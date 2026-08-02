@@ -63,6 +63,8 @@
 * release 构建在 `:app:packageRelease` 失败，错误为 `SigningConfig "release" is missing required property "keyPassword"`。
 * 修复要求：Kotlin/AGP signing config 必须对 `storeFile`、`storePassword`、`keyAlias`、`keyPassword` 做显式非空映射；workflow 只向 Gradle build step 传入 keystore 路径，不将密码和 alias 写入 `GITHUB_ENV`。
 * release source conversion 必须传入 `--source-sha256 "$ISDC_JSON_SHA256"`；临时 keystore 使用 mode `600`，keytool 临时诊断文件不打印并在校验后删除。
+* Run `30741024982` passed verify, keystore validation, and signed APK/AAB build; release failed only at `Verify APK signature` because `apksigner` was not on `PATH` (`command not found`, exit 127).
+* Fix requirement: the release job must locate an executable `apksigner` directly under the Android SDK `build-tools` directory, select the highest available version, verify that it runs, and invoke it by its resolved path. Keep `jarsigner`, the four secrets, cleanup, and artifact flow unchanged.
 
 ## Technical Notes
 

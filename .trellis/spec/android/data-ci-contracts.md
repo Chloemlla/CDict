@@ -45,6 +45,7 @@ This contract applies when changing `scripts/fetch_isdc_export.py`, `scripts/con
 - Unix Gradle wrapper contract: `gradlew` is tracked as executable (`100755`), and each job runs `chmod +x ./gradlew` immediately after checkout before any `./gradlew` invocation; `gradlew.bat` remains available for Windows.
 - Kotlin/AGP release signing must explicitly map the four environment values to `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`; the `KEY_PASSWORD` value must be non-null when the release signing config is created.
 - Release workflow passes only `KEYSTORE_FILE` to the Gradle build step; signing passwords and aliases remain job environment inputs and are never written to `GITHUB_ENV` or logs. The temporary keystore is mode `600`, and keytool diagnostics are removed without printing their contents.
+- Release APK verification must locate an executable `apksigner` directly under the Android SDK `build-tools` directory, select the highest available version, verify that the tool runs, and invoke it by the resolved absolute path rather than assuming `apksigner` is on `PATH`.
 - Audio paths are remote and use CDN → Youdao → Android TextToSpeech fallback; audio files are not bundled.
 
 ### 4. Validation & Error Matrix

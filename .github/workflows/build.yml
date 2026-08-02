@@ -125,8 +125,31 @@ jobs:
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
         run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+      - name: Locate Android SDK apksigner
+        id: locate-apksigner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$sdk_root" ] || [ ! -d "$sdk_root/build-tools" ]; then
+            echo "::error::Android SDK build-tools directory was not found"
+            exit 1
+          fi
+          apksigner_path="$(find "$sdk_root/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner -perm -u+x -print | sort -V | tail -n 1)"
+          if [ -z "$apksigner_path" ]; then
+            echo "::error::No executable apksigner was found in Android SDK build-tools"
+            exit 1
+          fi
+          apksigner_path="$(realpath -- "$apksigner_path")"
+          test -x "$apksigner_path"
+          "$apksigner_path" version >/dev/null
+          printf 'path=%s\n' "$apksigner_path" >> "$GITHUB_OUTPUT"
       - name: Verify APK signature
-        run: apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+        env:
+          APKSIGNER_PATH: ${{ steps.locate-apksigner.outputs.path }}
+        run: |
+          set -euo pipefail
+          "$APKSIGNER_PATH" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
       - name: Verify APK with jarsigner
         run: jarsigner -verify -verbose -certs app/build/outputs/apk/release/app-release.apk
       - name: Prepare and upload release assets
