@@ -1,0 +1,2 @@
+{"file":".trellis/spec/android/data-ci-contracts.md","reason":"Review Room/SQLite/FTS contracts and required CI validation after the entity annotation fix."}
+{"file":".trellis/tasks/08-02-room-ksp/prd.md","reason":"Verify implementation against the KSP failure, acceptance criteria, and no-local-build policy."}

@@ -12,6 +12,7 @@ data class GroupEntity(
     val sortOrder: Int,
 )
 
+@Entity(tableName = "words")
 data class WordEntity(
     @PrimaryKey val id: Long,
     val word: String,

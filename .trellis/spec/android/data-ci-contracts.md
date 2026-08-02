@@ -33,6 +33,7 @@ This contract applies when changing `scripts/fetch_isdc_export.py`, `scripts/con
 - `word_search` contains one FTS row per `words` row and indexes English word, translation, and definition.
 - `word_sentence_links`, `derived_terms`, `roots`, and `heatmap_entries` use foreign keys to `words`; sentences are deduplicated by English text.
 - Nullable source fields remain nullable; missing definitions, mnemonics, phonetics, or statistics must not abort conversion.
+- Room schema declarations must stay aligned with the generated SQLite schema: `WordEntity` is `@Entity(tableName = "words")`, DAO queries and inserts target `words`, and `WordSearchEntity` retains `@Fts4(contentEntity = WordEntity::class)`.
 - Asset path is `app/src/main/assets/dict.db`, generated in CI and ignored by Git.
 
 #### CI environment and secrets
