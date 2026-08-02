@@ -41,6 +41,7 @@ This contract applies when changing `scripts/fetch_isdc_export.py`, `scripts/con
 - Release jobs: `workflow_dispatch` with `publish=true` or `v*` tag; release job alone has `contents: write`.
 - Required secrets, and no others: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
 - Temporary signing file: `$RUNNER_TEMP/cdict-release.jks`.
+- Unix Gradle wrapper contract: `gradlew` is tracked as executable (`100755`), and each job runs `chmod +x ./gradlew` immediately after checkout before any `./gradlew` invocation; `gradlew.bat` remains available for Windows.
 - Audio paths are remote and use CDN → Youdao → Android TextToSpeech fallback; audio files are not bundled.
 
 ### 4. Validation & Error Matrix
