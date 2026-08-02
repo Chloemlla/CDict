@@ -1,0 +1,26 @@
+{
+  "words": [
+    {
+      "id": 1,
+      "word": "example",
+      "phoneticUk": "/ɪɡˈzɑːmpəl/",
+      "phoneticUs": "/ɪɡˈzæmpəl/",
+      "translation": "例子",
+      "definition": "A representative sample.",
+      "mnemonic": "Example helps explain.",
+      "frequencyGroup": 1,
+      "frequency": 1,
+      "derivedTerms": ["exemplary"],
+      "roots": [{"root": "exempl", "meaning": "示例"}],
+      "sentences": [{"english": "This is an example.", "chinese": "这是一个例子。"}],
+      "heatmap": {"Test 1": 2}
+    },
+    {
+      "id": 2,
+      "word": "学习",
+      "translation": "study",
+      "frequencyGroup": 2,
+      "frequency": 1
+    }
+  ]
+}

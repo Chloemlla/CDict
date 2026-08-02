@@ -25,3 +25,28 @@ replay_pid*
 
 # Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# Android and Gradle build output
+.gradle/
+build/
+*/build/
+local.properties
+
+# IDE metadata
+.idea/
+*.iml
+
+# Android signing material and generated database assets
+keystore_base64.txt
+cdict-release.jks
+*.jks
+*.keystore
+app/src/main/assets/dict.db
+app/schemas/
+
+# Python tooling caches
+__pycache__/
+*.py[cod]
+
+# Gradle wrapper distribution
+!gradle/wrapper/gradle-wrapper.jar

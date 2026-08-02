@@ -1,0 +1,153 @@
+name: CDict Android
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Build and publish a signed release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  ISDC_HTML_SHA256: c5cab0349b5fcf3e56904619a5f15c8923c7021a1f30c2c20639e2e597459c20
+  ISDC_JSON_SHA256: f83cddde1f09a8c4a15e97a6502187c935ba7dbf028e1c45812abd912cebecef
+
+jobs:
+  verify:
+    name: Verify Android project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Brotli decoder
+        run: python -m pip install --disable-pip-version-check brotli==1.1.0
+      - name: Generate and validate authorized dictionary asset
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          python scripts/fetch_isdc_export.py \
+            --output "$RUNNER_TEMP/isdc-export.json" \
+            --expected-html-sha256 "$ISDC_HTML_SHA256" \
+            --expected-json-sha256 "$ISDC_JSON_SHA256"
+          python scripts/convert_dictionary.py "$RUNNER_TEMP/isdc-export.json" app/src/main/assets/dict.db \
+            --expected-word-count 49213 --expected-groups 7 --source-sha256 "$ISDC_JSON_SHA256"
+          test -s app/src/main/assets/dict.db
+          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+      - name: Run Android lint
+        run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdict-verification-reports
+          path: |
+            app/build/reports/tests/**
+            app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Build signed release
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true || startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Brotli decoder
+        run: python -m pip install --disable-pip-version-check brotli==1.1.0
+      - name: Generate and validate authorized dictionary asset
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          python scripts/fetch_isdc_export.py --output "$RUNNER_TEMP/isdc-export.json" --expected-html-sha256 "$ISDC_HTML_SHA256" --expected-json-sha256 "$ISDC_JSON_SHA256"
+          python scripts/convert_dictionary.py "$RUNNER_TEMP/isdc-export.json" app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+          test -s app/src/main/assets/dict.db
+          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Validate signing secrets and keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "::error::Missing required repository secret: $name"; exit 1; fi
+          done
+          keytool_path="$RUNNER_TEMP/cdict-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$keytool_path"
+          test -s "$keytool_path" || { echo "::error::Decoded keystore is empty"; exit 1; }
+          keytool -list -keystore "$keytool_path" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keytool-error" || { echo "::error::Keystore alias/password validation failed"; cat "$RUNNER_TEMP/keytool-error"; exit 1; }
+          {
+            echo "KEYSTORE_FILE=$keytool_path"
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Build signed APK and AAB
+        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+      - name: Verify APK signature
+        run: apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+      - name: Verify APK with jarsigner
+        run: jarsigner -verify -verbose -certs app/build/outputs/apk/release/app-release.apk
+      - name: Prepare and upload release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp app/build/outputs/apk/release/app-release.apk release-assets/CDict.apk
+          cp app/build/outputs/bundle/release/app-release.aab release-assets/CDict.aab
+          (cd release-assets && sha256sum CDict.apk CDict.aab > checksums.txt)
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdict-release
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cdict-release.jks" "$RUNNER_TEMP/keytool-error"

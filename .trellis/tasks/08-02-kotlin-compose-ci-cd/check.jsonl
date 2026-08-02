@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/prd.md","reason":"Verify implementation against the confirmed product scope, package ID, acceptance criteria, and out-of-scope rules."}
+{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/rollout-requirements.md","reason":"Verify all extracted dictionary features, offline data behavior, audio fallback, and data risks are addressed."}
+{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/android-architecture.md","reason":"Verify Gradle, Compose, module, package, Room, and UI structure against the selected reference baseline."}
+{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/ci-cd.md","reason":"Verify workflow triggers, four-secret handling, keystore validation, signed outputs, cleanup, and artifact safety."}
+{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/target-repo.md","reason":"Verify existing user changes and repository-specific naming/ignore constraints are preserved."}
+{"file":".trellis/spec/guides/architecture-thinking-guide.md","reason":"Run architecture and dependency-boundary quality review."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Run cross-layer data-flow and consistency quality review."}

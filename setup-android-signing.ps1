@@ -253,8 +253,7 @@ if ([string]::IsNullOrWhiteSpace($keystoreBase64)) {
   Stop-WithError 'Base64 内容为空'
 }
 
-$previewLength = [Math]::Min(50, $keystoreBase64.Length)
-Write-Success "Base64 编码完成 (长度: $($keystoreBase64.Length), 预览: $($keystoreBase64.Substring(0, $previewLength))...)"
+Write-Success "Base64 编码完成 (长度: $($keystoreBase64.Length), 值已隐藏)"
 
 Write-Section '[6/6] 准备设置 GitHub Secrets...'
 Write-Host ''
