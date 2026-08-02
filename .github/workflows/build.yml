@@ -74,7 +74,7 @@ jobs:
     name: Build signed release
     permissions:
       contents: write
-    if: github.event_name == 'workflow_dispatch' && inputs.publish == true || startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
     needs: verify
     runs-on: ubuntu-latest
     env:
@@ -87,6 +87,22 @@ jobs:
         uses: actions/checkout@v4
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
+      - name: Read release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_name="$(sed -n 's/.*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ -z "$version_name" ]; then
+            echo "::error::Unable to read versionName from app/build.gradle.kts"
+            exit 1
+          fi
+          short_hash="${GITHUB_SHA::8}"
+          if [ -z "$short_hash" ]; then
+            echo "::error::GITHUB_SHA is empty; cannot name the release"
+            exit 1
+          fi
+          echo "CDICT_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
+          echo "CDICT_SHORT_HASH=$short_hash" >> "$GITHUB_ENV"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -168,11 +184,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: success() && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: "v${{ env.CDICT_VERSION_NAME }}-${{ env.CDICT_SHORT_HASH }}"
+          name: "CDict ${{ env.CDICT_VERSION_NAME }}-${{ env.CDICT_SHORT_HASH }}"
+          draft: false
+          make_latest: true
           generate_release_notes: true
+          files: release-assets/*
       - name: Remove temporary signing material
         if: always()
         run: rm -f "$RUNNER_TEMP/cdict-release.jks" "$RUNNER_TEMP/keytool-error"
