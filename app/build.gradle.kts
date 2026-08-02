@@ -11,11 +11,16 @@ fun propertyOrEnvironment(name: String): String? =
     providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
 
-val keystoreFile = propertyOrEnvironment("KEYSTORE_FILE")
-val keystorePassword = propertyOrEnvironment("KEYSTORE_PASSWORD")
-val keyAlias = propertyOrEnvironment("KEY_ALIAS")
-val keyPassword = propertyOrEnvironment("KEY_PASSWORD")
-val hasReleaseSigning = listOf(keystoreFile, keystorePassword, keyAlias, keyPassword).all { !it.isNullOrBlank() }
+val releaseKeystoreFile = propertyOrEnvironment("KEYSTORE_FILE")
+val releaseKeystorePassword = propertyOrEnvironment("KEYSTORE_PASSWORD")
+val releaseKeyAlias = propertyOrEnvironment("KEY_ALIAS")
+val releaseKeyPassword = propertyOrEnvironment("KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystoreFile,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.chloemlla.cdict"
@@ -34,10 +39,10 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(keystoreFile!!)
-                storePassword = keystorePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+                storeFile = file(requireNotNull(releaseKeystoreFile))
+                storePassword = requireNotNull(releaseKeystorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
             }
         }
     }

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/android/data-ci-contracts.md","reason":"Verify release trigger, four-secret boundary, signing validation, artifact upload, and no-local-build policy."}
+{"file":".trellis/tasks/08-02-cdict-apk/prd.md","reason":"Check dispatch execution against the selected manual artifact publication scope."}
