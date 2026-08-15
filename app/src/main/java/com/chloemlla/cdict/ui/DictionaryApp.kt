@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,7 +32,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 
@@ -81,7 +84,18 @@ private fun ErrorScreen(message: String) {
 @Composable
 private fun WordList(state: DictionaryScreenState.Ready, onQueryChanged: (String) -> Unit, onSelect: (WordEntity) -> Unit) {
     var query by rememberSaveable { mutableStateOf(state.query) }
-    Scaffold(topBar = { TopAppBar(title = { Text("CDict IELTS Dictionary") }) }) { padding ->
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("CDict IELTS Dictionary") },
+            navigationIcon = {
+                Icon(
+                    painter = painterResource(R.mipmap.ic_launcher),
+                    contentDescription = null,
+                    modifier = Modifier.padding(horizontal = 12.dp).size(28.dp),
+                )
+            },
+        )
+    }) { padding ->
         Column(Modifier.padding(padding)) {
             OutlinedTextField(
                 value = query,
