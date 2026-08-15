@@ -122,6 +122,8 @@ com.chloemlla.cdict
 
 工作流依次:`keytool` 校验解码后的 keystore → 构建 APK / AAB → `apksigner` 校验 APK → 生成 SHA-256 校验和 → 上传产物 → 清理临时签名材料。仓库不含任何 keystore 或明文凭据。
 
+发布构建开启 **R8 混淆**(`proguard-android-optimize.txt` + `proguard-rules.pro`)与**资源收缩**,并按 ABI 产出拆分 APK(`*universal*.apk` 为全架构包;AAB 交给 Google Play 按设备拆分)。拆分收益当前很小——原生库仅 `libandroidx.graphics.path.so` 数十 KB——主体体积在 83 MB 的 `dict.db`,已由 AAB 按需分发。
+
 ## 验证策略 Verification policy
 
 仓库策略要求 Android 构建与测试在 **GitHub Actions** 中执行;请勿在本地设备上运行 Gradle 或 Android 构建/测试命令。
