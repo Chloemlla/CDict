@@ -1,19 +1,86 @@
-# CDict
+# CDict · 雅思离线词典
 
-CDict is an offline-first IELTS dictionary Android application built with Kotlin, Jetpack Compose Material 3, and Room. The package and application ID are `com.chloemlla.cdict`.
+**CDict** is an offline-first IELTS dictionary for Android, built with **Kotlin**, **Jetpack Compose (Material 3)**, and **Room**. The package and application ID are `com.chloemlla.cdict`.
 
-## Data pipeline
+**CDict** 是一款**离线优先**的雅思词典 Android 应用,基于 Kotlin、Jetpack Compose Material 3 与 Room 构建,包名与应用 ID 均为 `com.chloemlla.cdict`。
 
-The repository deliberately does not contain a fabricated dictionary or an unauthorized copy of the source dataset. Generate the production asset from an authorized export supplied as a local file:
+---
+
+## 功能特性 Features
+
+### 📖 离线词典 Offline Dictionary
+
+| 能力 | 英文 | 中文 |
+|---|---|---|
+| 词库规模 | 49,213 words across 7 IELTS frequency groups | 49,213 词条,分属 7 个 IELTS 频率组 |
+| 英文搜索 | Full-text search (SQLite FTS4) over English word, translation, and definition | 英文全文搜索(FTS4),覆盖单词 / 翻译 / 释义 |
+| 中文搜索 | Chinese substring search via `LIKE` over word and translation | 中文子串搜索(`LIKE` 匹配单词与翻译) |
+| 离线存储 | Room copies the bundled asset `dict.db` into the app database on first launch | Room 首次启动将内置 `dict.db` 复制到应用数据库,完全离线可用 |
+
+### 🧩 词详情页 Word Detail
+
+点击词条进入详情页,展示:
+
+- **音标**:英式 `phoneticUk` + 美式 `phoneticUs`
+- **释义与翻译**:英文释义 `definition` + 中文翻译 `translation`
+- **助记词** `mnemonic`
+- **频率**:频率组 `frequencyGroup` + IELTS 频率 `frequency`
+- **词根** `roots`:词根及其含义
+- **派生词** `derivedTerms`
+- **历年出现频率热力图** `heatmap`:各时间段出现得分
+- **真题句子** `sentences`:英文原文 + 中文翻译,每词最多 10 条
+
+### 🔊 发音 Pronunciation
+
+词详情页提供 **英音 / 美音** 按钮,按三级顺序回退,无需打包任何音频文件:
+
+```
+CDN (https://cdn.isdc.pages.dev/audio/{uk|us}/{word}.mp3)
+  → Youdao 发音接口 (dict.youdao.com/dictvoice)
+  → Android 系统 TextToSpeech
+```
+
+任一级失败自动降级到下一级;发音不可用时词典浏览不受影响。
+
+### 🌐 在线翻译 Online Translation
+
+底部导航新增 **翻译** 标签页,内置在线翻译引擎:
+
+- 基于 **vivo 翻译网关**(逆向 `com.vivo.translator` 4.5.9.0,与 `fanyiji-rev/translate.js` 同源)
+- **免密钥直连**:V2 无签名通道 `POST https://vivotrans.vivo.com/translation/query`
+- **语言方向**:自动→中文、自动→英文、中文→英文、英文→中文
+- **批量翻译**:多行文本按 `\n` 合并为单次请求,响应逐行拆回
+- 响应附加信息:源/目标语言回显、音标
+
+> ⚠️ **免责声明**:该网关为私有接口,`appId`/`appKey` 为客户端常量,可能随时失效或变更。翻译是便利功能,并非应用的硬性依赖;词典核心功能完全离线。
+
+### 🔒 权限与隐私 Permissions & Privacy
+
+- 仅申请 **`INTERNET`** 权限,用于在线翻译与发音 CDN
+- 词典数据完全本地;不收集、不上传任何个人信息
+
+---
+
+## 快速上手 Getting Started
+
+- **Android Studio**:直接打开仓库根目录即可,IDE 会自动使用 Gradle Wrapper。
+- **命令行**:`./gradlew :app:assembleDebug`(需先生成词典资产,见下)。
+
+> **注意**:`dict.db` 由 CI 生成并被 Git 忽略(仓库刻意不携带 50–70 MB 二进制)。**本地构建前必须先执行数据生成步骤**;代码绝不会静默替换成示例或伪造数据。
+
+## 数据管线 Data pipeline
+
+仓库刻意**不包含伪造词典或未经授权的源数据副本**。生产资产由用户提供的授权导出文件生成:
 
 ```bash
+# 本地转换(基于授权导出文件)
 python scripts/convert_dictionary.py /path/to/authorized-export.json app/src/main/assets/dict.db \
   --expected-word-count 49213
 ```
 
-The converter accepts JSON/JSONL, base85-wrapped JSON, and Brotli-compressed JSON. It creates normalized `words`, `derived_terms`, `roots`, `sentences`, `word_sentence_links`, and `heatmap_entries` tables plus the `word_search` English FTS table. It validates the resulting record count and prints table counts as JSON. It does not fetch the website, because source access and source schema must be explicit and reproducible.
+转换器支持 JSON / JSONL、base85 包裹 JSON、Brotli 压缩 JSON。它生成规范化的 `words`、`derived_terms`、`roots`、`sentences`、`word_sentence_links`、`heatmap_entries` 表,以及 `word_search` 英文 FTS 表;校验记录数并输出各表计数(JSON)。转换器不抓取网页——数据来源与 schema 必须显式、可复现。
 
-The current public site returned HTTP 403 for requests without a browser User-Agent, but the authorized exporter uses `Mozilla/5.0` and can retrieve the page. Generate and validate the production asset with:
+从授权站点完整生成并校验:
 
 ```bash
 python -m pip install brotli==1.1.0
@@ -26,29 +93,41 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
   --expected-word-count 49213 --expected-groups 7
 ```
 
-`dict.db` is generated in CI and intentionally ignored by Git, so the repository does not carry a 50–70 MB binary. The workflow uploads the generated database only as part of build/release outputs. A local Android build also requires this generation step first; it never silently substitutes sample or fabricated data.
+`dict.db` 在 CI 中生成并校验,仅作为构建/发布产物上传,不进 Git 仓库。
 
-## Android development
+## 技术架构 Architecture
 
-Open the repository in Android Studio, or use the included Gradle wrapper. The project uses one `:app` module with `core` data/audio packages and `ui` Compose packages. Room copies `dict.db` from the APK assets on first open and reports a user-visible loading/error state.
+单一 `:app` 模块,按职责分包:
 
-The app searches English through FTS and Chinese through substring `LIKE` matching. Pronunciation does not bundle audio: it falls back from the CDN to Youdao and then Android TextToSpeech.
+```
+com.chloemlla.cdict
+├── core
+│   ├── data        # Room: Entities / DAO / Database / Repository
+│   ├── audio       # PronunciationPlayer(CDN → Youdao → TTS 回退)
+│   └── translate   # vivo 翻译网关客户端 + 模型(内嵌翻译引擎)
+└── ui             # Compose: CdictApp(底部导航)/ Dictionary* / Translate*
+```
 
-## Translation
-
-The bottom navigation adds an online translation tab powered by the same vivo translation gateway that the translation engine in `fanyiji-rev/translate.js` reproduces. It posts to `https://vivotrans.vivo.com/translation/query` (V2, unsigned) with the configured appId/appKey and batch-splits the newline-joined response back per input line. The gateway is a private API: its appId/appKey are client-side constants, not guaranteed to stay available, so translation is treated as a convenience feature, not a hard dependency.
+- 数据层通过 Room 的 `createFromAsset("dict.db")` 加载内置词典,首次打开复制到应用数据库,并暴露用户可见的加载/错误状态。
+- 翻译引擎 `core/translate` 完整复刻 `translate.js` 的表单编码、批量拆分与(可选的)X-AI-GATEWAY 签名,并配有单元测试。
 
 ## CI/CD
 
-`.github/workflows/build.yml` runs debug unit tests and lint on pushes and pull requests. Signed release builds are gated to a manual workflow dispatch with `publish=true` or a `v*` tag. Release signing uses only these repository secrets:
+`.github/workflows/build.yml` 在 push / pull request 时运行 debug 单元测试与 lint;签名发布构建由**手动 `workflow_dispatch`(`publish=true`)**或 **`v*` tag** 触发。发布签名仅使用以下仓库 secrets:
 
 - `KEYSTORE_BASE64`
 - `KEYSTORE_PASSWORD`
 - `KEY_ALIAS`
 - `KEY_PASSWORD`
 
-The workflow validates the decoded keystore with `keytool`, builds APK/AAB artifacts, verifies the APK with `apksigner`, creates SHA-256 checksums, uploads artifacts, and removes temporary signing material. No keystore or plaintext credentials belong in this repository.
+工作流依次:`keytool` 校验解码后的 keystore → 构建 APK / AAB → `apksigner` 校验 APK → 生成 SHA-256 校验和 → 上传产物 → 清理临时签名材料。仓库不含任何 keystore 或明文凭据。
 
-## Verification policy
+## 验证策略 Verification policy
 
-Repository policy requires Android builds and tests to run in GitHub Actions. Do not run Gradle or Android build/test commands on the local device.
+仓库策略要求 Android 构建与测试在 **GitHub Actions** 中执行;请勿在本地设备上运行 Gradle 或 Android 构建/测试命令。
+
+## 开源协议 License
+
+本项目基于 **GNU Affero General Public License v3.0 (AGPL-3.0)** 开源,详见 [LICENSE](LICENSE)。
+
+This project is licensed under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE).
