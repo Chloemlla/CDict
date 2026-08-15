@@ -191,6 +191,21 @@ def text(value: Any) -> str | None:
     return str(value).strip() or None
 
 
+def normalize_delimited_text(value: Any, separators: str) -> str | None:
+    normalized = text(value)
+    if normalized is None:
+        return None
+    parts = [part.strip() for part in re.split(separators, normalized) if part.strip()]
+    unique_parts: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        if part in seen:
+            continue
+        seen.add(part)
+        unique_parts.append(part)
+    return "；".join(unique_parts) or None
+
+
 def as_int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
@@ -249,8 +264,10 @@ def main() -> int:
                 continue
             seen.add(word.casefold())
             word_id = as_int(record.get("id"), index)
-            db.execute("INSERT INTO words VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (word_id, word, text(get(record, "phoneticUk")), text(get(record, "phoneticUs")), text(get(record, "translation")), text(get(record, "definition")), text(get(record, "mnemonic")), as_int(get(record, "frequencyGroup")), as_int(get(record, "frequency"))))
-            db.execute("INSERT INTO word_search(rowid, word, translation, definition) VALUES (?, ?, ?, ?)", (word_id, word, text(get(record, "translation")), text(get(record, "definition"))))
+            translation = normalize_delimited_text(get(record, "translation"), r"[；\r\n]+")
+            definition = normalize_delimited_text(get(record, "definition"), r"；")
+            db.execute("INSERT INTO words VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (word_id, word, text(get(record, "phoneticUk")), text(get(record, "phoneticUs")), translation, definition, text(get(record, "mnemonic")), as_int(get(record, "frequencyGroup")), as_int(get(record, "frequency"))))
+            db.execute("INSERT INTO word_search(rowid, word, translation, definition) VALUES (?, ?, ?, ?)", (word_id, word, translation, definition))
             for term in record.get("derivedTerms", record.get("derivatives", [])) or []:
                 value = text(term.get("term") if isinstance(term, dict) else term)
                 if value:
