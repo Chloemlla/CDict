@@ -2,7 +2,9 @@ package com.chloemlla.cdict.core.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Fts4
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "groups")
@@ -12,7 +14,13 @@ data class GroupEntity(
     val sortOrder: Int,
 )
 
-@Entity(tableName = "words")
+@Entity(
+    tableName = "words",
+    indices = [
+        Index(value = ["translation"], name = "idx_words_translation"),
+        Index(value = ["frequencyGroup", "frequency", "word"], name = "idx_words_group_frequency"),
+    ],
+)
 data class WordEntity(
     @PrimaryKey val id: Long,
     val word: String,
@@ -21,14 +29,22 @@ data class WordEntity(
     val translation: String? = null,
     val definition: String? = null,
     val mnemonic: String? = null,
-    val frequencyGroup: Int = 0,
-    val frequency: Int = 0,
+    @ColumnInfo(defaultValue = "0") val frequencyGroup: Int = 0,
+    @ColumnInfo(defaultValue = "0") val frequency: Int = 0,
 )
 
-@Entity(tableName = "derived_terms", primaryKeys = ["wordId", "term"])
+@Entity(
+    tableName = "derived_terms",
+    primaryKeys = ["wordId", "term"],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
 data class DerivedTermEntity(val wordId: Long, val term: String)
 
-@Entity(tableName = "roots", primaryKeys = ["wordId", "root"])
+@Entity(
+    tableName = "roots",
+    primaryKeys = ["wordId", "root"],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
 data class RootEntity(val wordId: Long, val root: String, val meaning: String? = null)
 
 @Entity(tableName = "sentences")
@@ -38,10 +54,22 @@ data class SentenceEntity(
     val chinese: String? = null,
 )
 
-@Entity(tableName = "word_sentence_links", primaryKeys = ["wordId", "sentenceId"])
+@Entity(
+    tableName = "word_sentence_links",
+    primaryKeys = ["wordId", "sentenceId"],
+    indices = [Index(value = ["wordId"], name = "idx_links_word")],
+    foreignKeys = [
+        ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"]),
+        ForeignKey(entity = SentenceEntity::class, parentColumns = ["id"], childColumns = ["sentenceId"]),
+    ],
+)
 data class WordSentenceLinkEntity(val wordId: Long, val sentenceId: Long)
 
-@Entity(tableName = "heatmap_entries", primaryKeys = ["wordId", "period"])
+@Entity(
+    tableName = "heatmap_entries",
+    primaryKeys = ["wordId", "period"],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
 data class HeatmapEntryEntity(val wordId: Long, val period: String, val score: Double)
 
 @Fts4(contentEntity = WordEntity::class)
