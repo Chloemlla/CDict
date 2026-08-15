@@ -181,11 +181,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp app/build/outputs/apk/release/app-release-arm64-v8a.apk release-assets/CDict-arm64-v8a.apk
-          cp app/build/outputs/apk/release/app-release-armeabi-v7a.apk release-assets/CDict-armeabi-v7a.apk
-          cp app/build/outputs/apk/release/app-release-x86.apk release-assets/CDict-x86.apk
-          cp app/build/outputs/apk/release/app-release-x86_64.apk release-assets/CDict-x86_64.apk
-          cp app/build/outputs/apk/release/app-release-universal.apk release-assets/CDict.apk
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk release-assets/CDict-arm64-v8a.apk
+          cp app/build/outputs/apk/release/app-armeabi-v7a-release.apk release-assets/CDict-armeabi-v7a.apk
+          cp app/build/outputs/apk/release/app-x86-release.apk release-assets/CDict-x86.apk
+          cp app/build/outputs/apk/release/app-x86_64-release.apk release-assets/CDict-x86_64.apk
+          cp app/build/outputs/apk/release/app-universal-release.apk release-assets/CDict.apk
           cp app/build/outputs/bundle/release/app-release.aab release-assets/CDict.aab
           (cd release-assets && sha256sum CDict.apk CDict.aab CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk > checksums.txt)
       - name: Upload signed artifacts
