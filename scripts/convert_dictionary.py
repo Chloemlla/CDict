@@ -43,7 +43,7 @@ CREATE TABLE roots (wordId INTEGER NOT NULL, root TEXT NOT NULL, meaning TEXT, P
 CREATE TABLE sentences (id INTEGER PRIMARY KEY NOT NULL, english TEXT NOT NULL, chinese TEXT);
 CREATE TABLE word_sentence_links (wordId INTEGER NOT NULL, sentenceId INTEGER NOT NULL, PRIMARY KEY(wordId, sentenceId), FOREIGN KEY(wordId) REFERENCES words(id), FOREIGN KEY(sentenceId) REFERENCES sentences(id));
 CREATE TABLE heatmap_entries (wordId INTEGER NOT NULL, period TEXT NOT NULL, score REAL NOT NULL, PRIMARY KEY(wordId, period), FOREIGN KEY(wordId) REFERENCES words(id));
-CREATE VIRTUAL TABLE word_search USING fts4(word, translation, definition, content='words');
+CREATE VIRTUAL TABLE word_search USING fts4(content=words, word, translation, definition);
 CREATE INDEX idx_words_group_frequency ON words(frequencyGroup, frequency, word);
 CREATE INDEX idx_words_translation ON words(translation);
 CREATE INDEX idx_links_word ON word_sentence_links(wordId);
