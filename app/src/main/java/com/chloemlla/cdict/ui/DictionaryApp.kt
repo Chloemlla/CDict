@@ -91,7 +91,7 @@ private fun WordList(state: DictionaryScreenState.Ready, onQueryChanged: (String
                 Icon(
                     painter = painterResource(R.mipmap.ic_launcher),
                     contentDescription = null,
-                    modifier = Modifier.padding(horizontal = 12.dp).size(28.dp),
+                    modifier = Modifier.size(28.dp),
                 )
             },
         )
