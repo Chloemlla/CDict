@@ -34,6 +34,10 @@ Open the repository in Android Studio, or use the included Gradle wrapper. The p
 
 The app searches English through FTS and Chinese through substring `LIKE` matching. Pronunciation does not bundle audio: it falls back from the CDN to Youdao and then Android TextToSpeech.
 
+## Translation
+
+The bottom navigation adds an online translation tab powered by the same vivo translation gateway that the translation engine in `fanyiji-rev/translate.js` reproduces. It posts to `https://vivotrans.vivo.com/translation/query` (V2, unsigned) with the configured appId/appKey and batch-splits the newline-joined response back per input line. The gateway is a private API: its appId/appKey are client-side constants, not guaranteed to stay available, so translation is treated as a convenience feature, not a hard dependency.
+
 ## CI/CD
 
 `.github/workflows/build.yml` runs debug unit tests and lint on pushes and pull requests. Signed release builds are gated to a manual workflow dispatch with `publish=true` or a `v*` tag. Release signing uses only these repository secrets:
