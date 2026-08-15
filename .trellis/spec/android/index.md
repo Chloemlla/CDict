@@ -8,6 +8,7 @@ This layer covers the greenfield Kotlin/Compose Android application under `app/`
 - [ ] Runtime dictionary data comes from the generated Room/SQLite `dict.db` asset; no runtime parsing of the source HTML payload.
 - [ ] Source conversion validates the snapshot hash, group count, and exact word count before producing an asset.
 - [ ] Android build and test commands run in GitHub Actions, not on the local device.
+- [ ] Compose UI APIs used by the app are available in the pinned Compose BOM; confirm symbol availability through GitHub Actions before release.
 - [ ] Signing values remain GitHub Secrets and temporary keystore files remain under `$RUNNER_TEMP`.
 
 ## Quality Check
