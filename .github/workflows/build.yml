@@ -145,10 +145,10 @@ jobs:
           chmod 600 "$keytool_path"
           keytool -list -keystore "$keytool_path" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keytool-error" || { echo "::error::Keystore alias/password validation failed"; rm -f "$RUNNER_TEMP/keytool-error"; exit 1; }
           rm -f "$RUNNER_TEMP/keytool-error"
-      - name: Build signed APK and AAB
+      - name: Build signed APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
-        run: ./gradlew :app:assembleRelease :app:bundleReleaseAab --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
       - name: Locate Android SDK apksigner
         id: locate-apksigner
         shell: bash
@@ -194,9 +194,8 @@ jobs:
           cp app/build/outputs/apk/release/app-x86-release.apk release-assets/CDict-x86.apk
           cp app/build/outputs/apk/release/app-x86_64-release.apk release-assets/CDict-x86_64.apk
           cp app/build/outputs/apk/release/app-universal-release.apk release-assets/CDict.apk
-          cp app/build/outputs/bundle/releaseAab/app-releaseAab.aab release-assets/CDict.aab
           cp app/src/main/assets/dict.db release-assets/CDict-dict.db
-          (cd release-assets && sha256sum CDict.apk CDict.aab CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk CDict-dict.db > checksums.txt)
+          (cd release-assets && sha256sum CDict.apk CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk CDict-dict.db > checksums.txt)
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
