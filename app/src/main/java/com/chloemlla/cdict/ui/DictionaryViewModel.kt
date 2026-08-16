@@ -9,6 +9,7 @@ import com.chloemlla.cdict.core.audio.PronunciationPlayer
 import com.chloemlla.cdict.core.data.DatabaseState
 import com.chloemlla.cdict.core.data.DictionaryDatabase
 import com.chloemlla.cdict.core.data.DictionaryRepository
+import com.chloemlla.cdict.core.data.DictionaryUpdateManager
 import com.chloemlla.cdict.core.data.HeatmapEntryEntity
 import com.chloemlla.cdict.core.data.RootEntity
 import com.chloemlla.cdict.core.data.SentenceEntity
@@ -48,6 +49,7 @@ sealed interface DictionaryScreenState {
         val sortMode: SortMode = SortMode.Frequency,
         val hasMore: Boolean = false,
         val isLoadingMore: Boolean = false,
+        val updateNeeded: Boolean = false,
     ) : DictionaryScreenState
     data class Error(val message: String) : DictionaryScreenState
 }
@@ -55,6 +57,7 @@ sealed interface DictionaryScreenState {
 class DictionaryViewModel(
     private val repository: DictionaryRepository,
     private val pronunciationPlayer: PronunciationPlayer,
+    private val appContext: Context,
 ) : ViewModel() {
     private val _state = MutableStateFlow<DictionaryScreenState>(DictionaryScreenState.Loading)
     val state: StateFlow<DictionaryScreenState> = _state.asStateFlow()
@@ -71,11 +74,13 @@ class DictionaryViewModel(
                     val db = result.database
                     database = db
                     totalCount = db.dictionaryDao().count()
+                    val updateNeeded = DictionaryUpdateManager.check(appContext, db)
                     val words = browsePage(db, SortMode.Frequency, 0)
                     _state.value = DictionaryScreenState.Ready(
                         words = words,
                         sortMode = SortMode.Frequency,
                         hasMore = words.size.toLong() < totalCount,
+                        updateNeeded = updateNeeded,
                     )
                 }
                 is DatabaseState.Failed -> _state.value = DictionaryScreenState.Error(result.message)
@@ -227,11 +232,48 @@ class DictionaryViewModel(
         }
     }
 
+    /** Rebuild the installed dictionary database from the bundled asset. */
+    fun rebuildDictionary() {
+        viewModelScope.launch {
+            database?.close()
+            database = null
+            _state.value = DictionaryScreenState.Loading
+            when (val result = repository.rebuild()) {
+                is DatabaseState.Ready -> {
+                    val db = result.database
+                    database = db
+                    totalCount = db.dictionaryDao().count()
+                    val words = browsePage(db, SortMode.Frequency, 0)
+                    _state.value = DictionaryScreenState.Ready(
+                        words = words,
+                        sortMode = SortMode.Frequency,
+                        hasMore = words.size.toLong() < totalCount,
+                        updateNeeded = false,
+                    )
+                    DictionaryUpdateManager.markReconciled(appContext)
+                }
+                is DatabaseState.Failed -> _state.value = DictionaryScreenState.Error(result.message)
+                DatabaseState.Loading -> Unit
+            }
+        }
+    }
+
+    /** Dismiss the update prompt without rebuilding. */
+    fun dismissUpdate() {
+        DictionaryUpdateManager.markReconciled(appContext)
+        val current = _state.value
+        if (current is DictionaryScreenState.Ready) {
+            _state.value = current.copy(updateNeeded = false)
+        }
+    }
+
     fun playPronunciation(word: WordEntity, accent: Accent) {
         pronunciationPlayer.play(word.word, accent)
     }
 
     override fun onCleared() {
+        database?.close()
+        database = null
         pronunciationPlayer.release()
         super.onCleared()
     }
@@ -243,6 +285,7 @@ class DictionaryViewModelFactory(private val context: Context) : ViewModelProvid
         return DictionaryViewModel(
             DictionaryRepository(context),
             PronunciationPlayer(context),
+            context.applicationContext,
         ) as T
     }
 }

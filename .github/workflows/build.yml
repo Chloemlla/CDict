@@ -40,7 +40,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
-          cp scripts/CDict-dict.db app/src/main/assets/dict.db
+          base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
+          (cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
+          cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
+          cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
       - name: Set up Java
@@ -110,7 +116,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
-          cp scripts/CDict-dict.db app/src/main/assets/dict.db
+          base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
+          (cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
+          cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
+          cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
       - name: Set up Java

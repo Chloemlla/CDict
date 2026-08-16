@@ -16,4 +16,12 @@ class DictionaryRepository(private val context: Context) {
         runCatching { DatabaseState.Ready(DictionaryDatabase.open(context)) }
             .getOrElse { DatabaseState.Failed("离线词典加载失败，请确认安装包包含 dict.db。") }
     }
+
+    /** Delete the installed dictionary database so Room re-copies from the bundled asset. */
+    suspend fun rebuild(): DatabaseState = withContext(Dispatchers.IO) {
+        runCatching {
+            context.deleteDatabase("dict.db")
+            DatabaseState.Ready(DictionaryDatabase.open(context))
+        }.getOrElse { DatabaseState.Failed("词典重建失败：${it.message}") }
+    }
 }

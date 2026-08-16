@@ -19,6 +19,7 @@ valid. Run this in CI on an authorized distribution export.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -220,6 +221,22 @@ def main() -> int:
         if violations:
             raise RuntimeError(f"foreign key violations after merge: {violations[:3]}")
         db.execute("VACUUM;")
+
+        # Compute content signature: SHA256 of all word content columns.
+        h = hashlib.sha256()
+        for row in db.execute(
+            "SELECT id, word, phoneticUk, phoneticUs, translation, definition, mnemonic, "
+            "frequencyGroup, frequency, emotionColor, register, nuanceDescription, "
+            "usageWarning, collocations FROM words ORDER BY id"
+        ):
+            h.update("|".join(str(v or "") for v in row).encode("utf-8"))
+            h.update(b"\n")
+        signature = h.hexdigest()
+        db.execute(
+            "INSERT OR REPLACE INTO metadata(key, value) VALUES ('assetSignature', ?)",
+            (signature,),
+        )
+        db.commit()
     finally:
         db.close()
 

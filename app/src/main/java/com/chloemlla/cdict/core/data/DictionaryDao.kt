@@ -81,4 +81,7 @@ interface DictionaryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWords(words: List<WordEntity>)
+
+    @Query("SELECT value FROM metadata WHERE key = :key")
+    suspend fun metadataValue(key: String): String?
 }

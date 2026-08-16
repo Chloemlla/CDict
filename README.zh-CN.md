@@ -204,25 +204,37 @@ com.chloemlla.cdict
 - **Android Studio**:直接打开仓库根目录即可,IDE 会自动使用 Gradle Wrapper。
 - **命令行**:`./gradlew :app:assembleDebug`(需先生成词典资产,见下)。
 
-> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。CI 构建前会把它复制到(被 Git 忽略的)`app/src/main/assets/dict.db`;本地执行 `./gradlew :app:assembleDebug` 前也需要该副本——全新检出后先运行 `cp scripts/CDict-dict.db app/src/main/assets/dict.db`。
+> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。CI 在构建阶段从 **GitHub Release** 下载合并后的词典。本地执行 `./gradlew :app:assembleDebug` 前需手动复制: `cp scripts/CDict-dict.db app/src/main/assets/dict.db`(签名文件 `dict.signature` 为可选,本地开发可忽略)。
 
 ---
 
 ## 数据管线
 
-词典以单个已提交、带 AI 标注的 SQLite 资产形式发布:`scripts/CDict-dict.db`(49,213 词,7 组)。标注字段——`emotionColor`、`register`、`nuanceDescription`、`usageWarning`、`collocations`——由 `scripts/annotate_dictionary.js`(node:sqlite,不使用 Python)生成。CI 原样复制该资产并校验:
+词典由两路数据源构建:
+
+1. **已标注底库** — `scripts/CDict-dict.db`(49,213 词,7 组),随仓库提交,AI 标注字段(`emotionColor`、`register`、`nuanceDescription`、`usageWarning`、`collocations`)由 `scripts/annotate_dictionary.js`(node:sqlite,不使用 Python)生成。
+2. **富内容合并** — `.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权导出的 `distribution.sqlite` 富内容并入已标注底库:`scripts/merge_distribution.py` 匹配约 17,925 个共有词,补充 US/UK 音标、空位助记(含词源)、派生词,以及带中文译文的例句。产物经校验后**发布到 GitHub Release**(tag `dictionary-asset`),包含合并数据库、`dict.signature` 内容校验和、以及 SHA-256 校验文件。
+
+CI 在构建时从硬编码的 Release 地址下载合并后的词典,校验 SHA-256 后复制到 `app/src/main/assets/dict.db`:
 
 ```bash
-cp scripts/CDict-dict.db app/src/main/assets/dict.db
+curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db" "$BASE/CDict-dict.db"
+curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$BASE/dict.signature"
+curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$BASE/checksums.txt"
+(cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
+cp "$RUNNER_TEMP/dict.db" app/src/main/assets/dict.db
+cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
   --expected-word-count 49213 --expected-groups 7
 ```
 
-`app/src/main/assets/dict.db` 是 Git 忽略的构建副本;它保持**压缩**存储(不设 `noCompress` 覆盖),并交给 AAB 按设备分发。若未来需要从授权导出重建无标注的底库,`scripts/convert_dictionary.py` 仍可使用。
+`app/src/main/assets/dict.db` 和 `dict.signature` 是 Git 忽略的构建副本;它们保持**压缩**存储(不设 `noCompress` 覆盖),并交给 AAB 按设备分发。随附的 `dict.signature` 文件让 App 能检测到词典内容在两次构建之间是否发生变化,从而提示用户删除并重建本地数据库。
+
+`scripts/convert_dictionary.py` 仍可用于从授权导出重建无标注的底库。
 
 ### 富内容合并(distribution)
 
-`.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权分发的 `distribution.sqlite` 富内容并入已标注资产:`scripts/merge_distribution.py` 按 headword 匹配两个词表共有的词(约 17,925 个),补 US/UK 音标、空位助记(含词源)、派生词,并把带中文译文的例句并入 `sentences`(已存在的例句只补中文,不重复插入)。产物经 `validate_dictionary_asset.py` 校验后作为 `CDict-dict-merged` artifact 上传,不直接改写 `scripts/CDict-dict.db`;如需让 App 携带,再手动替换并提交。
+`.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权分发的 `distribution.sqlite` 富内容并入已标注资产:`scripts/merge_distribution.py` 按 headword 匹配两个词表共有的词(约 17,925 个),补 US/UK 音标、空位助记(含词源)、派生词,并把带中文译文的例句并入 `sentences`(已存在的例句只补中文,不重复插入)。产物经 `validate_dictionary_asset.py` 校验后**发布到 GitHub Release**(tag `dictionary-asset`),包含合并数据库、`dict.signature` 内容校验和、以及 SHA-256 校验文件。构建管线在构建时从 Release 下载合并数据库,不再提交到仓库(合并后数据库超 100 MB,GitHub 单文件限制)。
 
 ---
 

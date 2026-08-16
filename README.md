@@ -204,25 +204,37 @@ com.chloemlla.cdict
 - **Android Studio:** open the repo root — the IDE uses the Gradle wrapper automatically.
 - **Command line:** `./gradlew :app:assembleDebug` (requires generating the dictionary asset first, below).
 
-> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. CI stages it into the (git-ignored) `app/src/main/assets/dict.db` before building; a local `./gradlew :app:assembleDebug` needs that copy present — run `cp scripts/CDict-dict.db app/src/main/assets/dict.db` on a fresh checkout.
+> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. CI downloads the merged dictionary from a **GitHub Release** asset during the build stage. For a local `./gradlew :app:assembleDebug`, copy the committed asset manually: `cp scripts/CDict-dict.db app/src/main/assets/dict.db && cp scripts/CDict-dict.db app/src/main/assets/dict.signature` (the signature file is optional for local development).
 
 ---
 
 ## Data Pipeline
 
-The dictionary ships as one committed, AI-annotated SQLite asset: `scripts/CDict-dict.db` (49,213 words, 7 groups). Its annotation fields — `emotionColor`, `register`, `nuanceDescription`, `usageWarning`, `collocations` — are produced by `scripts/annotate_dictionary.js` (node:sqlite, no Python). CI stages the asset verbatim and validates it:
+The dictionary is built from two sources:
+
+1. **Annotated base** — `scripts/CDict-dict.db` (49,213 words, 7 groups), committed in the repo, with AI annotation fields (`emotionColor`, `register`, `nuanceDescription`, `usageWarning`, `collocations`) produced by `scripts/annotate_dictionary.js` (node:sqlite, no Python).
+2. **Rich-content merge** — `.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated base: `scripts/merge_distribution.py` matches ~17,925 headwords and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences. The result is validated and **published as a GitHub Release asset** (`dictionary-asset` tag) plus a `dict.signature` content checksum.
+
+CI stages the merged dictionary at build time by downloading from the hardcoded release URL, verifying the SHA-256 checksum, and copying it into `app/src/main/assets/dict.db`:
 
 ```bash
-cp scripts/CDict-dict.db app/src/main/assets/dict.db
+curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db" "$BASE/CDict-dict.db"
+curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$BASE/dict.signature"
+curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$BASE/checksums.txt"
+(cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
+cp "$RUNNER_TEMP/dict.db" app/src/main/assets/dict.db
+cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
   --expected-word-count 49213 --expected-groups 7
 ```
 
-`app/src/main/assets/dict.db` is a git-ignored build copy; it stays **compressed** (no `noCompress` override) and ships via AAB per-device delivery. `scripts/convert_dictionary.py` remains available for rebuilding an unannotated base from an authorized export if the source data ever needs regenerating.
+`app/src/main/assets/dict.db` and `dict.signature` are git-ignored build copies; they stay **compressed** (no `noCompress` override) and ship via AAB per-device delivery. The linked `dict.signature` file lets the app detect when the dictionary content has changed between builds, prompting the user to delete and rebuild the local database.
+
+`scripts/convert_dictionary.py` remains available for rebuilding an unannotated base from an authorized export if the source data ever needs regenerating.
 
 ### Rich-content merge (distribution)
 
-`.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated asset: `scripts/merge_distribution.py` matches the headwords common to both word lists (~17,925) and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences carrying Chinese translations into `sentences` (existing sentences only get their chinese filled, never duplicated). The result is validated by `validate_dictionary_asset.py` and uploaded as the `CDict-dict-merged` artifact; it does not overwrite `scripts/CDict-dict.db` — replace and commit it manually to ship the richer dictionary.
+`.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated asset: `scripts/merge_distribution.py` matches the headwords common to both word lists (~17,925) and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences carrying Chinese translations into `sentences` (existing sentences only get their chinese filled, never duplicated). The result is validated by `validate_dictionary_asset.py` and **published as a GitHub Release** (tag `dictionary-asset`) with the merged database, a `dict.signature` content checksum, and a SHA-256 checksums file. The build pipeline then downloads the merged database from the release at build time instead of committing it to the repository (the merged database exceeds GitHub's 100 MB per-file limit).
 
 ---
 

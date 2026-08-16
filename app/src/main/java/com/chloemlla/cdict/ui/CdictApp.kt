@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Recommend
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -39,6 +40,7 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
@@ -92,6 +94,8 @@ fun CdictApp(
     onDictionaryPlayPronunciation: (WordEntity, Accent) -> Unit,
     onDictionaryLoadMore: () -> Unit,
     onDictionarySortModeChanged: (SortMode) -> Unit,
+    onDictionaryRebuild: () -> Unit,
+    onDictionaryDismissUpdate: () -> Unit,
     translationViewModel: TranslationViewModel,
     studyViewModel: StudyViewModel,
     recommendationViewModel: RecommendationViewModel,
@@ -160,6 +164,28 @@ fun CdictApp(
     // Keeps each tab's UI state (scroll position, search text, open detail) alive across tab
     // switches so returning to a tab restores exactly where the user left off.
     val tabStateHolder = rememberSaveableStateHolder()
+
+    // Dictionary-update prompt: when the bundled asset's content signature differs from the
+    // installed dictionary DB, the user is asked to rebuild so the enriched content takes effect.
+    if (dictionaryState is DictionaryScreenState.Ready && dictionaryState.updateNeeded) {
+        AlertDialog(
+            onDismissRequest = onDictionaryDismissUpdate,
+            title = { Text("检测到词典已更新") },
+            text = {
+                Text("本地词库需要重建以加载新版词典内容。重建不会影响你的背词进度。")
+            },
+            confirmButton = {
+                TextButton(onClick = onDictionaryRebuild) {
+                    Text("立即重建")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDictionaryDismissUpdate) {
+                    Text("稍后再说")
+                }
+            },
+        )
+    }
 
     Scaffold(
         modifier = Modifier
