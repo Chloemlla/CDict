@@ -235,7 +235,7 @@ class StudyViewModel(context: Context) : ViewModel() {
     }
 
     /** Linear interpolation of the decay multiplier across the 7 frequency bands. */
-    private fun frequencyGroupOf(wordId: Long): Int {
+    private suspend fun frequencyGroupOf(wordId: Long): Int {
         val group = dictDb?.dictionaryDao()?.wordsByIds(listOf(wordId))?.firstOrNull()?.frequencyGroup ?: 3
         return group.coerceIn(1, 7)
     }
