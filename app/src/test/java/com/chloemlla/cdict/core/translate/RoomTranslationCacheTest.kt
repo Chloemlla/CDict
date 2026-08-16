@@ -61,11 +61,11 @@ class RoomTranslationCacheTest {
 
         cache().put(keyD, "D", dir, resultOf("d1")) // 非收藏 A,C + 新 D = 3，未超上限
         cache().put(keyE, "E", dir, resultOf("e1")) // 超上限 → 淘汰最旧的 3 条非收藏（A,C,D）
-        assertTrue(dao.keys() contains keyB)
-        assertTrue(dao.keys() contains keyE)
-        assertFalse(dao.keys() contains keyA)
-        assertFalse(dao.keys() contains keyC)
-        assertFalse(dao.keys() contains keyD)
+        assertTrue(keyB in dao.keys())
+        assertTrue(keyE in dao.keys())
+        assertFalse(keyA in dao.keys())
+        assertFalse(keyC in dao.keys())
+        assertFalse(keyD in dao.keys())
     }
 
     @Test
