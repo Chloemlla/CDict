@@ -140,7 +140,7 @@ jobs:
       - name: Build signed APK and AAB
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
-        run: ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease :app:bundleReleaseAab --no-daemon --stacktrace
       - name: Locate Android SDK apksigner
         id: locate-apksigner
         shell: bash
@@ -186,7 +186,7 @@ jobs:
           cp app/build/outputs/apk/release/app-x86-release.apk release-assets/CDict-x86.apk
           cp app/build/outputs/apk/release/app-x86_64-release.apk release-assets/CDict-x86_64.apk
           cp app/build/outputs/apk/release/app-universal-release.apk release-assets/CDict.apk
-          cp app/build/outputs/bundle/release/app-release.aab release-assets/CDict.aab
+          cp app/build/outputs/bundle/releaseAab/app-releaseAab.aab release-assets/CDict.aab
           (cd release-assets && sha256sum CDict.apk CDict.aab CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk > checksums.txt)
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4

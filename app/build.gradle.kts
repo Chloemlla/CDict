@@ -56,6 +56,19 @@ android {
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // AAB cannot coexist with ABI splits + resource shrink in one buildType:
+        // AGP writes one shrunk-resources file per split, and buildReleasePreBundle
+        // requires a single one (IllegalStateException). Produce the AAB from a
+        // dedicated buildType with shrink off; Play performs resource shrinking
+        // per device at serve time.
+        releaseAab {
+            isMinifyEnabled = true
+            isShrinkResources = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
 
     splits {
