@@ -44,7 +44,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,6 +71,7 @@ fun StudyScreen(
     onReload: () -> Unit,
     onAnswer: (Int) -> Unit,
     onAdvance: () -> Unit,
+    onQuestionPresented: () -> Unit,
     onMarkLearned: () -> Unit,
     onDefer: () -> Unit,
     onContinueFreePlay: () -> Unit,
@@ -103,6 +107,7 @@ fun StudyScreen(
                         state = state,
                         onAnswer = onAnswer,
                         onAdvance = onAdvance,
+                        onQuestionPresented = onQuestionPresented,
                     )
                     StudyPhase.LEARN, StudyPhase.FREE_PLAY -> LearnFlow(
                         state = state,
@@ -153,6 +158,7 @@ private fun ReviewFlow(
     state: StudyScreenState.Ready,
     onAnswer: (Int) -> Unit,
     onAdvance: () -> Unit,
+    onQuestionPresented: () -> Unit,
 ) {
     val question = state.question
     if (question == null) {
@@ -160,6 +166,21 @@ private fun ReviewFlow(
             Text("复习题目准备中…", style = MaterialTheme.typography.bodyMedium)
         }
         return
+    }
+    // Error-Attribution hook: restart the hesitation clock each time the current question is
+    // shown (a new attempt, or a force-reveal card flipping over to the answer options).
+    // Keyed on wordId + attempt so advancing to a fresh word always re-arms the clock.
+    LaunchedEffect(question.wordId, question.attempt) { onQuestionPresented() }
+    // 完全陌生 retries re-show the 释义 card for a moment before the options appear.
+    var reveal by remember(question.wordId, question.attempt, question.forceReveal) {
+        mutableStateOf(!question.forceReveal)
+    }
+    LaunchedEffect(question.wordId, question.attempt, question.forceReveal) {
+        if (question.forceReveal) {
+            kotlinx.coroutines.delay(3000)
+            reveal = true
+            onQuestionPresented()
+        }
     }
     // Short success tone when an answer is correct ("播放提示音"). Created and released
     // together with the review screen so it never outlives the REVIEW phase.
@@ -184,7 +205,11 @@ private fun ReviewFlow(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         ) {
             Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("选择正确的汉语释义", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = if (question.forceReveal && !reveal) "请先记忆释义" else "选择正确的汉语释义",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Text(
                     text = question.english,
                     style = MaterialTheme.typography.headlineMedium,
@@ -202,6 +227,29 @@ private fun ReviewFlow(
                     )
                 }
             }
+        }
+        if (question.forceReveal && !reveal) {
+            // 识记卡片：陌生词的释义先亮出，再进入作答。
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Text(
+                    text = question.correctText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            return@Column
+        }
+        if (question.confusionRetry) {
+            Text(
+                text = "存在易混淆干扰项，请仔细辨析",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
         }
         question.options.forEachIndexed { index, option ->
             ReviewOption(
@@ -400,6 +448,23 @@ private fun LearnCard(
                     color = MaterialTheme.colorScheme.primary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 10.dp),
+                )
+            }
+            word.translation?.takeIf(String::isNotBlank)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 14.dp),
+                )
+            }
+            word.definition?.takeIf(String::isNotBlank)?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
             Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

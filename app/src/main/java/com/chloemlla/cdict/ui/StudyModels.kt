@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.ui
 
 import com.chloemlla.cdict.core.data.WordEntity
+import kotlin.math.abs
 
 enum class StudyPhase { REVIEW, LEARN, DONE, FREE_PLAY }
 
@@ -11,13 +12,24 @@ data class ReviewFeedback(
     val chosenText: String?,
 )
 
-/** A single next-day review multiple-choice question: English word, 4 Chinese options. */
+/**
+ * A single review multiple-choice question: English word, Chinese options.
+ *
+ * [attempt]/[forceReveal]/[confusionRetry] carry the Error-Attribution Engine's retry
+ * plan (优化项五). Each wrong answer bumps [attempt] so the presenter knows it is a new
+ * showing; [forceReveal] marks a 完全陌生 case that must re-show the 释义 card before the
+ * options; [confusionRetry] marks a 形近混淆 case that pins the same option set for a
+ * focused re-discrimination pass.
+ */
 data class ReviewQuestion(
     val wordId: Long,
     val english: String,
     val phonetic: String?,
     val options: List<String>,
     val correctIndex: Int,
+    val attempt: Int = 0,
+    val forceReveal: Boolean = false,
+    val confusionRetry: Boolean = false,
 ) {
     val correctText: String get() = options[correctIndex]
 }
@@ -65,43 +77,124 @@ fun primaryPartOfSpeech(chinese: String): String {
     }
 }
 
-/** Loose near-duplicate guard so a distractor never reads as the same sense. */
-private fun isNearDuplicate(a: String, b: String): Boolean =
-    a == b || a.contains(b) || b.contains(a)
+/**
+ * Drops a leading part-of-speech tag (`n. `, `vt. ` …) from a translation so similarity
+ * is measured on the actual Chinese sense rather than the shared abbreviation prefix.
+ */
+private val POS_TAG_PREFIX = Regex("""^[a-zA-Z]+\.\s*""")
+
+private fun stripPosTag(zh: String): String = zh.replaceFirst(POS_TAG_PREFIX, "")
+
+/** Character bigrams; a single remaining character yields itself. */
+private fun bigrams(s: String): Set<String> =
+    if (s.length < 2) {
+        if (s.isEmpty()) emptySet() else setOf(s)
+    } else {
+        (0 until s.length - 1).map { s.substring(it, it + 2) }.toSet()
+    }
 
 /**
- * Draws up to three distinct Chinese-translation distractors, preferring words that
- * share the correct answer's part of speech and are not near-duplicates. Falls back
- * to any distinct translation when a same-POS pool is too thin.
+ * Offline stand-in for a semantic-vector cosine. Two senses are treated as near-synonyms
+ * when their stripped-Chinese bigram sets overlap past a threshold: exact duplicates (or
+ * near-duplicates) score high, unrelated words score ~0. Returned in [0, 1].
+ */
+fun semanticSimilarity(a: String, b: String): Float {
+    val ba = bigrams(stripPosTag(a))
+    val bb = bigrams(stripPosTag(b))
+    if (ba.isEmpty() || bb.isEmpty()) return 0f
+    val union = (ba union bb).size
+    if (union == 0) return 0f
+    return (ba intersect bb).size.toFloat() / union
+}
+
+/** Edit distance between two strings; small values flag orthographically confusable words. */
+fun levenshtein(a: String, b: String): Int {
+    if (a == b) return 0
+    if (a.isEmpty()) return b.length
+    if (b.isEmpty()) return a.length
+    val previous = IntArray(b.length + 1) { it }
+    val current = IntArray(b.length + 1)
+    for (i in 1..a.length) {
+        current[0] = i
+        for (j in 1..b.length) {
+            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+            current[j] = minOf(
+                previous[j] + 1,
+                current[j - 1] + 1,
+                previous[j - 1] + cost,
+            )
+        }
+        for (j in 0..b.length) previous[j] = current[j]
+    }
+    return previous[b.length]
+}
+
+// Dynamic Distractor Engine (优化项一): candidate distractors must survive a strict
+// word-class match, a difficulty band around the target, and a semantic filter that
+// discards near-synonyms; the survivors are weighted toward orthographically confusable
+// distractors (Levenshtein <= 2) which force a sharper discrimination.
+private data class DistractorCandidate(
+    val word: WordEntity,
+    val label: String,
+    val bandDistance: Int,
+    val orthoWeight: Int,
+)
+
+/**
+ * Builds up to [k] distinct Chinese-translation distractors for [target]:
+ *
+ *  A. word-class strict match: only distractors sharing [primaryPartOfSpeech] are first
+ *     choice, so an easy ADJ/A is never confused with a verb target;
+ *  B. difficulty decay: prefer distractors within one [frequencyGroup] band of the target
+ *     (±1), falling back outward only when the band is too thin;
+ *  C. semantic-vector filter: discard any candidate whose [semanticSimilarity] to the
+ *     correct sense exceeds the 0.65 confusion ceiling;
+ *  D. orthographic weighting: nearer-spelling distractors (Levenshtein <= 2) rank first.
  */
 fun buildReviewDistractors(
-    correctPos: String,
+    target: WordEntity,
     pool: List<WordEntity>,
-    correctText: String,
     k: Int = 3,
 ): List<String> {
-    val usable = pool.mapNotNull { it.translation?.takeIf(String::isNotBlank) }
-    val candidates = if (correctPos.isNotBlank()) {
-        val same = usable.filter {
-            primaryPartOfSpeech(it) == correctPos && !isNearDuplicate(it, correctText)
+    val correctText = target.translation?.takeIf(String::isNotBlank) ?: return emptyList()
+    val pos = primaryPartOfSpeech(correctText)
+    val targetGroup = target.frequencyGroup
+
+    val candidates = pool.mapNotNull { w ->
+        val label = w.translation?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+        DistractorCandidate(
+            word = w,
+            label = label,
+            bandDistance = abs(w.frequencyGroup - targetGroup),
+            orthoWeight = if (levenshtein(w.word, target.word) <= 2) 1 else 0,
+        )
+    }.distinctBy { it.label }
+
+    val picked = linkedSetOf<String>()
+    fun take(src: List<DistractorCandidate>) {
+        for (c in src) {
+            if (picked.size >= k) break
+            if (semanticSimilarity(c.label, correctText) > 0.65f) continue
+            picked.add(c.label)
         }
-        if (same.size >= k) same else same + usable.filterNot { isNearDuplicate(it, correctText) }
-    } else {
-        usable.filterNot { isNearDuplicate(it, correctText) }
     }
-    val result = mutableListOf<String>()
-    for (option in candidates.distinct()) {
-        if (result.size >= k) break
-        result.add(option)
+
+    fun byOrtho(list: List<DistractorCandidate>) =
+        list.sortedWith(compareByDescending<DistractorCandidate> { it.orthoWeight })
+
+    // Strictest layer: same POS within the difficulty band.
+    take(
+        byOrtho(
+            candidates.filter { primaryPartOfSpeech(it.label) == pos && it.bandDistance <= 1 },
+        ),
+    )
+    // Relax the difficulty band, keep the word-class match.
+    if (picked.size < k) {
+        take(byOrtho(candidates.filter { primaryPartOfSpeech(it.label) == pos }))
     }
-    // Last-resort fill so the question always has enough options.
-    var fallbackIndex = 0
-    while (result.size < k && fallbackIndex < pool.size) {
-        val candidate = pool[fallbackIndex].translation?.takeIf(String::isNotBlank)
-        if (candidate != null && !isNearDuplicate(candidate, correctText) && candidate !in result) {
-            result.add(candidate)
-        }
-        fallbackIndex++
+    // Last resort: any distinct, non-synonymous translation.
+    if (picked.size < k) {
+        take(byOrtho(candidates))
     }
-    return result
+    return picked.toList().take(k)
 }

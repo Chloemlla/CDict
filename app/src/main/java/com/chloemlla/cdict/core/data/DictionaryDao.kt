@@ -58,6 +58,12 @@ interface DictionaryDao {
     @Query("SELECT * FROM words WHERE translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit")
     suspend fun randomWords(limit: Int): List<WordEntity>
 
+    // Random sample restricted to a frequency band, used by the adaptive cold-start
+    // gradient (core / high-frequency-extension / simple words) to pull recommendations
+    // from the right difficulty neighbourhood of the user's estimated level.
+    @Query("SELECT * FROM words WHERE frequencyGroup = :group AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit")
+    suspend fun randomWordsInGroup(group: Int, limit: Int): List<WordEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWords(words: List<WordEntity>)
 }

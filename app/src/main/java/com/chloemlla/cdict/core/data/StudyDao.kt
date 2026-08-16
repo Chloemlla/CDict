@@ -17,23 +17,42 @@ interface StudyDao {
     @Query("SELECT wordId FROM study_words")
     suspend fun allStudiedIds(): List<Long>
 
-    @Query("SELECT COUNT(*) FROM study_words WHERE status = 'learned' AND learnedDate = :date")
+    @Query("SELECT * FROM study_words WHERE wordId = :wordId")
+    suspend fun word(wordId: Long): StudyWordEntity?
+
+    // Words studied today (first learning day) regardless of their current memory state,
+    // so progress counts them even after they have been promoted to the review ladder.
+    @Query(
+        "SELECT COUNT(*) FROM study_words WHERE status IN ('learning', 'review') AND learnedDate = :date",
+    )
     suspend fun learnedTodayCount(date: String): Int
 
-    @Query("SELECT wordId FROM study_words WHERE status = 'learned' AND learnedDate = :date ORDER BY addedAt")
+    @Query("SELECT wordId FROM study_words WHERE status IN ('learning', 'review') AND learnedDate = :date ORDER BY addedAt")
     suspend fun learnedTodayIds(date: String): List<Long>
 
-    // Words learned on a previous day that have not yet been answered correctly in
-    // review. Oldest-learned first (time-gradient backlog) and capped to [limit] so a
-    // long absence never dumps an overwhelming review session on the user in one day.
+    // Words whose next review is due today (or overdue after an absence). Ordered by how
+    // decayed they are (oldest scheduled date first, fewest repetitions first) so the
+    // most fragile words are reviewed before the cap drops the tail of the backlog.
     @Query(
-        "SELECT * FROM study_words WHERE status = 'learned' AND learnedDate < :date AND reviewed = 0 " +
-            "ORDER BY learnedDate, addedAt LIMIT :limit",
+        "SELECT * FROM study_words WHERE status IN ('learning', 'review') AND nextReviewDate <= :date " +
+            "ORDER BY nextReviewDate, repetitions LIMIT :limit",
     )
     suspend fun pendingReview(date: String, limit: Int): List<StudyWordEntity>
 
-    @Query("UPDATE study_words SET reviewed = 1 WHERE wordId = :wordId")
-    suspend fun markReviewed(wordId: Long)
+    // ASR scheduling write: promote memory state, record the next review's interval, and
+    // derive the repeating ladder through ease / repetition count.
+    @Query(
+        "UPDATE study_words SET status = :status, nextReviewDate = :nextReviewDate, " +
+            "ease = :ease, repetitions = :repetitions, lastInterval = :interval WHERE wordId = :wordId",
+    )
+    suspend fun schedule(
+        wordId: Long,
+        status: String,
+        nextReviewDate: String,
+        ease: Double,
+        repetitions: Int,
+        interval: Int,
+    )
 
     @Query("SELECT wordId FROM study_words WHERE status = 'mastered'")
     fun masteredIds(): Flow<List<Long>>

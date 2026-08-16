@@ -133,6 +133,7 @@ fun CdictApp(
                         onReload = studyViewModel::reload,
                         onAnswer = studyViewModel::answerReview,
                         onAdvance = studyViewModel::advanceAfterFeedback,
+                        onQuestionPresented = studyViewModel::noteQuestionPresented,
                         onMarkLearned = studyViewModel::markLearned,
                         onDefer = studyViewModel::deferWord,
                         onContinueFreePlay = studyViewModel::continueFreePlay,
