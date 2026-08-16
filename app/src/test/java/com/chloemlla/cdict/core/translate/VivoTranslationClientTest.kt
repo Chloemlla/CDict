@@ -92,6 +92,29 @@ class VivoTranslationClientTest {
     }
 
     @Test
+    fun `phonetic json blob is normalized to its text field`() {
+        val resp = HttpResponse(
+            200,
+            """{"retcode":0,"code":0,"data":{"translation":"服务器","from":"auto","to":"zh-CHS","phonetic":"[{\"filename\":\"https://openapi.youdao.com/vivo/ttsapi?q=%E6%9C%8D%E5%8A%A1%E5%99%A8&langType=zh-CHS&appKey=48fd18fd98fb24b2\",\"ttsId\":\"x-phonetic-0\",\"text\":\"fú wù qì\",\"type\":\"auto\"}]"}}""",
+        )
+        val outcome = parseTranslationResponse(resp) as TranslationOutcome.Success
+        assertEquals("fú wù qì", outcome.result.phonetic)
+        assertEquals("fú wù qì", normalizePhonetic("""[{"text":"fú wù qì","type":"auto"}]"""))
+    }
+
+    @Test
+    fun `plain phonetic string passes through unchanged`() {
+        assertEquals("/test/", normalizePhonetic("/test/"))
+        assertEquals("fú wù qì", normalizePhonetic("fú wù qì"))
+    }
+
+    @Test
+    fun `malformed phonetic json falls back to raw`() {
+        assertEquals("junk", normalizePhonetic("junk"))
+        assertEquals("""[{"text":""]""", normalizePhonetic("""[{"text":""]"""))
+    }
+
+    @Test
     fun `service error code yields failure`() {
         val resp = HttpResponse(200, """{"retcode":0,"code":71001,"msg":"bad param"}""")
         val outcome = parseTranslationResponse(resp) as TranslationOutcome.Failure

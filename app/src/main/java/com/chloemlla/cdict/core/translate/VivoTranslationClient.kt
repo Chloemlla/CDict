@@ -244,7 +244,40 @@ internal fun parseTranslationResponse(resp: HttpResponse): TranslationOutcome {
             translations = if (joined.isEmpty()) emptyList() else joined.split("\n"),
             from = data.optString("from", json.optString("from")),
             to = data.optString("to", json.optString("to")),
-            phonetic = data.optString("phonetic").takeIf { it.isNotEmpty() },
+            phonetic = data.optString("phonetic").takeIf { it.isNotEmpty() }?.let(::normalizePhonetic),
         )
     )
+}
+
+/**
+ * 归一化 vivo 网关返回的 phonetic 字段为可展示的纯音标字符串。
+ *
+ * 中文等场景下该字段不是纯 IPA,而是一段 JSON(数组,元素含 filename / ttsId / text / type),
+ * 例如 `[{"filename":"https://openapi.youdao.com/vivo/ttsapi?...&appKey=...","ttsId":"…","text":"fú wù qì","type":"auto"}]`。
+ * 直接据实展示会把内部 TTS URL、appKey 等一并泄出,故这里抽取出各元素的 `text`(拼音/音标)拼接;
+ * 本身就是纯字符串(如英文 IPA)或解析失败时,原样返回。
+ */
+internal fun normalizePhonetic(raw: String): String {
+    val trimmed = raw.trim()
+    val parsed: Any? = runCatching {
+        when {
+            trimmed.startsWith("[") -> JSONArray(trimmed)
+            trimmed.startsWith("{") -> JSONObject(trimmed)
+            else -> null
+        }
+    }.getOrNull() ?: return raw
+    val texts = ArrayList<String>()
+    val queue = ArrayDeque<Any?>()
+    queue.add(parsed)
+    while (queue.isNotEmpty()) {
+        when (val node = queue.removeFirst()) {
+            is JSONArray -> for (i in 0 until node.length()) queue.add(node.opt(i))
+            is JSONObject -> {
+                node.optString("text").takeIf { it.isNotEmpty() }?.let(texts::add)
+                node.keys().forEach { key -> queue.add(node.opt(key)) }
+            }
+            else -> {}
+        }
+    }
+    return texts.joinToString("，").ifEmpty { raw }
 }
