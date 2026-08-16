@@ -107,7 +107,7 @@ Youdao static pronunciation (dict.youdao.com/dictvoice; word / sentence)
   → Android system TextToSpeech
 ```
 
-Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The Youdao `dictvoice` endpoint reliably reads single words; for whole sentences it first tries the sentence whole, and on failure splits it **word-by-word** by spaces, falling back to vivo → system TTS only if that also fails.
+Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The Youdao `dictvoice` endpoint reliably reads single words; for whole sentences it first tries the sentence whole, and on failure hands the **entire sentence** to vivo → system TTS for whole-sentence reading (never word-by-word splitting, which would break the sentence). Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
 
 `VivoTtsClient` (reverse-engineered from `com.vivo.translator`):
 

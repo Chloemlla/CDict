@@ -7,12 +7,15 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** 文本朗读能力抽象，便于注入与测试；[PronunciationPlayer] 为其默认实现。 */
 interface PronunciationSpeaker {
@@ -24,19 +27,30 @@ interface PronunciationSpeaker {
  * 发音播放器，三级回退：有道静态音频（默认，优先）→ vivo TTS → 系统 TextToSpeech。
  * 有道只保证单词；整句交由 vivo / 系统 TTS 整句朗读，绝不逐词拆读。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
+ *
+ * 并发安全：每次 [play] 都会让之前的播放流水线失效（generation 递增 + 取消旧 job），
+ * MediaPlayer 回调只作用于它自己的播放器（`player === media`），避免旧回调误杀新播放；
+ * 同词同音色的下载经单飞（single-flight）共享一次 HTTP 请求，避免 prefetch 与 play 重复下载。
  */
 class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var player: MediaPlayer? = null
     private var tts: TextToSpeech? = null
+    private var playJob: Job? = null
+    private var playGeneration = 0
     private val vivoClient = VivoTtsClient()
     private val cache = SpeechAudioCache(context)
+
+    /** 同 <音色>:<文本> 的进行中下载共享；只由 Main 线程访问。 */
+    private val inFlight = mutableMapOf<String, Deferred<ByteArray?>>()
 
     override fun speak(text: String) = play(text, Accent.US)
 
     fun play(word: String, accent: Accent) {
+        playGeneration++
+        playJob?.cancel()
         releasePlayer()
-        scope.launch { playYoudao(word, accent) }
+        playJob = scope.launch { playYoudao(playGeneration, word, accent) }
     }
 
     /**
@@ -59,44 +73,74 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     }
 
     /** 第一级：有道。命中磁盘 LRU 缓存则直接播放缓存文件；未命中下载字节并写缓存。 */
-    private suspend fun playYoudao(word: String, accent: Accent) {
+    private suspend fun playYoudao(generation: Int, word: String, accent: Accent) {
+        if (generation != playGeneration) return
         val cached = cache.find(word, accent)
         if (cached != null) {
-            playFile(cached, word, accent)
+            playFile(generation, cached, word, accent)
             return
         }
         val bytes = downloadYoudao(word, accent)
         if (bytes == null || bytes.isEmpty()) {
-            playYoudaoSentenceFallback(word, accent)
+            playYoudaoSentenceFallback(generation, word, accent)
             return
         }
         val file = cache.put(word, accent, bytes)
-        playFile(file, word, accent)
+        if (generation == playGeneration) playFile(generation, file, word, accent)
     }
 
-    private suspend fun downloadYoudao(word: String, accent: Accent): ByteArray? = withContext(Dispatchers.IO) {
-        runCatching {
-            val conn = URL("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
-                .openConnection() as HttpURLConnection
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
-            try {
-                if (conn.responseCode != 200) return@runCatching null
-                conn.inputStream.use { it.readBytes() }
-            } finally {
-                conn.disconnect()
-            }
-        }.getOrNull()
+    /** 单飞下载：并发请求同一 <音色>:<文本> 只发一次 HTTP，其余复用结果。 */
+    private suspend fun downloadYoudao(word: String, accent: Accent): ByteArray? {
+        val key = "${accent.name}:$word"
+        inFlight[key]?.let { return it.await() }
+        val deferred = scope.async(Dispatchers.IO) { fetchYoudao(word, accent) }
+        inFlight[key] = deferred
+        try {
+            return deferred.await()
+        } finally {
+            inFlight.remove(key)
+        }
     }
 
-    private fun playFile(file: File, word: String, accent: Accent) {
+    /** 有道下载。只接受 200 且 content-type 为 audio/*（或无 content-type 但可识别音频容器）的响应；错误页/空体返回 null 触发回退。 */
+    private fun fetchYoudao(word: String, accent: Accent): ByteArray? = try {
+        val conn = URL("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
+            .openConnection() as HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 8000
+        conn.setRequestProperty("User-Agent", USER_AGENT)
+        try {
+            if (conn.responseCode != 200) return null
+            val type = conn.contentType
+            val audioType = type != null && type.startsWith("audio/", ignoreCase = true)
+            if (type != null && type.isNotBlank() && !audioType) return null
+            val bytes = conn.inputStream.use { it.readBytes() }
+            if (bytes.isEmpty()) return null
+            if (!audioType && !looksLikeAudio(bytes)) return null
+            bytes
+        } finally {
+            conn.disconnect()
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun playFile(generation: Int, file: File, word: String, accent: Accent) {
         val media = MediaPlayer().apply {
-            setOnPreparedListener { start() }
-            setOnCompletionListener { releasePlayer() }
+            setOnPreparedListener {
+                if (generation == playGeneration && player === media) start()
+            }
+            setOnCompletionListener {
+                if (player === media) releasePlayer()
+            }
             setOnErrorListener { _, _, _ ->
-                releasePlayer()
-                file.delete()
-                playYoudaoSentenceFallback(word, accent)
+                if (player === media) {
+                    releasePlayer()
+                    file.delete()
+                    playYoudaoSentenceFallback(generation, word, accent)
+                }
                 true
             }
         }
@@ -105,23 +149,26 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             media.setDataSource(file.path)
             media.prepareAsync()
         } catch (e: Exception) {
-            releasePlayer()
+            if (player === media) releasePlayer()
             file.delete()
-            playYoudaoSentenceFallback(word, accent)
+            playYoudaoSentenceFallback(generation, word, accent)
         }
     }
 
     /** 有道整句失败：不再逐词拆读（那会按词打断句子），直接把整句交给后备 TTS（vivo → 系统）整句朗读。 */
-    private fun playYoudaoSentenceFallback(word: String, accent: Accent) {
-        scope.launch { playVivoFallback(word, accent) }
+    private fun playYoudaoSentenceFallback(generation: Int, word: String, accent: Accent) {
+        if (generation != playGeneration) return
+        scope.launch { playVivoFallback(generation, word, accent) }
     }
 
     /** 第二级：vivo TTS。失败时落到系统 TextToSpeech。 */
-    private suspend fun playVivoFallback(word: String, accent: Accent) {
+    private suspend fun playVivoFallback(generation: Int, word: String, accent: Accent) {
+        if (generation != playGeneration) return
         val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
+        if (generation != playGeneration) return
         val audio = (result as? VivoTtsResult.Audio)?.bytes
         if (audio == null || audio.isEmpty()) {
-            speak(word, accent)
+            if (generation == playGeneration) speak(generation, word, accent)
             return
         }
         val (bytes, ext) = when {
@@ -136,25 +183,38 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             tmp.writeBytes(bytes)
         } catch (e: Exception) {
             tmp.delete()
-            speak(word, accent)
+            if (generation == playGeneration) speak(generation, word, accent)
             return
         }
-        player = MediaPlayer().apply {
-            setOnPreparedListener { start() }
-            setOnCompletionListener { releasePlayer(); tmp.delete() }
+        val media = MediaPlayer().apply {
+            setOnPreparedListener {
+                if (generation == playGeneration && player === media) start()
+            }
+            setOnCompletionListener {
+                if (player === media) {
+                    releasePlayer()
+                    tmp.delete()
+                }
+            }
             setOnErrorListener { _, _, _ ->
-                releasePlayer()
-                tmp.delete()
-                speak(word, accent)
+                if (player === media) {
+                    releasePlayer()
+                    tmp.delete()
+                    if (generation == playGeneration) speak(generation, word, accent)
+                }
                 true
             }
-            try {
-                setDataSource(tmp.path)
-            } catch (e: Exception) {
-                speak(word, accent)
-            }
-            prepareAsync()
         }
+        player = media
+        try {
+            media.setDataSource(tmp.path)
+        } catch (e: Exception) {
+            if (player === media) releasePlayer()
+            tmp.delete()
+            if (generation == playGeneration) speak(generation, word, accent)
+            return
+        }
+        if (generation == playGeneration) media.prepareAsync()
     }
 
     private fun looksLikeMp3(bytes: ByteArray): Boolean {
@@ -167,6 +227,8 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private fun looksLikeWav(bytes: ByteArray): Boolean =
         bytes.size >= 4 && bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
             bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte()
+
+    private fun looksLikeAudio(bytes: ByteArray): Boolean = looksLikeMp3(bytes) || looksLikeWav(bytes)
 
     /** 给无容器的 16-bit PCM(单声道 16kHz)补 WAV 头,以便 MediaPlayer 播放。 */
     private fun wavWrap(pcm: ByteArray, sampleRate: Int = 16000, channels: Int = 1, bitsPerSample: Int = 16): ByteArray {
@@ -194,21 +256,34 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         return out
     }
 
-    private fun speak(word: String, accent: Accent) {
+    /** 系统 TextToSpeech 兜底。语言必须在引擎初始化成功后设置，否则初始化前 setLanguage 无效、UK/US 音色不生效。 */
+    private fun speak(generation: Int, word: String, accent: Accent) {
         val locale = if (accent == Accent.UK) Locale.UK else Locale.US
         tts?.shutdown()
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) tts?.speak(word, TextToSpeech.QUEUE_FLUSH, null, word)
-        }.also { it.language = locale }
+        val newTts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS && generation == playGeneration && tts === newTts) {
+                newTts.language = locale
+                newTts.speak(word, TextToSpeech.QUEUE_FLUSH, null, word)
+            }
+        }
+        tts = newTts
     }
 
     override fun release() {
         scope.cancel()
+        playJob = null
         player?.release()
+        player = null
         tts?.shutdown()
+        tts = null
     }
 
     private fun String.encodeUrl() = java.net.URLEncoder.encode(this, Charsets.UTF_8.name())
+
+    companion object {
+        private const val USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+    }
 }
 
 enum class Accent(val path: String, val youdaoType: Int, val ttsLangType: String) {
