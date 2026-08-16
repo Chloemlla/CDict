@@ -251,6 +251,7 @@ private fun DestinationContent(
                 onAdvance = studyViewModel::advanceAfterFeedback,
                 onQuestionPresented = studyViewModel::noteQuestionPresented,
                 onDebugLaunchReview = studyViewModel::debugLaunchReview,
+                onStartImmediateTest = studyViewModel::startImmediateTest,
                 onMarkLearned = studyViewModel::markLearned,
                 onDefer = studyViewModel::deferWord,
                 onContinueFreePlay = studyViewModel::continueFreePlay,

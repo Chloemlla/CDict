@@ -48,6 +48,9 @@ sealed interface StudyScreenState {
         val card: WordEntity? = null,
         val queueRemaining: Int = 0,
         val learnedToday: List<WordEntity> = emptyList(),
+        // True when the review phase is an on-demand test of today's newly-learned words
+        // instead of yesterday's scheduled due queue; drives the header label.
+        val isImmediateTest: Boolean = false,
     ) : StudyScreenState
 }
 

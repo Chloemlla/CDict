@@ -83,6 +83,10 @@ class StudyViewModel(context: Context) : ViewModel() {
     // Error-Attribution engine's hesitation measurement.
     private var questionShownAt = 0L
 
+    // True while running an on-demand immediate test of today's newly-learned words, so the
+    // review header labels it as such rather than as "昨日复习". Reset when the review exits.
+    private var isImmediateTest = false
+
     private val today: String get() = LocalDate.now().toString()
 
     init {
@@ -281,6 +285,47 @@ class StudyViewModel(context: Context) : ViewModel() {
         }
     }
 
+    /**
+     * On-demand immediate test of today's newly-learned words (无需等到明日): runs the words
+     * just marked 我已背会 through the same review engine instead of making the learner wait
+     * for tomorrow's scheduled first review. Answering a word correctly advances its adaptive
+     * spacing schedule exactly as an on-time review would — the early call simply pulls the
+     * ladder forward, it never discards a pending review.
+     */
+    fun startImmediateTest() {
+        viewModelScope.launch {
+            val dictDao = dictDb?.dictionaryDao() ?: return@launch
+            refreshLearnedToday()
+            val targets = learnedToday.toList()
+            if (targets.isEmpty()) return@launch
+            val distractorPool = dictDao.randomWords(400)
+            reviewQueue.clear()
+            reviewTotal = 0
+            for (word in targets) {
+                val correctText = word.translation?.takeIf(String::isNotBlank)
+                    ?: word.definition?.takeIf(String::isNotBlank) ?: continue
+                val distractors = buildReviewDistractors(word, distractorPool)
+                if (distractors.size < 3) continue
+                val options = (listOf(correctText) + distractors).shuffled()
+                reviewQueue.addLast(
+                    ReviewQuestion(
+                        wordId = word.id,
+                        english = word.word,
+                        phonetic = phoneticsOf(word),
+                        options = options,
+                        correctIndex = options.indexOf(correctText),
+                    ),
+                )
+            }
+            reviewTotal = reviewQueue.size
+            // Nothing testable (all learned words failed to assemble a full option set): stay
+            // put rather than stranding the UI on a ghost "preparing" review screen.
+            if (reviewQueue.isEmpty()) return@launch
+            isImmediateTest = true
+            emit(StudyPhase.REVIEW, question = reviewQueue.first())
+        }
+    }
+
     // ---- Learning phase ----------------------------------------------------------------
 
     private suspend fun buildLearn() {
@@ -435,6 +480,8 @@ class StudyViewModel(context: Context) : ViewModel() {
     // ---- State helpers ---------------------------------------------------------------
 
     private suspend fun startLearningPhase() {
+        // Leaving the review phase (back to learn/done) resets the immediate-test label.
+        isImmediateTest = false
         val goal = dailyGoal()
         refreshLearnedToday()
         if (todayDone >= goal) emit(StudyPhase.DONE, learnedList = learnedToday.toList())
@@ -467,6 +514,7 @@ class StudyViewModel(context: Context) : ViewModel() {
             card = card,
             queueRemaining = learnQueue.size,
             learnedToday = learnedList,
+            isImmediateTest = isImmediateTest,
         )
     }
 

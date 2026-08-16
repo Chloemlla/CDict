@@ -92,6 +92,7 @@ fun StudyScreen(
     onAdvance: () -> Unit,
     onQuestionPresented: () -> Unit,
     onDebugLaunchReview: () -> Unit,
+    onStartImmediateTest: () -> Unit,
     onMarkLearned: () -> Unit,
     onDefer: () -> Unit,
     onContinueFreePlay: () -> Unit,
@@ -181,6 +182,7 @@ fun StudyScreen(
                         state = state,
                         onMarkLearned = onMarkLearned,
                         onDefer = onDefer,
+                        onStartImmediateTest = onStartImmediateTest,
                         onContinueFreePlay = onContinueFreePlay,
                         onExitFreePlay = onExitFreePlay,
                         onSetGoal = onSetGoal,
@@ -191,6 +193,7 @@ fun StudyScreen(
                     )
                     StudyPhase.DONE -> DoneFlow(
                         state = state,
+                        onStartImmediateTest = onStartImmediateTest,
                         onContinueFreePlay = onContinueFreePlay,
                         onSetGoal = onSetGoal,
                     )
@@ -332,8 +335,9 @@ private fun ReviewFlow(
             modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+        val header = if (state.isImmediateTest) "今日测试" else "昨日复习"
         Text(
-            text = "昨日复习  ${state.reviewTotal - state.reviewRemaining + 1} / ${state.reviewTotal}",
+            text = "$header  ${state.reviewTotal - state.reviewRemaining + 1} / ${state.reviewTotal}",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -488,6 +492,7 @@ private fun LearnFlow(
     state: StudyScreenState.Ready,
     onMarkLearned: () -> Unit,
     onDefer: () -> Unit,
+    onStartImmediateTest: () -> Unit,
     onContinueFreePlay: () -> Unit,
     onExitFreePlay: () -> Unit,
     onSetGoal: (Int) -> Unit,
@@ -548,6 +553,15 @@ private fun LearnFlow(
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
             ) {
                 Text(if (isFree) "刷完" else "我已背会")
+            }
+        }
+        // 无需等明日：今天已背会的词可立即进入考试测试，回答正确即提前推进复习计划。
+        if (!isFree && state.todayDone >= 1) {
+            OutlinedButton(
+                onClick = onStartImmediateTest,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) {
+                Text("立即测试今日所学 · 无需等明日")
             }
         }
         if (isFree) {
@@ -704,6 +718,7 @@ private fun GoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
 @Composable
 private fun DoneFlow(
     state: StudyScreenState.Ready,
+    onStartImmediateTest: () -> Unit,
     onContinueFreePlay: () -> Unit,
     onSetGoal: (Int) -> Unit,
 ) {
@@ -732,6 +747,13 @@ private fun DoneFlow(
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         textAlign = TextAlign.Center,
                     )
+                    // 无需等明日：达标后仍可立即测试今天背会的词，正确即提前推进复习计划。
+                    OutlinedButton(
+                        onClick = onStartImmediateTest,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 8.dp),
+                    ) {
+                        Text("立即测试今日所学（无需等明日）")
+                    }
                     Button(
                         onClick = onContinueFreePlay,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 8.dp),
