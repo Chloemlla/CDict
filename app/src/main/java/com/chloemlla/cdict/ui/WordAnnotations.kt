@@ -123,6 +123,23 @@ fun AiSupplementPill(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Places the "AI 补充" pill at the trailing edge of a section's content, i.e. right
+ * after the distribution-supplemented data it marks. Renders nothing when [show]
+ * is false.
+ */
+@Composable
+fun AiSupplementTrailing(show: Boolean, modifier: Modifier = Modifier) {
+    if (show) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            AiSupplementPill()
+        }
+    }
+}
+
 /** Emotion-color and register tags for a word; renders nothing when both are absent. */
 @Composable
 fun WordAnnotationBadges(word: WordEntity, modifier: Modifier = Modifier) {

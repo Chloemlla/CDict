@@ -2,11 +2,14 @@
 """Merge rich content from a distribution.sqlite source into CDict-dict.db.
 
 For every headword present in both datasets the distribution's richer fields are
-merged into the existing CDict words schema in full (overwriting the base values,
-not only filling empty slots):
+merged into the existing CDict words schema:
 
-- phoneticUs / phoneticUk <- pos_group_pronunciations (US/UK-tagged IPA, slashes stripped)
-- mnemonic                <- entries.memory_hook with entries.etymology_note appended
+- phoneticUs / phoneticUk <- pos_group_pronunciations (US/UK-tagged IPA, slashes
+                             stripped); the source value overwrites the base for
+                             that accent whenever the source has one
+- mnemonic                <- the curated base mnemonic is kept and the source
+                             entries.memory_hook (with etymology_note appended) is
+                             added after it, so neither source is lost
 - derived_terms           <- pos_group_relations type='derived_term'
 - sentences + links       <- meaning_examples (english text + chinese translation);
                              an example whose english already exists in `sentences`
@@ -178,18 +181,21 @@ def main() -> int:
                 supplements.append("phoneticUs")
                 stats["phoneticUsFilled"] += 1
 
-            # Full overwrite: the memory hook (with the etymology note appended)
-            # replaces any existing mnemonic when the source provides one.
-            new_mnemonic: str | None = None
-            parts = [memory_hook] if memory_hook and memory_hook.strip() else []
+            # Keep both sources: the curated base mnemonic is preserved and the
+            # distribution memory hook (with the etymology note appended) is added
+            # after it, so the original curated content is never discarded.
+            new_mnemonic = mnemonic
+            ai_parts = [memory_hook] if memory_hook and memory_hook.strip() else []
             if etymology_note and etymology_note.strip():
-                parts.append(f"[词源] {etymology_note.strip()}")
-            if parts:
-                new_mnemonic = "\n".join(parts)
+                ai_parts.append(f"[词源] {etymology_note.strip()}")
+            if ai_parts:
+                ai_text = "\n".join(ai_parts)
+                if new_mnemonic and new_mnemonic.strip():
+                    new_mnemonic = f"{new_mnemonic.strip()}\n\n{ai_text}"
+                else:
+                    new_mnemonic = ai_text
                 supplements.append("mnemonic")
                 stats["mnemonicFilled"] += 1
-            if new_mnemonic is None:
-                new_mnemonic = mnemonic
 
             for term in derived.get(entry_id, []):
                 batch_derived.append((word_id, term))

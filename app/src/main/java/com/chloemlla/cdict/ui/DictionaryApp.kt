@@ -887,17 +887,17 @@ private fun WordDetail(
 
             if (mnemonic != null) {
                 item(key = "mnemonic") {
-                    DetailSectionCard(
-                        title = "记忆提示",
-                        trailing = { if ("mnemonic" in supplements) AiSupplementPill() },
-                    ) {
-                        SpeakableEnglishText(
-                            en = mnemonic,
-                            pinnedZh = null,
-                            ui = phraseStates[mnemonic],
-                            onTranslate = onPhraseTranslate,
-                            onSpeak = onPhraseSpeak,
-                        )
+                    DetailSectionCard(title = "记忆提示") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SpeakableEnglishText(
+                                en = mnemonic,
+                                pinnedZh = null,
+                                ui = phraseStates[mnemonic],
+                                onTranslate = onPhraseTranslate,
+                                onSpeak = onPhraseSpeak,
+                            )
+                            AiSupplementTrailing(show = "mnemonic" in supplements)
+                        }
                     }
                 }
             }
@@ -958,10 +958,7 @@ private fun WordDetail(
 
                 if (derivedTerms.isNotEmpty()) {
                     item(key = "derived-terms") {
-                        DetailSectionCard(
-                            title = "派生词",
-                            trailing = { if ("derived" in supplements) AiSupplementPill() },
-                        ) {
+                        DetailSectionCard(title = "派生词") {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 derivedTerms.forEach { term ->
                                     val targetWord = derivedTermWords[term.lowercase()]
@@ -977,6 +974,7 @@ private fun WordDetail(
                                         },
                                     )
                                 }
+                                AiSupplementTrailing(show = "derived" in supplements)
                             }
                         }
                     }
@@ -1032,28 +1030,28 @@ private fun WordDetail(
                 }
 
                 item(key = "sentences") {
-                    DetailSectionCard(
-                        title = "真题句子",
-                        trailing = { if ("sentences" in supplements) AiSupplementPill() },
-                    ) {
-                        if (sentences.isEmpty()) {
-                            Text(
-                                text = "暂无真题句子",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            sentences.forEachIndexed { index, sentence ->
-                                if (index > 0) {
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                                }
-                                SpeakableEnglishText(
-                                    en = sentence.english,
-                                    pinnedZh = sentence.chinese?.takeIf { it.isNotBlank() },
-                                    ui = phraseStates[sentence.english],
-                                    onTranslate = onPhraseTranslate,
-                                    onSpeak = onPhraseSpeak,
+                    DetailSectionCard(title = "真题句子") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (sentences.isEmpty()) {
+                                Text(
+                                    text = "暂无真题句子",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            } else {
+                                sentences.forEachIndexed { index, sentence ->
+                                    if (index > 0) {
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                                    }
+                                    SpeakableEnglishText(
+                                        en = sentence.english,
+                                        pinnedZh = sentence.chinese?.takeIf { it.isNotBlank() },
+                                        ui = phraseStates[sentence.english],
+                                        onTranslate = onPhraseTranslate,
+                                        onSpeak = onPhraseSpeak,
+                                    )
+                                }
+                                AiSupplementTrailing(show = "sentences" in supplements)
                             }
                         }
                     }
@@ -1068,7 +1066,6 @@ private fun WordDetail(
 @Composable
 private fun DetailSectionCard(
     title: String,
-    trailing: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -1079,19 +1076,12 @@ private fun DetailSectionCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                trailing?.invoke()
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
             Spacer(Modifier.height(10.dp))
             content()
         }
