@@ -167,6 +167,12 @@ function wordHasAnnotation(w) {
   return ANNOTATION_COLUMNS.some((c) => w[c] !== null && String(w[c]).trim() !== '');
 }
 
+// 核心三字段（感情色彩/语体/精细语意）必须非空才视为完整；usageWarning 允许为空
+// （提示词定义"没有则空字符串"）。不完整的词下次运行会重写补齐。
+function wordAnnotationComplete(w) {
+  return ['emotionColor', 'register', 'nuanceDescription'].every((c) => w[c] !== null && String(w[c]).trim() !== '');
+}
+
 function persistAnnotation(db, word, ann) {
   if (CONFIG.dryRun) return;
   db.prepare(
@@ -480,9 +486,8 @@ async function runMerge(db, words) {
 // ---------------------------------------------------------------------------
 async function runAi(db, words) {
   let pending = words.filter((w) => {
-    if (wordHasAnnotation(w)) return false;
-    if (!CONFIG.force && state.completed[String(w.id)]) return false;
-    return true;
+    if (CONFIG.force) return true;
+    return !wordAnnotationComplete(w);
   });
   if (CONFIG.groups.length) pending = pending.filter((w) => CONFIG.groups.includes(w.frequencyGroup));
   if (CONFIG.limit > 0) pending = pending.slice(0, CONFIG.limit);
@@ -585,8 +590,8 @@ async function main() {
       console.error('词典中没有词条。');
       process.exit(1);
     }
-    const annotated = words.filter((w) => wordHasAnnotation(w)).length;
-    console.log(`词条总数 ${words.length}，已标注 ${annotated}，断点续传: ${STATE_FILE}`);
+    const complete = words.filter((w) => wordAnnotationComplete(w)).length;
+    console.log(`词条总数 ${words.length}，标注完整 ${complete}，待标注/待补齐 ${words.length - complete}，断点续传: ${STATE_FILE}`);
 
     let summary;
     if (CONFIG.input) {
