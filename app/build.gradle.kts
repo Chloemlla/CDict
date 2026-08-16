@@ -61,7 +61,7 @@ android {
         // requires a single one (IllegalStateException). Produce the AAB from a
         // dedicated buildType with shrink off; Play performs resource shrinking
         // per device at serve time.
-        releaseAab {
+        create("releaseAab") {
             isMinifyEnabled = true
             isShrinkResources = false
             if (hasReleaseSigning) {
