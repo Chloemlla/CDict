@@ -4,6 +4,10 @@
 
 **CDict** 是一款**离线优先**的雅思词典 Android 应用,基于 Kotlin、Jetpack Compose Material 3 与 Room 构建,包名与应用 ID 均为 `com.chloemlla.cdict`。
 
+> **当前版本 `1.0.1`**(versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2024.12.01` · Room `2.8.4` · Kotlin/JVM 17
+>
+> Current release **`1.0.1`** (versionCode `2`): `minSdk 26` / `targetSdk 37` / `compileSdk 37`, Compose BOM `2024.12.01`, Room `2.8.4`, Kotlin/JVM 17.
+
 ---
 
 ## 功能特性 Features
@@ -32,15 +36,23 @@
 
 ### 🔊 发音 Pronunciation
 
-词详情页提供 **英音 / 美音** 按钮,按三级顺序回退,无需打包任何音频文件:
+词详情页提供 **英音 / 美音** 按钮,发音由内置的 **vivo 语音合成**客户端默认生成,按三级顺序回退,无需打包任何音频文件:
 
 ```
-CDN (https://cdn.isdc.pages.dev/audio/{uk|us}/{word}.mp3)
-  → Youdao 发音接口 (dict.youdao.com/dictvoice)
+vivo 语音合成 (POST https://vivotrans.vivo.com.cn/fy/tts,返回 MP3)
+  → Youdao 静态发音 (dict.youdao.com/dictvoice)
   → Android 系统 TextToSpeech
 ```
 
-任一级失败自动降级到下一级;发音不可用时词典浏览不受影响。
+任一级失败(超时 / 非 2xx / 音频损坏 / 网络不可用)自动降级到下一级;发音不可用时词典浏览与离线搜索完全不受影响。
+
+`VivoTtsClient`(逆向 `com.vivo.translator` 的语音合成链路):
+
+- 请求体为 JSON(非表单),`auf=audio/L16;rate=16000`、`aue=3` → 返回 MP3 二进制;失败返回 `{"errorResult":{...}}`
+- HMAC-SHA256 签名`Sign.sign`(`hmacSha256Hex`),请求头含 `product/model/sysVer/appVer` 客户端指纹
+- 使用**独立于翻译引擎**的凭证 `appId=1336541186` / `appKey=9925f42b…`;英音 `langType=en-GBR`、美音 `en-USA`
+
+> ⚠️ **免责声明**:vivo 语音合成为私有接口,`appId`/`appKey` 为客户端常量,可能随时失效或变更。发音是便利功能,并非核心依赖;词典核心功能完全离线。
 
 ### 🌐 在线翻译 Online Translation
 
@@ -56,7 +68,7 @@ CDN (https://cdn.isdc.pages.dev/audio/{uk|us}/{word}.mp3)
 
 ### 🔒 权限与隐私 Permissions & Privacy
 
-- 仅申请 **`INTERNET`** 权限,用于在线翻译与发音 CDN
+- 仅申请 **`INTERNET`** 权限,用于在线翻译与发音(vivo 合成 / Youdao / CDN)
 - 词典数据完全本地;不收集、不上传任何个人信息
 
 ---
@@ -103,7 +115,7 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
 com.chloemlla.cdict
 ├── core
 │   ├── data        # Room: Entities / DAO / Database / Repository
-│   ├── audio       # PronunciationPlayer(CDN → Youdao → TTS 回退)
+│   ├── audio       # PronunciationPlayer + VivoTtsClient(vivo 合成 → Youdao → TTS 回退)
 │   └── translate   # vivo 翻译网关客户端 + 模型(内嵌翻译引擎)
 └── ui             # Compose: CdictApp(底部导航)/ Dictionary* / Translate*
 ```
