@@ -130,13 +130,13 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private fun playFile(generation: Int, file: File, word: String, accent: Accent) {
         val media = MediaPlayer().apply {
             setOnPreparedListener {
-                if (generation == playGeneration && player === media) start()
+                if (generation == playGeneration && player === this) start()
             }
             setOnCompletionListener {
-                if (player === media) releasePlayer()
+                if (player === this) releasePlayer()
             }
             setOnErrorListener { _, _, _ ->
-                if (player === media) {
+                if (player === this) {
                     releasePlayer()
                     file.delete()
                     playYoudaoSentenceFallback(generation, word, accent)
@@ -188,16 +188,16 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
         val media = MediaPlayer().apply {
             setOnPreparedListener {
-                if (generation == playGeneration && player === media) start()
+                if (generation == playGeneration && player === this) start()
             }
             setOnCompletionListener {
-                if (player === media) {
+                if (player === this) {
                     releasePlayer()
                     tmp.delete()
                 }
             }
             setOnErrorListener { _, _, _ ->
-                if (player === media) {
+                if (player === this) {
                     releasePlayer()
                     tmp.delete()
                     if (generation == playGeneration) speak(generation, word, accent)
@@ -260,10 +260,11 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private fun speak(generation: Int, word: String, accent: Accent) {
         val locale = if (accent == Accent.UK) Locale.UK else Locale.US
         tts?.shutdown()
-        val newTts = TextToSpeech(context) { status ->
+        var newTts: TextToSpeech? = null
+        newTts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS && generation == playGeneration && tts === newTts) {
-                newTts.language = locale
-                newTts.speak(word, TextToSpeech.QUEUE_FLUSH, null, word)
+                newTts?.language = locale
+                newTts?.speak(word, TextToSpeech.QUEUE_FLUSH, null, word)
             }
         }
         tts = newTts
