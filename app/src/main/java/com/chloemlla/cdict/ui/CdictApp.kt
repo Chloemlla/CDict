@@ -148,7 +148,7 @@ fun CdictApp(
                         onLoadMore = onDictionaryLoadMore,
                         onSortModeChanged = onDictionarySortModeChanged,
                         masteredIds = masteredIds,
-                        onToggleMastered = studyViewModel::toggleMastered,
+                        onToggleMastered = { word -> studyViewModel.toggleMastered(word.id) },
                     )
                     else -> TranslateScreen(translationViewModel)
                 }
