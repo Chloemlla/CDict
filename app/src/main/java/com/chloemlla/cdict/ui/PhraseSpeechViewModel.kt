@@ -37,9 +37,9 @@ class PhraseSpeechViewModel(
     /** 为某段英文请求中文译文；已加载/加载中则幂等跳过。 */
     fun translate(en: String) {
         if (en.isBlank()) return
-        _states.update { current ->
-            if (current[en] is PhraseUiState.Loading) current else current + (en to PhraseUiState.Loading)
-        }
+        val currentState = _states.value[en]
+        if (currentState is PhraseUiState.Loading || currentState is PhraseUiState.Done) return
+        _states.update { it + (en to PhraseUiState.Loading) }
         viewModelScope.launch {
             val outcome = client.translate(
                 TranslationRequest(listOf(en), TranslationDirection.EN_TO_ZH),
