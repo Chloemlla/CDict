@@ -17,6 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WordSentenceLinkEntity::class,
         HeatmapEntryEntity::class,
         WordSearchEntity::class,
+        MetadataEntity::class,
     ],
     version = 2,
     exportSchema = true,
