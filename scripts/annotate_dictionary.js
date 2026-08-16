@@ -209,7 +209,7 @@ function normalizeEmotion(v) {
 
 function normalizeRegister(v) {
   const s = String(v == null ? '' : v).trim().toLowerCase().replace(/[-\s]+/g, '_');
-  return ['academic', 'spoken', 'written', 'literary', 'informal'].includes(s) ? s : null;
+  return ['academic', 'spoken', 'written', 'literary', 'informal', 'neutral'].includes(s) ? s : null;
 }
 
 function splitCollocations(v) {
@@ -244,7 +244,7 @@ function validateAnnotation(obj) {
 const SYSTEM_PROMPT = `你是一个严谨的雅思英语语言专家。分析用户给出的英文单词，只输出一个 JSON 对象（不要 Markdown，不要任何额外文字），字段：
 {
   "emotion_color": "positive | negative | neutral | context_dependent",
-  "register": "academic | spoken | written | literary | informal",
+  "register": "academic | spoken | written | literary | informal | neutral",
   "nuance_description": "中文一句话，说明该词的精细语意/动作画面感，点出与普通同义词的区别",
   "usage_warning": "中文避坑指南：不能搭配哪些词、不适合哪些场景；没有则空字符串",
   "common_collocations": ["2到4个常用搭配，含介词/动词搭配"]
@@ -262,7 +262,7 @@ const BATCH_PROMPT = `你是一个严谨的雅思英语语言专家。分析用�
     {
       "word": "单词本身，必须与输入原样一致",
       "emotion_color": "positive | negative | neutral | context_dependent",
-      "register": "academic | spoken | written | literary | informal",
+      "register": "academic | spoken | written | literary | informal | neutral",
       "nuance_description": "中文一句话，说明该词的精细语意/动作画面感，点出与普通同义词的区别",
       "usage_warning": "中文避坑指南：不能搭配哪些词、不适合哪些场景；没有则空字符串",
       "common_collocations": ["2到4个常用搭配，含介词/动词搭配"]
