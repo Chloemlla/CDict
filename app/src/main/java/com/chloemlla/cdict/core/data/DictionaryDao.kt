@@ -79,6 +79,9 @@ interface DictionaryDao {
     )
     suspend fun wordsSharingRoots(roots: List<String>, limit: Int): List<WordEntity>
 
+    @Query("SELECT * FROM words WHERE LOWER(word) IN (:words)")
+    suspend fun wordsByText(words: List<String>): List<WordEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWords(words: List<WordEntity>)
 

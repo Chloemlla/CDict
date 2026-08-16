@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 
 data class WordDetailData(
     val derivedTerms: List<String> = emptyList(),
+    val derivedTermWords: Map<String, WordEntity> = emptyMap(),
     val roots: List<RootEntity> = emptyList(),
     val sentences: List<SentenceEntity> = emptyList(),
     val heatmap: List<HeatmapEntryEntity> = emptyList(),
@@ -210,8 +211,12 @@ class DictionaryViewModel(
             // fragments while the detail page loads, so the first tap plays instantly.
             pronunciationPlayer.prefetch(word.word, Accent.US)
             pronunciationPlayer.prefetch(word.word, Accent.UK)
+            val derivedTerms = dao.derivedTerms(word.id)
+            val derivedTermWords = dao.wordsByText(derivedTerms.map { it.lowercase() })
+                .associateBy { it.word.lowercase() }
             val detail = WordDetailData(
-                derivedTerms = dao.derivedTerms(word.id),
+                derivedTerms = derivedTerms,
+                derivedTermWords = derivedTermWords,
                 roots = dao.roots(word.id),
                 sentences = dao.sentences(word.id, limit = 10, offset = 0),
                 heatmap = dao.heatmap(word.id),

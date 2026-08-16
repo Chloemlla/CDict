@@ -156,6 +156,7 @@ fun DictionaryApp(
                             word = sel,
                             detail = state.detail,
                             onBack = onBackFromDetail,
+                            onOpenWord = onSelect,
                             onPlayPronunciation = onPlayPronunciation,
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
@@ -639,6 +640,7 @@ private fun WordDetail(
     word: WordEntity,
     detail: WordDetailData?,
     onBack: () -> Unit,
+    onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     phraseStates: Map<String, PhraseUiState>,
     onPhraseTranslate: (String) -> Unit,
@@ -655,6 +657,7 @@ private fun WordDetail(
         root.root.isNotBlank() || !root.meaning.isNullOrBlank()
     }
     val derivedTerms = detail?.derivedTerms.orEmpty().filter { it.isNotBlank() }
+    val derivedTermWords = detail?.derivedTermWords.orEmpty()
     val heatmap = detail?.heatmap.orEmpty().filter { it.period.isNotBlank() }
     val sentences = detail?.sentences.orEmpty().filter { it.english.isNotBlank() }
 
@@ -933,13 +936,25 @@ private fun WordDetail(
                         DetailSectionCard(title = "派生词") {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 derivedTerms.forEach { term ->
-                                    SpeakableEnglishText(
-                                        en = term,
-                                        pinnedZh = null,
-                                        ui = phraseStates[term],
-                                        onTranslate = onPhraseTranslate,
-                                        onSpeak = onPhraseSpeak,
-                                    )
+                                    val headword = derivedTermWords[term.lowercase()]
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        SpeakableEnglishText(
+                                            en = term,
+                                            pinnedZh = null,
+                                            ui = phraseStates[term],
+                                            onTranslate = onPhraseTranslate,
+                                            onSpeak = onPhraseSpeak,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (headword != null) {
+                                            TextButton(onClick = { onOpenWord(headword) }) {
+                                                Text("前往")
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
