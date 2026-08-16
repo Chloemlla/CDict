@@ -35,7 +35,7 @@ private const val DEFER_INSERT_SLOT = 5
  * 状态同步），使背词引擎的 ASR 状态机自动跳过已处理词。构造不触发任何网络；全部数据来自本地 Room。
  */
 class RecommendationViewModel(application: Application) : AndroidViewModel(application) {
-    private val context: Context = application.applicationContext
+    private val context: Context get() = getApplication<Application>()
     private val prefs: SharedPreferences =
         context.getSharedPreferences(REC_PREFS_NAME, Context.MODE_PRIVATE)
 
