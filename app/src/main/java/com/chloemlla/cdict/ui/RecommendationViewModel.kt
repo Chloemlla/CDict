@@ -1,0 +1,186 @@
+package com.chloemlla.cdict.ui
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.chloemlla.cdict.core.data.DatabaseState
+import com.chloemlla.cdict.core.data.DictionaryDatabase
+import com.chloemlla.cdict.core.data.DictionaryRepository
+import com.chloemlla.cdict.core.data.RecommendationEngine
+import com.chloemlla.cdict.core.data.RecommendationPool
+import com.chloemlla.cdict.core.data.STUDY_STATUS_LEARNING
+import com.chloemlla.cdict.core.data.StudyDatabase
+import com.chloemlla.cdict.core.data.StudyWordEntity
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+
+/** 与背词页共享同一个每日目标（同一 SharedPreferences），保证两侧进度一致。 */
+private const val REC_PREFS_NAME = "cdict_study_settings"
+private const val REC_PREF_KEY_GOAL = "study_daily_goal"
+
+/** “稍后再看”打散：插回到当前词之后第 4~6 位（PRD 智能插入）。 */
+private const val DEFER_INSERT_SLOT = 5
+
+/**
+ * 推荐页 ViewModel：持有内存中的推荐流队列（ArrayDeque），负责“我已背会 / 稍后再看 /
+ * 改目标 / 再来一批”的实时队列重排，并把“我已背会”的新词持久化到 study.db（加入复习管线，
+ * 之后不再进入新词池）。构造不触发任何网络；全部数据来自本地 Room。
+ */
+class RecommendationViewModel(private val context: Context) : ViewModel() {
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences(REC_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _state = MutableStateFlow<RecommendationScreenState>(RecommendationScreenState.Loading)
+    val state: StateFlow<RecommendationScreenState> = _state.asStateFlow()
+
+    private var dictDb: DictionaryDatabase? = null
+    private var studyDb: StudyDatabase? = null
+    private val queue = ArrayDeque<RecommendationItemCard>()
+    private val consumedToday = mutableSetOf<Long>()
+    private var totalCount = 0
+    private var handledToday = 0
+
+    private val today: String get() = LocalDate.now().toString()
+
+    init {
+        viewModelScope.launch {
+            when (val result = DictionaryRepository(context).open()) {
+                is DatabaseState.Ready -> {
+                    dictDb = result.database
+                    studyDb = StudyDatabase.open(context)
+                    buildFeed()
+                }
+                is DatabaseState.Failed -> {
+                    _state.value = RecommendationScreenState.NoDictionary
+                }
+                DatabaseState.Loading -> Unit
+            }
+        }
+    }
+
+    private fun dailyGoal(): Int =
+        prefs.getInt(REC_PREF_KEY_GOAL, DAILY_GOAL_DEFAULT)
+            .coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
+
+    /** 依据当前每日目标从头重建整条推荐流（点刷新时调用）。 */
+    fun reload() {
+        viewModelScope.launch { buildFeed() }
+    }
+
+    private suspend fun engine(): RecommendationEngine? {
+        val dictDao = dictDb?.dictionaryDao() ?: return null
+        val dao = studyDb?.studyDao() ?: return null
+        return RecommendationEngine(dictDao, dao)
+    }
+
+    private suspend fun buildFeed() {
+        val eng = engine() ?: return
+        val goal = dailyGoal()
+        val occupied = consumedToday + queue.map { it.word.id }
+        queue.clear()
+        val feed = eng.generateFeed(goal, today, occupied)
+        feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
+        totalCount = feed.items.size
+        handledToday = 0
+        emit()
+    }
+
+    /** 我已背会：从队列移除，本会话排除；新词写入 study.db 进入复习管线。 */
+    fun markLearned() {
+        val cur = _state.value as? RecommendationScreenState.Ready ?: return
+        val head = cur.items.firstOrNull() ?: return
+        val id = head.word.id
+        viewModelScope.launch {
+            if (head.pool != RecommendationPool.REVIEW) {
+                studyDb?.studyDao()?.upsert(
+                    StudyWordEntity(
+                        wordId = id,
+                        status = STUDY_STATUS_LEARNING,
+                        learnedDate = today,
+                        nextReviewDate = plusDays(1),
+                        ease = 2.5,
+                        repetitions = 0,
+                        lastInterval = 1,
+                        addedAt = System.currentTimeMillis(),
+                    ),
+                )
+            }
+            consumedToday.add(id)
+            handledToday++
+            queue.removeFirst()
+            emit()
+        }
+    }
+
+    /** 稍后再看：打散插回到当前位置之后第 [DEFER_INSERT_SLOT] 位（队尾不足则回尾）。 */
+    fun defer() {
+        val cur = _state.value as? RecommendationScreenState.Ready ?: return
+        val head = cur.items.firstOrNull() ?: return
+        queue.removeFirst()
+        val insertAt = minOf(DEFER_INSERT_SLOT, queue.size)
+        queue.add(insertAt, head)
+        emit()
+    }
+
+    /** 再来一批：词池学光后按目标再生成一批（终极复习 / 补充）。 */
+    fun continueMore() {
+        viewModelScope.launch {
+            val eng = engine() ?: return@launch
+            val goal = dailyGoal()
+            val occupied = consumedToday + queue.map { it.word.id }
+            val feed = eng.generateFeed(goal, today, occupied)
+            feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
+            totalCount += feed.items.size
+            emit()
+        }
+    }
+
+    /** 修改每日目标：追加符合 3:5:2 的新切片；降低则从队尾裁剪（PRD 无缝扩充）。 */
+    fun setGoal(value: Int) {
+        val goal = value.coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
+        val prev = dailyGoal()
+        prefs.edit().putInt(REC_PREF_KEY_GOAL, goal).apply()
+        val cur = _state.value as? RecommendationScreenState.Ready ?: return
+        viewModelScope.launch {
+            val delta = goal - prev
+            when {
+                delta > 0 -> {
+                    val eng = engine() ?: return@launch
+                    val occupied = consumedToday + queue.map { it.word.id }
+                    val feed = eng.generateFeed(delta, today, occupied)
+                    feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
+                    totalCount += feed.items.size
+                }
+                delta < 0 -> {
+                    val remove = (queue.size - goal).coerceAtLeast(0)
+                    repeat(remove) { queue.removeLast() }
+                    totalCount = (totalCount - remove).coerceAtLeast(0)
+                }
+            }
+            emit()
+        }
+    }
+
+    private fun plusDays(days: Int): String = LocalDate.now().plusDays(days.toLong()).toString()
+
+    private fun emit() {
+        _state.value = RecommendationScreenState.Ready(
+            dailyGoal = dailyGoal(),
+            totalCount = totalCount,
+            items = queue.toList(),
+            handledToday = handledToday,
+        )
+    }
+}
+
+class RecommendationViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        @Suppress("UNCHECKED_CAST")
+        return RecommendationViewModel(context.applicationContext) as T
+    }
+}

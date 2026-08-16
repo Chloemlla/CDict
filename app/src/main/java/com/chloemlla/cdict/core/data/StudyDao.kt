@@ -39,6 +39,13 @@ interface StudyDao {
     )
     suspend fun pendingReview(date: String, limit: Int): List<StudyWordEntity>
 
+    // Weakest-memory words (lowest ease, fewest repetitions) — the ultimate-review fallback
+    // target when the fresh-word pool has been exhausted (PRD 边缘策略).
+    @Query(
+        "SELECT * FROM study_words ORDER BY ease ASC, repetitions ASC, nextReviewDate ASC LIMIT :limit",
+    )
+    suspend fun weakestStudied(limit: Int): List<StudyWordEntity>
+
     // ASR scheduling write: promote memory state, record the next review's interval, and
     // derive the repeating ladder through ease / repetition count.
     @Query(

@@ -56,7 +56,7 @@ fun ResponsiveContentBox(
 }
 
 /** 从 Compose LocalContext 逆包装找到 [Activity]；找不到返回 null（退化为满宽）。 */
-private tailrec fun Context.findActivity(): Activity? {
+internal fun Context.findActivity(): Activity? {
     if (this is Activity) return this
     if (this !is ContextWrapper) return null
     return baseContext.findActivity()

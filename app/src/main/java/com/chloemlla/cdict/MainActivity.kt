@@ -14,6 +14,8 @@ import com.chloemlla.cdict.ui.CdictApp
 import com.chloemlla.cdict.ui.CdictTheme
 import com.chloemlla.cdict.ui.DictionaryViewModel
 import com.chloemlla.cdict.ui.DictionaryViewModelFactory
+import com.chloemlla.cdict.ui.RecommendationViewModel
+import com.chloemlla.cdict.ui.RecommendationViewModelFactory
 import com.chloemlla.cdict.ui.StudyViewModel
 import com.chloemlla.cdict.ui.StudyViewModelFactory
 import com.chloemlla.cdict.ui.TranslationViewModel
@@ -29,6 +31,9 @@ class MainActivity : ComponentActivity() {
     }
     private val studyViewModel: StudyViewModel by viewModels {
         StudyViewModelFactory(applicationContext)
+    }
+    private val recommendationViewModel: RecommendationViewModel by viewModels {
+        RecommendationViewModelFactory(applicationContext)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +53,7 @@ class MainActivity : ComponentActivity() {
                             onDictionarySortModeChanged = dictionaryViewModel::setSortMode,
                             translationViewModel = translationViewModel,
                             studyViewModel = studyViewModel,
+                            recommendationViewModel = recommendationViewModel,
                         )
                     }
                 }
