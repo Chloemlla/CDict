@@ -102,7 +102,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** 有道下载。只接受 200 且 content-type 为 audio/*（或无 content-type 但可识别音频容器）的响应；错误页/空体返回 null 触发回退。 */
+    /** 有道下载。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
     private fun fetchYoudao(word: String, accent: Accent): ByteArray? = try {
         val conn = URL("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
             .openConnection() as HttpURLConnection
