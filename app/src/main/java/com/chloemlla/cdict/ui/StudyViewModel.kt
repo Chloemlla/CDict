@@ -32,10 +32,19 @@ private const val MASTER_REPETITIONS = 5
 private const val EASE_DELTA = 0.15
 private const val EASE_MAX = 3.0
 
-// Anti-overwhelmed cap (优化项二): cap today's review backlog at 每日新词量 * 2.5 so a long
-// absence never dumps the whole backlog in one session; the tail stays due and drains over
-// the following days.
+// Ebbinghaus decay weighting (PRD §3.3): a per-band multiplier bends the base ladder by the
+// word's IELTS frequency. DAO frequencyGroup runs 1 (core 真题高频) .. 7 (生僻低频):
+//   group 1 -> 0.5  (core words reviewed on a tighter cadence — high priority)
+//   group 7 -> 1.7  (obscure words stretch their intervals — focus stays on core)
+// This maps the base interval to base * MULT_MIN + t * (MULT_MAX - MULT_MIN), clamped >= 1 day.
+private const val GROUP_DECAY_MULT_MIN = 0.5
+private const val GROUP_DECAY_MULT_MAX = 1.7
+
+// Anti-overwhelmed cap (PRD §2.2 断刷截断): a long absence must not dump the whole backlog
+// in one session. The overdue tail stays due and drains over the following days; the cap is
+// the smaller of the goal-scaled budget and the hard 50-question truncation from the spec.
 private const val REVIEW_CAP_MULTIPLIER = 2.5
+private const val REVIEW_ABSENCE_HARD_CAP = 50
 
 // Error Attribution thresholds (优化项五), in milliseconds.
 private const val CONFUSION_MAX_MS = 1500L
@@ -117,7 +126,9 @@ class StudyViewModel(context: Context) : ViewModel() {
             val dao = studyDb?.studyDao() ?: return@launch
             todayDone = dao.learnedTodayCount(today)
             refreshLearnedToday()
-            val cap = (dailyGoal() * REVIEW_CAP_MULTIPLIER).toInt().coerceAtLeast(DAILY_GOAL_MIN)
+            val cap = (dailyGoal() * REVIEW_CAP_MULTIPLIER).toInt()
+                .coerceAtMost(REVIEW_ABSENCE_HARD_CAP)
+                .coerceAtLeast(DAILY_GOAL_MIN)
             val pending = dao.pendingReview(today, cap)
             if (pending.isNotEmpty()) {
                 buildReview(pending)
@@ -139,7 +150,11 @@ class StudyViewModel(context: Context) : ViewModel() {
         val words = dictDao.wordsByIds(ids)
         val byId = words.groupBy { it.id }
         val distractorPool = dictDao.randomWords(400)
-        for (entry in pending) {
+        // Prioritise core IELTS words first (PRD §3.3): the review batch is drawn from the
+        // decayed pool but re-ordered by frequencyGroup so high-frequency words surface
+        // before obscure ones when the backlog exceeds a single session.
+        val ordered = pending.sortedBy { byId[it.wordId]?.firstOrNull()?.frequencyGroup ?: Int.MAX_VALUE }
+        for (entry in ordered) {
             val word = byId[entry.wordId]?.firstOrNull() ?: continue
             val correctText = word.translation?.takeIf(String::isNotBlank) ?: word.definition?.takeIf(String::isNotBlank) ?: continue
             val distractors = buildReviewDistractors(word, distractorPool)
@@ -203,16 +218,32 @@ class StudyViewModel(context: Context) : ViewModel() {
         }
     }
 
-    /** Adaptive Spaced Repetition write: advance the memory state on a correct review. */
+    /**
+     * Adaptive Spaced Repetition write: advance the memory state on a correct review.
+     * The base 1/3/7/15/30-day ladder is bent by the word's IELTS frequency band (PRD §3.3)
+     * so core words are re-tested sooner and obscure words spread further apart.
+     */
     private suspend fun scheduleReview(wordId: Long) {
         val dao = studyDb?.studyDao() ?: return
         val row = dao.word(wordId) ?: return
         val slot = row.repetitions.coerceIn(0, REVIEW_INTERVALS.lastIndex)
-        val interval = REVIEW_INTERVALS[slot]
+        val interval = decayedInterval(REVIEW_INTERVALS[slot], frequencyGroupOf(wordId))
         val repetitions = row.repetitions + 1
         val ease = (row.ease + EASE_DELTA).coerceAtMost(EASE_MAX)
         val status = if (repetitions >= MASTER_REPETITIONS) STUDY_STATUS_MASTERED else STUDY_STATUS_REVIEW
         dao.schedule(wordId, status, plusDays(interval), ease, repetitions, interval)
+    }
+
+    /** Linear interpolation of the decay multiplier across the 7 frequency bands. */
+    private fun frequencyGroupOf(wordId: Long): Int {
+        val group = dictDb?.dictionaryDao()?.wordsByIds(listOf(wordId))?.firstOrNull()?.frequencyGroup ?: 3
+        return group.coerceIn(1, 7)
+    }
+
+    private fun decayedInterval(baseDays: Int, frequencyGroup: Int): Int {
+        val t = (frequencyGroup - 1) / 6.0 // 0.0 (core) .. 1.0 (obscure)
+        val mult = GROUP_DECAY_MULT_MIN + t * (GROUP_DECAY_MULT_MAX - GROUP_DECAY_MULT_MIN)
+        return maxOf(1, (baseDays * mult).toInt())
     }
 
     /** Marks the current question as just presented, restarting the hesitation clock. */
