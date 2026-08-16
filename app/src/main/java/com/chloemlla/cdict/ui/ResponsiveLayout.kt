@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** 按窗口宽度尺寸类选择的最大内容行宽；无上限（手机竖屏）时返回 [Dp.Infinity]。 */
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun responsiveContentMaxWidth(): Dp {
     val activity = LocalContext.current.findActivity()
