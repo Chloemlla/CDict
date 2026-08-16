@@ -3,6 +3,7 @@ package com.chloemlla.cdict.ui
 import com.chloemlla.cdict.core.translate.HttpResponse
 import com.chloemlla.cdict.core.translate.VivoTranslationClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -17,6 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TranslationViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()

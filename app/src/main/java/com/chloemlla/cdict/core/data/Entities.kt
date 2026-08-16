@@ -57,7 +57,10 @@ data class SentenceEntity(
 @Entity(
     tableName = "word_sentence_links",
     primaryKeys = ["wordId", "sentenceId"],
-    indices = [Index(value = ["wordId"], name = "idx_links_word")],
+    indices = [
+        Index(value = ["wordId"], name = "idx_links_word"),
+        Index(value = ["sentenceId"], name = "idx_links_sentence"),
+    ],
     foreignKeys = [
         ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"]),
         ForeignKey(entity = SentenceEntity::class, parentColumns = ["id"], childColumns = ["sentenceId"]),

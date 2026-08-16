@@ -21,13 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -307,7 +307,7 @@ private fun ColumnScope.EmptySearchState(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(
-                imageVector = if (query.isBlank()) Icons.Default.MenuBook else Icons.Default.SearchOff,
+                imageVector = if (query.isBlank()) Icons.AutoMirrored.Filled.MenuBook else Icons.Default.SearchOff,
                 contentDescription = if (query.isBlank()) "词典为空" else "没有找到匹配词条",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary,
@@ -448,7 +448,7 @@ private fun WordDetail(
                             contentDescription = "返回词典列表"
                         },
                     ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -545,7 +545,7 @@ private fun WordDetail(
                                     .heightIn(min = 48.dp),
                                 contentPadding = ButtonDefaults.ContentPadding,
                             ) {
-                                Icon(Icons.Default.VolumeUp, contentDescription = null)
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
                                 Spacer(Modifier.size(8.dp))
                                 Text("英音")
                             }
@@ -556,7 +556,7 @@ private fun WordDetail(
                                     .heightIn(min = 48.dp),
                                 contentPadding = ButtonDefaults.ContentPadding,
                             ) {
-                                Icon(Icons.Default.VolumeUp, contentDescription = null)
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
                                 Spacer(Modifier.size(8.dp))
                                 Text("美音")
                             }
