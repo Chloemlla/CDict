@@ -26,6 +26,12 @@ data class WordDetailData(
     val heatmap: List<HeatmapEntryEntity> = emptyList(),
 )
 
+enum class SortMode(val label: String) {
+    Frequency("按频率"),
+    Alphabetical("按字母"),
+    AlphabeticalDesc("字母倒序"),
+}
+
 sealed interface DictionaryScreenState {
     data object Loading : DictionaryScreenState
     data class Ready(
@@ -33,6 +39,7 @@ sealed interface DictionaryScreenState {
         val selected: WordEntity? = null,
         val query: String = "",
         val detail: WordDetailData? = null,
+        val sortMode: SortMode = SortMode.Frequency,
         val hasMore: Boolean = false,
         val isLoadingMore: Boolean = false,
     ) : DictionaryScreenState
@@ -57,9 +64,10 @@ class DictionaryViewModel(
                     val db = result.database
                     database = db
                     totalCount = db.dictionaryDao().count()
-                    val words = firstPageWords(db)
+                    val words = browsePage(db, SortMode.Frequency, 0)
                     _state.value = DictionaryScreenState.Ready(
                         words = words,
+                        sortMode = SortMode.Frequency,
                         hasMore = words.size.toLong() < totalCount,
                     )
                 }
@@ -69,18 +77,46 @@ class DictionaryViewModel(
         }
     }
 
-    private suspend fun firstPageWords(db: DictionaryDatabase): List<WordEntity> =
-        db.dictionaryDao().browse(pageSize, 0).first()
+    private suspend fun browsePage(
+        db: DictionaryDatabase,
+        mode: SortMode,
+        offset: Int,
+    ): List<WordEntity> =
+        when (mode) {
+            SortMode.Frequency -> db.dictionaryDao().browse(pageSize, offset)
+            SortMode.Alphabetical -> db.dictionaryDao().browseAlphabetical(pageSize, offset)
+            SortMode.AlphabeticalDesc -> db.dictionaryDao().browseAlphabeticalDesc(pageSize, offset)
+        }.first()
+
+    private fun currentSortMode(): SortMode =
+        (_state.value as? DictionaryScreenState.Ready)?.sortMode ?: SortMode.Frequency
+
+    fun setSortMode(mode: SortMode) {
+        val db = database ?: return
+        if (currentSortMode() == mode) return
+        viewModelScope.launch {
+            totalCount = db.dictionaryDao().count()
+            val words = browsePage(db, mode, 0)
+            _state.value = DictionaryScreenState.Ready(
+                words = words,
+                query = "",
+                sortMode = mode,
+                hasMore = words.size.toLong() < totalCount,
+            )
+        }
+    }
 
     fun search(query: String) {
         val db = database ?: return
         viewModelScope.launch {
             val newState = if (query.isBlank()) {
                 totalCount = db.dictionaryDao().count()
-                val words = firstPageWords(db)
+                val mode = currentSortMode()
+                val words = browsePage(db, mode, 0)
                 DictionaryScreenState.Ready(
                     words = words,
                     query = "",
+                    sortMode = mode,
                     hasMore = words.size.toLong() < totalCount,
                 )
             } else if (query.any { it.code > 127 }) {
@@ -103,15 +139,16 @@ class DictionaryViewModel(
         if (state.query.isNotBlank() || !state.hasMore || loadMoreInFlight) return
         val db = database ?: return
         val offset = state.words.size
+        val sortMode = state.sortMode
         // Flip the loading footer synchronously (no suspension in between) so the UI never re-requests.
         _state.value = state.copy(isLoadingMore = true)
         loadMoreInFlight = true
         viewModelScope.launch {
             try {
-                val more = db.dictionaryDao().browse(pageSize, offset).first()
+                val more = browsePage(db, sortMode, offset)
                 val latest = _state.value as? DictionaryScreenState.Ready ?: return@launch
-                // Discard stale results when a newer search superseded this page.
-                if (latest.query.isNotBlank() || latest.words.size != offset) return@launch
+                // Discard stale results when a newer search or sort change superseded this page.
+                if (latest.query.isNotBlank() || latest.sortMode != sortMode || latest.words.size != offset) return@launch
                 val merged = latest.words + more
                 _state.value = latest.copy(
                     words = merged,

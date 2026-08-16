@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
                             onDictionarySelect = dictionaryViewModel::select,
                             onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
                             onDictionaryLoadMore = dictionaryViewModel::loadMore,
+                            onDictionarySortModeChanged = dictionaryViewModel::setSortMode,
                             translationViewModel = translationViewModel,
                         )
                     }

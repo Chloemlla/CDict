@@ -62,6 +62,7 @@ fun CdictApp(
     onDictionarySelect: (WordEntity) -> Unit,
     onDictionaryPlayPronunciation: (WordEntity, Accent) -> Unit,
     onDictionaryLoadMore: () -> Unit,
+    onDictionarySortModeChanged: (SortMode) -> Unit,
     translationViewModel: TranslationViewModel,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -121,6 +122,7 @@ fun CdictApp(
                         onSelect = onDictionarySelect,
                         onPlayPronunciation = onDictionaryPlayPronunciation,
                         onLoadMore = onDictionaryLoadMore,
+                        onSortModeChanged = onDictionarySortModeChanged,
                     )
                     else -> TranslateScreen(translationViewModel)
                 }

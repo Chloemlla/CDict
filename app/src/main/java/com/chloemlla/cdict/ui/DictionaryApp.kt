@@ -34,6 +34,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,6 +83,7 @@ fun DictionaryApp(
     onSelect: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     onLoadMore: () -> Unit,
+    onSortModeChanged: (SortMode) -> Unit,
 ) {
     val context = LocalContext.current
     val phraseViewModel: PhraseSpeechViewModel = viewModel(
@@ -103,7 +105,7 @@ fun DictionaryApp(
                     onPhraseSpeak = phraseViewModel::speak,
                 )
             } else {
-                WordList(state, onQueryChanged, onSelect, onLoadMore)
+                WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
             }
         }
     }
@@ -179,17 +181,19 @@ private fun WordList(
     onQueryChanged: (String) -> Unit,
     onSelect: (WordEntity) -> Unit,
     onLoadMore: () -> Unit,
+    onSortModeChanged: (SortMode) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf(state.query) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
 
-    // Jump back to the top whenever a fresh search replaces the browse list.
-    var lastQuery by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(state.query) {
-        if (state.query != lastQuery) {
-            lastQuery = state.query
+    // Jump back to the top whenever a fresh search or sort change replaces the browse list.
+    var lastListKey by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(state.query, state.sortMode) {
+        val key = "${state.sortMode.name}:${state.query}"
+        if (key != lastListKey) {
+            lastListKey = key
             listState.scrollToItem(0)
         }
     }
@@ -297,6 +301,29 @@ private fun WordList(
                 ),
             )
 
+            if (query.isBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SortMode.entries.forEach { mode ->
+                        FilterChip(
+                            selected = state.sortMode == mode,
+                            onClick = { onSortModeChanged(mode) },
+                            label = {
+                                Text(
+                                    text = mode.label,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+
             if (state.words.isEmpty()) {
                 EmptySearchState(
                     query = query,
@@ -307,7 +334,7 @@ private fun WordList(
                 )
             } else {
                 Text(
-                    text = if (query.isBlank()) "全部词条 · 按频率" else "匹配词条",
+                    text = if (query.isBlank()) "全部词条" else "匹配词条",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),

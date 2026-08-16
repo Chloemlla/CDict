@@ -14,6 +14,12 @@ interface DictionaryDao {
     @Query("SELECT * FROM words ORDER BY frequencyGroup, frequency, word LIMIT :limit OFFSET :offset")
     fun browse(limit: Int, offset: Int): Flow<List<WordEntity>>
 
+    @Query("SELECT * FROM words ORDER BY word COLLATE NOCASE LIMIT :limit OFFSET :offset")
+    fun browseAlphabetical(limit: Int, offset: Int): Flow<List<WordEntity>>
+
+    @Query("SELECT * FROM words ORDER BY word COLLATE NOCASE DESC LIMIT :limit OFFSET :offset")
+    fun browseAlphabeticalDesc(limit: Int, offset: Int): Flow<List<WordEntity>>
+
     @Query("SELECT * FROM words WHERE id = :id")
     fun observeWord(id: Long): Flow<WordEntity?>
 
