@@ -942,7 +942,7 @@ private fun SpeakableEnglishText(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ui is PhraseUiState.Loading -> Text(
-                text = "译中…",
+                text = "翻译中…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline,
             )
