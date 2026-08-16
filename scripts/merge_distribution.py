@@ -14,6 +14,16 @@ merged into the existing CDict words schema:
 - sentences + links       <- meaning_examples (english text + chinese translation);
                              an example whose english already exists in `sentences`
                              gets its empty chinese filled instead of being duplicated
+- headwordSummary         <- entries.headword_summary (a one-sentence gloss)
+- word_relations          <- pos_group_relations types synonym/antonym/related_term
+- word_forms              <- pos_group_forms (inflection forms with POS/tense tags)
+- etymologies             <- etymologies.text (structured etymology paragraphs)
+- study_notes             <- entry_study_notes (learner-oriented notes, mostly zh)
+
+The four relation/form/etymology/study-note tables and the headwordSummary column are
+created on the output when missing, matching the Room entity schema exactly (column
+types, primary keys, foreign keys and index names), so the published asset passes
+Room's createFromAsset schema validation.
 
 Each enriched word also gets an `aiSupplemented` column (added when missing) storing
 a comma-separated list of the fields that came from the distribution source, so the
@@ -49,15 +59,15 @@ def read_distribution(path: Path) -> dict[str, dict]:
     """Preload the distribution tables once; returns per-headword enrichments."""
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
-        entries: dict[str, tuple[str, str | None, str | None]] = {}
-        for entry_id, headword, normalized, memory_hook, etymology_note in db.execute(
-            "SELECT entry_id, headword, normalized_headword, memory_hook, etymology_note FROM entries"
+        entries: dict[str, tuple[str, str | None, str | None, str | None]] = {}
+        for entry_id, headword, normalized, memory_hook, etymology_note, headword_summary in db.execute(
+            "SELECT entry_id, headword, normalized_headword, memory_hook, etymology_note, headword_summary FROM entries"
         ):
             key = headword.strip().casefold()
-            entries.setdefault(key, (entry_id, memory_hook, etymology_note))
+            entries.setdefault(key, (entry_id, memory_hook, etymology_note, headword_summary))
             nkey = (normalized or "").strip().casefold()
             if nkey and nkey != key:
-                entries.setdefault(nkey, (entry_id, memory_hook, etymology_note))
+                entries.setdefault(nkey, (entry_id, memory_hook, etymology_note, headword_summary))
 
         pronunciations: dict[str, list[tuple[str | None, str | None, frozenset[str]]]] = {}
         for entry_id, ipa, text, tags_json in db.execute(
@@ -79,10 +89,51 @@ def read_distribution(path: Path) -> dict[str, dict]:
         ):
             if word and word.strip():
                 derived.setdefault(entry_id, []).append(word.strip())
+
+        relations: dict[str, list[tuple[str, str]]] = {}
+        for entry_id, rtype, word in db.execute(
+            "SELECT entry_id, type, word FROM pos_group_relations "
+            "WHERE type IN ('synonym', 'antonym', 'related_term')"
+        ):
+            if word and word.strip():
+                relations.setdefault(entry_id, []).append((rtype, word.strip()))
+
+        forms: dict[str, list[tuple[str, str]]] = {}
+        for entry_id, text, tags_json in db.execute(
+            "SELECT entry_id, text, tags_json FROM pos_group_forms "
+            "ORDER BY pos_group_index, form_index"
+        ):
+            cleaned = (text or "").strip()
+            if cleaned and not re.fullmatch(r"[^a-zA-Z0-9]+", cleaned):
+                tags = ",".join(sorted(json.loads(tags_json))) if tags_json else ""
+                forms.setdefault(entry_id, []).append((cleaned, tags))
+
+        etymologies: dict[str, list[str]] = {}
+        for entry_id, text in db.execute(
+            "SELECT entry_id, text FROM etymologies "
+            "WHERE text IS NOT NULL AND length(trim(text)) > 0 ORDER BY etymology_index"
+        ):
+            etymologies.setdefault(entry_id, []).append(text.strip())
+
+        study_notes: dict[str, list[str]] = {}
+        for entry_id, note_text in db.execute(
+            "SELECT entry_id, note_text FROM entry_study_notes "
+            "WHERE note_text IS NOT NULL AND length(trim(note_text)) > 0 ORDER BY note_index"
+        ):
+            study_notes.setdefault(entry_id, []).append(note_text.strip())
     finally:
         db.close()
 
-    return {"entries": entries, "pronunciations": pronunciations, "examples": examples, "derived": derived}
+    return {
+        "entries": entries,
+        "pronunciations": pronunciations,
+        "examples": examples,
+        "derived": derived,
+        "relations": relations,
+        "forms": forms,
+        "etymologies": etymologies,
+        "study_notes": study_notes,
+    }
 
 
 def main() -> int:
@@ -104,6 +155,10 @@ def main() -> int:
     pronunciations = data["pronunciations"]
     examples = data["examples"]
     derived = data["derived"]
+    relations = data["relations"]
+    forms = data["forms"]
+    etymologies = data["etymologies"]
+    study_notes = data["study_notes"]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.base, args.output)
@@ -113,6 +168,56 @@ def main() -> int:
         words_columns = {row[1] for row in db.execute("PRAGMA table_info(words)")}
         if "aiSupplemented" not in words_columns:
             db.execute("ALTER TABLE words ADD COLUMN aiSupplemented TEXT")
+        if "headwordSummary" not in words_columns:
+            db.execute("ALTER TABLE words ADD COLUMN headwordSummary TEXT")
+
+        # Distribution tables created on the output so the published asset matches
+        # the Room entity schema (columns, PKs, FKs, index names) exactly.
+        new_table_ddl = [
+            """
+            CREATE TABLE IF NOT EXISTS word_relations (
+                wordId INTEGER NOT NULL,
+                relationType TEXT NOT NULL,
+                targetWord TEXT NOT NULL,
+                PRIMARY KEY (wordId, relationType, targetWord),
+                FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS index_word_relations_wordId ON word_relations (wordId)",
+            """
+            CREATE TABLE IF NOT EXISTS word_forms (
+                wordId INTEGER NOT NULL,
+                formIndex INTEGER NOT NULL,
+                formText TEXT NOT NULL,
+                formTags TEXT NOT NULL,
+                PRIMARY KEY (wordId, formIndex),
+                FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS index_word_forms_wordId ON word_forms (wordId)",
+            """
+            CREATE TABLE IF NOT EXISTS etymologies (
+                wordId INTEGER NOT NULL,
+                etymologyIndex INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                PRIMARY KEY (wordId, etymologyIndex),
+                FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS index_etymologies_wordId ON etymologies (wordId)",
+            """
+            CREATE TABLE IF NOT EXISTS study_notes (
+                wordId INTEGER NOT NULL,
+                noteIndex INTEGER NOT NULL,
+                noteText TEXT NOT NULL,
+                PRIMARY KEY (wordId, noteIndex),
+                FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS index_study_notes_wordId ON study_notes (wordId)",
+        ]
+        for ddl in new_table_ddl:
+            db.execute(ddl)
         base_words = db.execute("SELECT COUNT(*) FROM words").fetchone()[0]
         base_groups = db.execute("SELECT COUNT(*) FROM groups").fetchone()[0]
         if args.expected_word_count is not None and base_words != args.expected_word_count:
@@ -140,20 +245,29 @@ def main() -> int:
             "derivedAdded": 0,
             "examplesAdded": 0,
             "examplesChineseFilled": 0,
+            "headwordSummaryFilled": 0,
+            "relationsAdded": 0,
+            "formsAdded": 0,
+            "etymologiesAdded": 0,
+            "studyNotesAdded": 0,
         }
         insert_sentences: list[tuple[int, str, str | None]] = []
         fill_sentences: list[tuple[str, int]] = []
         batch_links: list[tuple[int, int]] = []
         batch_derived: list[tuple[int, str]] = []
-        word_updates: list[tuple[str | None, str | None, str | None, str | None, int]] = []
+        batch_relations: list[tuple[int, str, str]] = []
+        batch_forms: list[tuple[int, int, str, str]] = []
+        batch_etymologies: list[tuple[int, int, str]] = []
+        batch_study_notes: list[tuple[int, int, str]] = []
+        word_updates: list[tuple[str | None, str | None, str | None, str | None, str | None, int]] = []
 
-        for word_id, word, phonetic_uk, phonetic_us, mnemonic in db.execute(
-            "SELECT id, word, phoneticUk, phoneticUs, mnemonic FROM words"
+        for word_id, word, phonetic_uk, phonetic_us, mnemonic, existing_summary in db.execute(
+            "SELECT id, word, phoneticUk, phoneticUs, mnemonic, headwordSummary FROM words"
         ):
             entry = entries.get(word.strip().casefold())
             if entry is None:
                 continue
-            entry_id, memory_hook, etymology_note = entry
+            entry_id, memory_hook, etymology_note, headword_summary = entry
             stats["wordsEnriched"] += 1
             supplements: list[str] = []
 
@@ -219,18 +333,55 @@ def main() -> int:
             if examples.get(entry_id):
                 supplements.append("sentences")
 
+            new_summary = existing_summary
+            if headword_summary and headword_summary.strip():
+                new_summary = headword_summary.strip()
+                supplements.append("headwordSummary")
+                stats["headwordSummaryFilled"] += 1
+
+            for rtype, target in relations.get(entry_id, []):
+                batch_relations.append((word_id, rtype, target))
+            if relations.get(entry_id):
+                supplements.append("relations")
+
+            for form_index, (form_text, form_tags) in enumerate(forms.get(entry_id, [])):
+                batch_forms.append((word_id, form_index, form_text, form_tags))
+            if forms.get(entry_id):
+                supplements.append("forms")
+
+            for etymology_index, etymology_text in enumerate(etymologies.get(entry_id, [])):
+                batch_etymologies.append((word_id, etymology_index, etymology_text))
+            if etymologies.get(entry_id):
+                supplements.append("etymology")
+
+            for note_index, note_text in enumerate(study_notes.get(entry_id, [])):
+                batch_study_notes.append((word_id, note_index, note_text))
+            if study_notes.get(entry_id):
+                supplements.append("studyNotes")
+
             marker = ",".join(sorted(set(supplements))) if supplements else None
             if marker:
                 stats["aiSupplementedWords"] += 1
-            if marker or new_uk != phonetic_uk or new_us != phonetic_us or new_mnemonic != mnemonic:
-                word_updates.append((new_uk, new_us, new_mnemonic, marker, word_id))
+            if marker or new_uk != phonetic_uk or new_us != phonetic_us or new_mnemonic != mnemonic or new_summary != existing_summary:
+                word_updates.append((new_uk, new_us, new_mnemonic, new_summary, marker, word_id))
 
-        db.executemany("UPDATE words SET phoneticUk = ?, phoneticUs = ?, mnemonic = ?, aiSupplemented = ? WHERE id = ?", word_updates)
+        db.executemany(
+            "UPDATE words SET phoneticUk = ?, phoneticUs = ?, mnemonic = ?, headwordSummary = ?, aiSupplemented = ? WHERE id = ?",
+            word_updates,
+        )
         db.executemany("INSERT OR IGNORE INTO derived_terms VALUES (?, ?)", batch_derived)
         stats["derivedAdded"] = len(batch_derived)
         db.executemany("INSERT OR IGNORE INTO sentences VALUES (?, ?, ?)", insert_sentences)
         db.executemany("UPDATE sentences SET chinese = ? WHERE id = ?", fill_sentences)
         db.executemany("INSERT OR IGNORE INTO word_sentence_links VALUES (?, ?)", batch_links)
+        db.executemany("INSERT OR IGNORE INTO word_relations VALUES (?, ?, ?)", batch_relations)
+        stats["relationsAdded"] = len(batch_relations)
+        db.executemany("INSERT OR IGNORE INTO word_forms VALUES (?, ?, ?, ?)", batch_forms)
+        stats["formsAdded"] = len(batch_forms)
+        db.executemany("INSERT OR IGNORE INTO etymologies VALUES (?, ?, ?)", batch_etymologies)
+        stats["etymologiesAdded"] = len(batch_etymologies)
+        db.executemany("INSERT OR IGNORE INTO study_notes VALUES (?, ?, ?)", batch_study_notes)
+        stats["studyNotesAdded"] = len(batch_study_notes)
 
         db.executemany(
             "INSERT OR IGNORE INTO metadata(key, value) VALUES (?, ?)",
@@ -245,6 +396,11 @@ def main() -> int:
                 ("mergedPhoneticUkFilled", str(stats["phoneticUkFilled"])),
                 ("mergedPhoneticUsFilled", str(stats["phoneticUsFilled"])),
                 ("mergedMnemonicFilled", str(stats["mnemonicFilled"])),
+                ("mergedHeadwordSummaryFilled", str(stats["headwordSummaryFilled"])),
+                ("mergedRelationsAdded", str(stats["relationsAdded"])),
+                ("mergedFormsAdded", str(stats["formsAdded"])),
+                ("mergedEtymologiesAdded", str(stats["etymologiesAdded"])),
+                ("mergedStudyNotesAdded", str(stats["studyNotesAdded"])),
             ],
         )
         db.commit()
@@ -262,7 +418,7 @@ def main() -> int:
         for row in db.execute(
             "SELECT id, word, phoneticUk, phoneticUs, translation, definition, mnemonic, "
             "frequencyGroup, frequency, emotionColor, register, nuanceDescription, "
-            "usageWarning, collocations, aiSupplemented FROM words ORDER BY id"
+            "usageWarning, collocations, aiSupplemented, headwordSummary FROM words ORDER BY id"
         ):
             h.update("|".join(str(v or "") for v in row).encode("utf-8"))
             h.update(b"\n")
