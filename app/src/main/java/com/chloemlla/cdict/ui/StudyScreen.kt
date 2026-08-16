@@ -1,5 +1,7 @@
 package com.chloemlla.cdict.ui
 
+import android.media.AudioManager
+import android.media.ToneGenerator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,10 +42,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -156,6 +161,13 @@ private fun ReviewFlow(
         }
         return
     }
+    // Short success tone when an answer is correct ("播放提示音"). Created and released
+    // together with the review screen so it never outlives the REVIEW phase.
+    val context = LocalContext.current
+    val tone = remember(context) { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) }
+    DisposableEffect(tone) {
+        onDispose { tone.release() }
+    }
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -207,6 +219,7 @@ private fun ReviewFlow(
                 FeedbackBanner("回答正确，继续加油", CorrectGreen, CorrectGreenContainer)
                 // Auto-advance to the next question after a brief green confirmation.
                 LaunchedEffect(feedback) {
+                    tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
                     kotlinx.coroutines.delay(650)
                     onAdvance()
                 }
