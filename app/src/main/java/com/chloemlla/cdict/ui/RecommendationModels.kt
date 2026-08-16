@@ -3,11 +3,11 @@ package com.chloemlla.cdict.ui
 import com.chloemlla.cdict.core.data.RecommendationPool
 import com.chloemlla.cdict.core.data.WordEntity
 
-/** 单条推荐卡片的词池中文标签。 */
+/** 单条推荐卡片的词池中文标签（方案A：核心 5 / 派生拓展 3 / 高频过渡 2）。 */
 fun recommendationPoolLabel(pool: RecommendationPool): String = when (pool) {
-    RecommendationPool.REVIEW -> "复习巩固"
     RecommendationPool.CORE_NEW -> "核心新词"
-    RecommendationPool.SIMPLE -> "简单过渡"
+    RecommendationPool.EXPANSION -> "派生拓展"
+    RecommendationPool.SIMPLE -> "高频过渡"
 }
 
 /** 单条推荐：词 + 所属词池（用于 UI 打标签）。 */

@@ -71,6 +71,14 @@ interface DictionaryDao {
     @Query("SELECT * FROM words WHERE frequencyGroup = :group AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit")
     suspend fun randomWordsInGroup(group: Int, limit: Int): List<WordEntity>
 
+    // Expansion pool (方案A): new words sharing a word root with already-studied words, so the
+    // daily exploration feed extends from familiar vocabulary instead of the review backlog.
+    @Query(
+        "SELECT DISTINCT words.* FROM words JOIN roots ON words.id = roots.wordId " +
+            "WHERE roots.root IN (:roots) ORDER BY words.frequencyGroup, words.frequency, words.word LIMIT :limit",
+    )
+    suspend fun wordsSharingRoots(roots: List<String>, limit: Int): List<WordEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWords(words: List<WordEntity>)
 }

@@ -61,9 +61,11 @@ import com.chloemlla.cdict.core.data.RecommendationPool
 import com.chloemlla.cdict.core.data.WordEntity
 
 /**
- * 推荐页（今日推荐流）。顶部是独有的推荐图标 TopAppBar；正文按 3:5:2 混排的核心卡片与
- * 后续队列。宽的布局（medium/expanded）左侧大卡 + 右侧队列两栏，窄布局（compact）纵向
- * 滚动单列。英文释义经 vivo 网关自动翻译为中文（复用词典 / 背词页的非中文自动翻译管线）。
+ * 推荐页（每日探索与发现 · Explore & Feed）。顶部是独有的推荐图标 TopAppBar；正文按
+ * 5:3:2 混排的核心新词 / 派生拓展 / 高频过渡卡片与后续队列（方案A：推荐页只做“输入 / 预热”，
+ * 复习权交还背词页，不再混入复习巩固）。宽的布局（medium/expanded）左侧大卡 + 右侧队列两栏，
+ * 窄布局（compact）纵向滚动单列。英文释义经 vivo 网关自动翻译为中文（复用词典 / 背词页的
+ * 非中文自动翻译管线）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +73,7 @@ fun RecommendationScreen(
     state: RecommendationScreenState,
     onReload: () -> Unit,
     onMarkLearned: () -> Unit,
+    onMarkMastered: () -> Unit,
     onDefer: () -> Unit,
     onContinueMore: () -> Unit,
     onSetGoal: (Int) -> Unit,
@@ -106,9 +109,9 @@ fun RecommendationScreen(
                             )
                         }
                         Column {
-                            Text("推荐", style = MaterialTheme.typography.titleLarge)
+                            Text("探索", style = MaterialTheme.typography.titleLarge)
                             Text(
-                                "今日推荐 · 3:5:2 记忆配比",
+                                "每日探索 · 5:3:2 配比",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -148,6 +151,7 @@ fun RecommendationScreen(
                                 onTranslate = onTranslate,
                                 onSpeak = onSpeak,
                                 onMarkLearned = onMarkLearned,
+                                onMarkMastered = onMarkMastered,
                                 onDefer = onDefer,
                                 onOpenWord = onOpenWord,
                                 onPlayPronunciation = onPlayPronunciation,
@@ -174,6 +178,7 @@ fun RecommendationScreen(
                                 onTranslate = onTranslate,
                                 onSpeak = onSpeak,
                                 onMarkLearned = onMarkLearned,
+                                onMarkMastered = onMarkMastered,
                                 onDefer = onDefer,
                                 onOpenWord = onOpenWord,
                                 onPlayPronunciation = onPlayPronunciation,
@@ -250,9 +255,9 @@ private fun RecommendationHeader(
             modifier = Modifier.fillMaxWidth().height(6.dp),
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RecommendationLegendPill("复习 30%", RecommendationPool.REVIEW)
-            RecommendationLegendPill("新词 50%", RecommendationPool.CORE_NEW)
-            RecommendationLegendPill("简单 20%", RecommendationPool.SIMPLE)
+            RecommendationLegendPill("核心 50%", RecommendationPool.CORE_NEW)
+            RecommendationLegendPill("派生 30%", RecommendationPool.EXPANSION)
+            RecommendationLegendPill("过渡 20%", RecommendationPool.SIMPLE)
         }
     }
 }
@@ -264,6 +269,7 @@ private fun RecommendationCurrentCard(
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onMarkLearned: () -> Unit,
+    onMarkMastered: () -> Unit,
     onDefer: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
@@ -365,11 +371,19 @@ private fun RecommendationCurrentCard(
                     onClick = onMarkLearned,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp),
                 ) {
-                    Text("我已背会")
+                    Text("加入今日背词任务")
                 }
             }
-            TextButton(onClick = { onOpenWord(word) }) {
-                Text("查看详情")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(onClick = onMarkMastered) {
+                    Text("已掌握（直接消灭）")
+                }
+                TextButton(onClick = { onOpenWord(word) }) {
+                    Text("查看详情")
+                }
             }
         }
     }
@@ -607,10 +621,10 @@ private fun RecommendationInfoPill(text: String) {
 @Composable
 private fun poolColors(pool: RecommendationPool): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> =
     when (pool) {
-        RecommendationPool.REVIEW ->
-            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         RecommendationPool.CORE_NEW ->
             MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        RecommendationPool.EXPANSION ->
+            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         RecommendationPool.SIMPLE ->
             MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
