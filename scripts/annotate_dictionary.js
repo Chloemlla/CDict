@@ -484,6 +484,17 @@ async function runMerge(db, words) {
 // ---------------------------------------------------------------------------
 // AI 模式：并发 worker 池（每 worker 领一批，批内个别词失败降级为单词请求兜底）
 // ---------------------------------------------------------------------------
+// 每 10s 汇报一次已运行时长，帮助判断长任务的进度；unref 避免自身拖住进程退出
+function startRuntimeHeartbeat() {
+  const start = Date.now();
+  const timer = setInterval(() => {
+    const secs = Math.floor((Date.now() - start) / 1000);
+    log(null, `已运行 ${Math.floor(secs / 60)}分${secs % 60}秒`);
+  }, 10000);
+  timer.unref();
+  return timer;
+}
+
 async function runAi(db, words) {
   let pending = words.filter((w) => {
     if (CONFIG.force) return true;
@@ -508,6 +519,7 @@ async function runAi(db, words) {
   }
 
   const results = new Array(pending.length);
+  const heartbeat = startRuntimeHeartbeat();
   const limit = Math.min(CONFIG.concurrency, numBatches);
   let next = 0;
   const workers = Array.from({ length: limit }, async () => {
@@ -556,6 +568,7 @@ async function runAi(db, words) {
     }
   });
   await Promise.all(workers);
+  clearInterval(heartbeat);
   flushJsonl();
   flushState();
   const ok = results.filter((r) => r && r.ok).length;
