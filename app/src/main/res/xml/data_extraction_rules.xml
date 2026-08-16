@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31+) backup/transfer rules. -->
+<!-- dict.db is reconstructed from the bundled asset (createFromAsset) on first
+     launch, so excluding it keeps cloud backups / device transfers small and fast. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="database"
+            path="dict.db" />
+    </cloud-backup>
+    <!-- Device-to-device transfer keeps the same exclusions to match cloud backups. -->
+    <device-transfer>
+        <exclude
+            domain="database"
+            path="dict.db" />
+    </device-transfer>
+</data-extraction-rules>
