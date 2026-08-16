@@ -1,3 +1,0 @@
-{"file":".trellis/tasks/08-02-github-actions/prd.md","reason":"Failure root cause, scope, acceptance criteria, and no-local-build constraint."}
-{"file":".trellis/spec/android/data-ci-contracts.md","reason":"Android CI wrapper, data generation, and release contract context."}
-{"file":".github/workflows/build.yml","reason":"All Gradle wrapper invocation points requiring executable permission fallback."}

@@ -1,2 +1,0 @@
-{"file":".trellis/spec/android/data-ci-contracts.md","reason":"Room entity, SQLite table, DAO query, and FTS content-entity naming contract for this KSP fix."}
-{"file":".trellis/tasks/08-02-room-ksp/prd.md","reason":"Requirements, acceptance criteria, scope, and CI-only verification constraints for the Room KSP fix."}

@@ -1,2 +1,0 @@
-{"file":".trellis/spec/android/data-ci-contracts.md","reason":"Release workflow signing secrets, artifact names, validation, and tag/manual dispatch contracts."}
-{"file":".trellis/tasks/08-02-cdict-apk/prd.md","reason":"APK publication goal, dispatch parameters, acceptance criteria, and safety boundaries."}

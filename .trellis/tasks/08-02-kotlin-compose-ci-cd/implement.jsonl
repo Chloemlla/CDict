@@ -1,7 +1,0 @@
-{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/prd.md","reason":"Confirmed product requirements, package ID, full data-pipeline scope, acceptance criteria, architecture decision, and CI/CD constraints."}
-{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/rollout-requirements.md","reason":"Source-derived IELTS Dictionary feature, data, offline, audio, and copyright requirements."}
-{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/android-architecture.md","reason":"Reference comparison and selected CLens single-module / Project-Lumen release architecture."}
-{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/ci-cd.md","reason":"Secret-safe GitHub Actions signing validation, artifact, and release workflow requirements."}
-{"file":".trellis/tasks/08-02-kotlin-compose-ci-cd/research/target-repo.md","reason":"Greenfield repository constraints, existing gitignore entries, and cdict naming hints."}
-{"file":".trellis/spec/guides/architecture-thinking-guide.md","reason":"Architecture trade-off and boundary review guidance for the new Android project."}
-{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Cross-layer data-flow review guidance for the Android data, domain, and UI layers."}

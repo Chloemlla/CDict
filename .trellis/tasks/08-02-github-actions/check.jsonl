@@ -1,3 +1,0 @@
-{"file":".trellis/tasks/08-02-github-actions/prd.md","reason":"Verify the permission fix against the exact failing job and acceptance criteria."}
-{"file":".trellis/spec/android/data-ci-contracts.md","reason":"Check that wrapper execution remains compatible with the Android CI contract."}
-{"file":".github/workflows/build.yml","reason":"Review every workflow Gradle invocation and permission fallback."}
