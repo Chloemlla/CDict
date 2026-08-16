@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
-import androidx.core.content.getSharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -38,7 +37,7 @@ private const val DEFER_INSERT_SLOT = 5
 class RecommendationViewModel(application: Application) : AndroidViewModel(application) {
     private val context: Context = application.applicationContext
     private val prefs: SharedPreferences =
-        context.getSharedPreferences(REC_PREFS_NAME)
+        context.getSharedPreferences(REC_PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _state = MutableStateFlow<RecommendationScreenState>(RecommendationScreenState.Loading)
     val state: StateFlow<RecommendationScreenState> = _state.asStateFlow()

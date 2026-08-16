@@ -2,7 +2,6 @@ package com.chloemlla.cdict.core.data
 
 import android.content.Context
 import androidx.core.content.edit
-import androidx.core.content.getSharedPreferences
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,7 +37,7 @@ object DictionaryUpdateManager {
      * @return true when the installed dictionary is stale and should be rebuilt.
      */
     suspend fun check(context: Context, database: DictionaryDatabase): Boolean {
-        val prefs = context.getSharedPreferences(PREFS)
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val version = runCatching {
             @Suppress("DEPRECATION")
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -66,7 +65,7 @@ object DictionaryUpdateManager {
      * prompt does not reappear until the next app update.
      */
     fun markReconciled(context: Context) {
-        context.getSharedPreferences(PREFS).edit {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
             putBoolean(KEY_NEEDS_REBUILD, false)
         }
     }
