@@ -2,9 +2,8 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.kapt")
+    id("com.google.devtools.ksp")
 }
 
 fun propertyOrEnvironment(name: String): String? =
@@ -124,27 +123,20 @@ android {
     }
 }
 
-kotlin {
-    jvmToolchain(21)
-}
-
-kapt {
-    correctErrorTypes = true
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
-        arg("room.incremental", "true")
-    }
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
 }
 
 // Room exports the schema to a shared project dir per database. `release` and
-// `releaseAab` both run kapt and would concurrently read/write that file, racing
-// (KaptWithoutKotlincTask provokes "Expected end of object, but had EOF"). Force
-// the AAB variant's kapt to run strictly after release's so the file is complete
-// before it is read. Room schema export is not a declared task output, so Gradle
-// cannot know they conflict and would otherwise parallelize them.
+// `releaseAab` both run KSP and would concurrently read/write that file, racing
+// ("Expected end of object, but had EOF"). Force the AAB variant's KSP to run
+// strictly after release's so the file is complete before it is read. Room
+// schema export is not a declared task output, so Gradle cannot know they
+// conflict and would otherwise parallelize them.
 tasks.configureEach {
-    if (name == "kaptReleaseAabKotlin") {
-        mustRunAfter("kaptReleaseKotlin")
+    if (name == "kspReleaseAabKotlin") {
+        mustRunAfter("kspReleaseKotlin")
     }
 }
 
@@ -165,8 +157,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
-    kapt("androidx.room:room-compiler:2.8.4")
-    kapt("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
+    ksp("androidx.room:room-compiler:2.8.4")
+    ksp("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.chloemlla.lumen:lumen-crash:$lumenCrashSdkVersion")
