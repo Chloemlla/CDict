@@ -18,8 +18,6 @@ permissions:
 
 env:
   PYTHONUNBUFFERED: "1"
-  ISDC_HTML_SHA256: c5cab0349b5fcf3e56904619a5f15c8923c7021a1f30c2c20639e2e597459c20
-  ISDC_JSON_SHA256: f83cddde1f09a8c4a15e97a6502187c935ba7dbf028e1c45812abd912cebecef
 
 jobs:
   verify:
@@ -34,22 +32,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Brotli decoder
-        run: python -m pip install --disable-pip-version-check brotli==1.1.0
       - name: Resolve lumen-crash SDK version
         run: python scripts/fetch-lumen-crash-sdk.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate and validate authorized dictionary asset
+      - name: Stage annotated dictionary asset
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
-          python scripts/fetch_isdc_export.py \
-            --output "$RUNNER_TEMP/isdc-export.json" \
-            --expected-html-sha256 "$ISDC_HTML_SHA256" \
-            --expected-json-sha256 "$ISDC_JSON_SHA256"
-          python scripts/convert_dictionary.py "$RUNNER_TEMP/isdc-export.json" app/src/main/assets/dict.db \
-            --expected-word-count 49213 --expected-groups 7 --source-sha256 "$ISDC_JSON_SHA256"
+          cp scripts/CDict-dict.db app/src/main/assets/dict.db
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
       - name: Set up Java
@@ -111,18 +102,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Brotli decoder
-        run: python -m pip install --disable-pip-version-check brotli==1.1.0
       - name: Resolve lumen-crash SDK version
         run: python scripts/fetch-lumen-crash-sdk.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Generate and validate authorized dictionary asset
+      - name: Stage annotated dictionary asset
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
-          python scripts/fetch_isdc_export.py --output "$RUNNER_TEMP/isdc-export.json" --expected-html-sha256 "$ISDC_HTML_SHA256" --expected-json-sha256 "$ISDC_JSON_SHA256"
-          python scripts/convert_dictionary.py "$RUNNER_TEMP/isdc-export.json" app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7 --source-sha256 "$ISDC_JSON_SHA256"
+          cp scripts/CDict-dict.db app/src/main/assets/dict.db
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
       - name: Set up Java

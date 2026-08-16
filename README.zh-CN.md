@@ -204,36 +204,21 @@ com.chloemlla.cdict
 - **Android Studio**:直接打开仓库根目录即可,IDE 会自动使用 Gradle Wrapper。
 - **命令行**:`./gradlew :app:assembleDebug`(需先生成词典资产,见下)。
 
-> **注意**:`dict.db` 由 CI 生成并被 Git 忽略(仓库刻意不携带 50–70 MB 二进制)。**本地构建前必须先执行数据生成步骤**;代码绝不会静默替换成示例或伪造数据。
+> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。CI 构建前会把它复制到(被 Git 忽略的)`app/src/main/assets/dict.db`;本地执行 `./gradlew :app:assembleDebug` 前也需要该副本——全新检出后先运行 `cp scripts/CDict-dict.db app/src/main/assets/dict.db`。
 
 ---
 
 ## 数据管线
 
-仓库刻意**不包含伪造词典或未经授权的源数据副本**。生产资产由用户提供的授权导出文件生成:
+词典以单个已提交、带 AI 标注的 SQLite 资产形式发布:`scripts/CDict-dict.db`(49,213 词,7 组)。标注字段——`emotionColor`、`register`、`nuanceDescription`、`usageWarning`、`collocations`——由 `scripts/annotate_dictionary.js`(node:sqlite,不使用 Python)生成。CI 原样复制该资产并校验:
 
 ```bash
-# 本地转换(基于授权导出文件)
-python scripts/convert_dictionary.py /path/to/authorized-export.json app/src/main/assets/dict.db \
-  --expected-word-count 49213
-```
-
-转换器支持 JSON / JSONL、base85 包裹 JSON、Brotli 压缩 JSON。它生成规范化的 `words`、`derived_terms`、`roots`、`sentences`、`word_sentence_links`、`heatmap_entries` 表,以及 `word_search` 英文 FTS 表;校验记录数并输出各表计数(JSON)。转换器不抓取网页——数据来源与 schema 必须显式、可复现。
-
-从授权站点完整生成并校验:
-
-```bash
-python -m pip install brotli==1.1.0
-python scripts/fetch_isdc_export.py --output /tmp/isdc-export.json \
-  --expected-html-sha256 c5cab0349b5fcf3e56904619a5f15c8923c7021a1f30c2c20639e2e597459c20 \
-  --expected-json-sha256 f83cddde1f09a8c4a15e97a6502187c935ba7dbf028e1c45812abd912cebecef
-python scripts/convert_dictionary.py /tmp/isdc-export.json app/src/main/assets/dict.db \
-  --expected-word-count 49213 --expected-groups 7
+cp scripts/CDict-dict.db app/src/main/assets/dict.db
 python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
   --expected-word-count 49213 --expected-groups 7
 ```
 
-`dict.db` 在 CI 中生成并校验,仅作为构建 / 发布产物上传,不进 Git 仓库。它保持**压缩**存储(不设 `noCompress` 覆盖——否则安装包体积会翻倍),并交给 AAB 按设备分发。
+`app/src/main/assets/dict.db` 是 Git 忽略的构建副本;它保持**压缩**存储(不设 `noCompress` 覆盖),并交给 AAB 按设备分发。若未来需要从授权导出重建无标注的底库,`scripts/convert_dictionary.py` 仍可使用。
 
 ---
 

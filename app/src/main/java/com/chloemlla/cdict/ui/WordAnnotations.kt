@@ -50,6 +50,7 @@ fun registerLabel(value: String?): String? = value?.trim()?.lowercase()?.let {
         "written" -> "书面"
         "literary" -> "文学"
         "informal" -> "非正式"
+        "neutral" -> "中性"
         else -> value.trim()
     }
 }
