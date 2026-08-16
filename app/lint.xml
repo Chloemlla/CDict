@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Deliberate lint suppressions with their rationale. Nothing here is a
+  hidden shortcut; each entry documents the design decision it encodes.
+-->
+<lint>
+    <!-- releaseAab deliberately sets isShrinkResources = false: AGP cannot build an
+         AAB with ABI splits + resource shrinking (buildReleasePreBundle requires a
+         single shrunk-resources file). Play re-shrinks resources per device at serve
+         time. See the releaseAab block in app/build.gradle.kts. -->
+    <issue id="NotShrinkingResources">
+        <ignore path="build.gradle.kts" />
+    </issue>
+    <!-- lifecycle-runtime-compose / lifecycle-viewmodel-compose stay on 2.8.7 to match
+         compose-bom 2024.12.01 (compose 1.7.6): lifecycle 2.9+ requires compose
+         runtime 1.8+, and mixing a newer lifecycle with the pinned BOM yields an
+         inconsistent compose classpath. -->
+    <issue id="GradleDependency">
+        <ignore path="build.gradle.kts" />
+    </issue>
+</lint>

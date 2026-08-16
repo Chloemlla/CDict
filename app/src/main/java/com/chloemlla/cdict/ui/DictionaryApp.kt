@@ -1217,8 +1217,8 @@ private fun DetailSectionCard(
 @Composable
 private fun RelationTargetChip(
     target: String,
-    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     Surface(
         color = if (onClick != null) {

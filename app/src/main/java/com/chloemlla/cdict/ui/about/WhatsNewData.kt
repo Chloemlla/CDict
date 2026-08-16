@@ -46,6 +46,8 @@ object WhatsNewData {
             bullets = listOf(
                 "Java 17 → Java 21。",
                 "独立 Kotlin 插件 + kapt 迁移到 AGP built-in Kotlin + KSP（Room），构建告警清零。",
+                "Android Lint 零告警：按报告升级 core-ktx / 协程 / Robolectric，SharedPreferences 改用 KTX。",
+                "AAB 资源压缩与 lifecycle 版本为刻意设计，已登记 lint 白名单。",
                 "MetadataEntity 与词典库 schema 对齐，DAO 元数据查询可编译。",
             ),
             tip = "对日常使用无感；属于工程加固。",

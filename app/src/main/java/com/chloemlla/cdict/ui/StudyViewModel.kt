@@ -2,6 +2,7 @@ package com.chloemlla.cdict.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -111,7 +112,7 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     fun setGoal(value: Int) {
         val goal = value.coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
-        prefs.edit().putInt(PREF_KEY_GOAL, goal).apply()
+        prefs.edit { putInt(PREF_KEY_GOAL, goal) }
         viewModelScope.launch {
             val cur = _state.value as? StudyScreenState.Ready ?: return@launch
             when (cur.phase) {

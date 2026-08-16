@@ -1,7 +1,11 @@
 package com.chloemlla.cdict.ui
 
+import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
+import androidx.core.content.getSharedPreferences
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -31,9 +35,10 @@ private const val DEFER_INSERT_SLOT = 5
  * 稍后再看 / 改目标 / 再来一批”的实时队列重排，并把处理过的词实时落库 study.db（方案C 流转
  * 状态同步），使背词引擎的 ASR 状态机自动跳过已处理词。构造不触发任何网络；全部数据来自本地 Room。
  */
-class RecommendationViewModel(private val context: Context) : ViewModel() {
+class RecommendationViewModel(application: Application) : AndroidViewModel(application) {
+    private val context: Context = application.applicationContext
     private val prefs: SharedPreferences =
-        context.getSharedPreferences(REC_PREFS_NAME, Context.MODE_PRIVATE)
+        context.getSharedPreferences(REC_PREFS_NAME)
 
     private val _state = MutableStateFlow<RecommendationScreenState>(RecommendationScreenState.Loading)
     val state: StateFlow<RecommendationScreenState> = _state.asStateFlow()
@@ -173,7 +178,7 @@ class RecommendationViewModel(private val context: Context) : ViewModel() {
     fun setGoal(value: Int) {
         val goal = value.coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
         val prev = dailyGoal()
-        prefs.edit().putInt(REC_PREF_KEY_GOAL, goal).apply()
+        prefs.edit { putInt(REC_PREF_KEY_GOAL, goal) }
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
         viewModelScope.launch {
             val delta = goal - prev
@@ -210,6 +215,6 @@ class RecommendationViewModel(private val context: Context) : ViewModel() {
 class RecommendationViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return RecommendationViewModel(context.applicationContext) as T
+        return RecommendationViewModel(context.applicationContext as Application) as T
     }
 }

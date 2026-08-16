@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.ui.about
 
 import android.content.Context
+import androidx.core.content.edit
 
 class AboutStore(context: Context) {
     private val prefs = context.applicationContext
@@ -9,18 +10,18 @@ class AboutStore(context: Context) {
     var ossNoticeSeen: Boolean
         get() = prefs.getBoolean("oss_notice_seen", false)
         set(value) {
-            prefs.edit().putBoolean("oss_notice_seen", value).apply()
+            prefs.edit { putBoolean("oss_notice_seen", value) }
         }
 
     var acknowledgedCommitHash: String
         get() = prefs.getString("ack_commit_hash", "") ?: ""
         set(value) {
-            prefs.edit().putString("ack_commit_hash", value).apply()
+            prefs.edit { putString("ack_commit_hash", value) }
         }
 
     var acknowledgedBuildTime: Long
         get() = prefs.getLong("ack_build_time", 0L)
         set(value) {
-            prefs.edit().putLong("ack_build_time", value).apply()
+            prefs.edit { putLong("ack_build_time", value) }
         }
 }
