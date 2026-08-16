@@ -316,8 +316,9 @@ private fun WordList(
                     }
                 },
                 actions = {
+                    val aboutController = LocalAboutController.current
                     IconButton(
-                        onClick = { LocalAboutController.current.push(AboutScreenRoute.About) },
+                        onClick = { aboutController.push(AboutScreenRoute.About) },
                         modifier = Modifier.semantics { contentDescription = "关于" },
                     ) {
                         Icon(Icons.Filled.Info, contentDescription = null)

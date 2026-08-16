@@ -6,6 +6,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +40,6 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import com.chloemlla.cdict.R
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AboutRow(
     title: String,
@@ -85,7 +86,7 @@ private fun AboutRow(
                 if (interactive) {
                     Modifier
                         .clip(MaterialTheme.shapes.small)
-                        .clickable(
+                        .combinedClickable(
                             onClick = onClick ?: {},
                             onLongClick = onLongClick,
                         )
@@ -795,7 +796,7 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                         }
                         Spacer(Modifier.width(16.dp))
                     }
-                    FilledButton(
+                    Button(
                         onClick = {
                             if (currentPage < lastIndex) {
                                 scope.launch { pagerState.animateScrollToPage(currentPage + 1) }
