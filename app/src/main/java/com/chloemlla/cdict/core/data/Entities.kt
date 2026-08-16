@@ -34,7 +34,9 @@ data class WordEntity(
     val nuanceDescription: String? = null,
     val usageWarning: String? = null,
     val collocations: String? = null,
-    /** Comma-separated fields (phoneticUk/phoneticUs/mnemonic/derived/sentences) enriched from the AI distribution merge. */
+    /** One-sentence gloss of the headword from the distribution merge. */
+    val headwordSummary: String? = null,
+    /** Comma-separated fields (phoneticUk/phoneticUs/mnemonic/derived/sentences/headwordSummary/relations/forms/etymology/studyNotes) enriched from the AI distribution merge. */
     val aiSupplemented: String? = null,
     @ColumnInfo(defaultValue = "0") val frequencyGroup: Int = 0,
     @ColumnInfo(defaultValue = "0") val frequency: Int = 0,
@@ -81,6 +83,42 @@ data class WordSentenceLinkEntity(val wordId: Long, val sentenceId: Long)
     foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
 )
 data class HeatmapEntryEntity(val wordId: Long, val period: String, val score: Double)
+
+/** A single synonym/antonym/related_term relation for a word (from the distribution merge). */
+@Entity(
+    tableName = "word_relations",
+    primaryKeys = ["wordId", "relationType", "targetWord"],
+    indices = [Index(value = ["wordId"], name = "index_word_relations_wordId")],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
+data class WordRelationEntity(val wordId: Long, val relationType: String, val targetWord: String)
+
+/** An inflection form of a word; formTags is a comma-joined POS/tense tag list. */
+@Entity(
+    tableName = "word_forms",
+    primaryKeys = ["wordId", "formIndex"],
+    indices = [Index(value = ["wordId"], name = "index_word_forms_wordId")],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
+data class WordFormEntity(val wordId: Long, val formIndex: Int, val formText: String, val formTags: String)
+
+/** A structured etymology paragraph for a word (from the distribution merge). */
+@Entity(
+    tableName = "etymologies",
+    primaryKeys = ["wordId", "etymologyIndex"],
+    indices = [Index(value = ["wordId"], name = "index_etymologies_wordId")],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
+data class EtymologyEntity(val wordId: Long, val etymologyIndex: Int, val text: String)
+
+/** A learner-oriented study note for a word (from the distribution merge). */
+@Entity(
+    tableName = "study_notes",
+    primaryKeys = ["wordId", "noteIndex"],
+    indices = [Index(value = ["wordId"], name = "index_study_notes_wordId")],
+    foreignKeys = [ForeignKey(entity = WordEntity::class, parentColumns = ["id"], childColumns = ["wordId"])],
+)
+data class StudyNoteEntity(val wordId: Long, val noteIndex: Int, val noteText: String)
 
 @Fts4(contentEntity = WordEntity::class)
 @Entity(tableName = "word_search")

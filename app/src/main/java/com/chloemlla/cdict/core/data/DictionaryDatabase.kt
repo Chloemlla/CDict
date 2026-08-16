@@ -16,10 +16,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SentenceEntity::class,
         WordSentenceLinkEntity::class,
         HeatmapEntryEntity::class,
+        WordRelationEntity::class,
+        WordFormEntity::class,
+        EtymologyEntity::class,
+        StudyNoteEntity::class,
         WordSearchEntity::class,
         MetadataEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class DictionaryDatabase : RoomDatabase() {
@@ -47,10 +51,48 @@ abstract class DictionaryDatabase : RoomDatabase() {
             }
         }
 
+        // v3 -> v4 adds the headwordSummary column and the distribution enrichment
+        // tables (word_relations, word_forms, etymologies, study_notes). The DDL is
+        // identical to what the merge workflow creates in the published asset, so
+        // upgraded installs and fresh createFromAsset installs share one schema.
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE words ADD COLUMN headwordSummary TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS word_relations (" +
+                        "wordId INTEGER NOT NULL, relationType TEXT NOT NULL, targetWord TEXT NOT NULL, " +
+                        "PRIMARY KEY (wordId, relationType, targetWord), " +
+                        "FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_word_relations_wordId ON word_relations (wordId)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS word_forms (" +
+                        "wordId INTEGER NOT NULL, formIndex INTEGER NOT NULL, formText TEXT NOT NULL, formTags TEXT NOT NULL, " +
+                        "PRIMARY KEY (wordId, formIndex), " +
+                        "FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_word_forms_wordId ON word_forms (wordId)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS etymologies (" +
+                        "wordId INTEGER NOT NULL, etymologyIndex INTEGER NOT NULL, text TEXT NOT NULL, " +
+                        "PRIMARY KEY (wordId, etymologyIndex), " +
+                        "FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_etymologies_wordId ON etymologies (wordId)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS study_notes (" +
+                        "wordId INTEGER NOT NULL, noteIndex INTEGER NOT NULL, noteText TEXT NOT NULL, " +
+                        "PRIMARY KEY (wordId, noteIndex), " +
+                        "FOREIGN KEY (wordId) REFERENCES words (id) ON UPDATE NO ACTION ON DELETE NO ACTION)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_study_notes_wordId ON study_notes (wordId)")
+            }
+        }
+
         fun open(context: Context): DictionaryDatabase =
             Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
                 .createFromAsset("dict.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }

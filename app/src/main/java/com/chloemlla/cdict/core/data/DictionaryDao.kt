@@ -57,6 +57,18 @@ interface DictionaryDao {
     @Query("SELECT * FROM heatmap_entries WHERE wordId = :wordId ORDER BY period")
     suspend fun heatmap(wordId: Long): List<HeatmapEntryEntity>
 
+    @Query("SELECT * FROM word_relations WHERE wordId = :wordId ORDER BY relationType, targetWord")
+    suspend fun relations(wordId: Long): List<WordRelationEntity>
+
+    @Query("SELECT * FROM word_forms WHERE wordId = :wordId ORDER BY formIndex")
+    suspend fun forms(wordId: Long): List<WordFormEntity>
+
+    @Query("SELECT * FROM etymologies WHERE wordId = :wordId ORDER BY etymologyIndex")
+    suspend fun etymologies(wordId: Long): List<EtymologyEntity>
+
+    @Query("SELECT * FROM study_notes WHERE wordId = :wordId ORDER BY noteIndex")
+    suspend fun studyNotes(wordId: Long): List<StudyNoteEntity>
+
     @Query("SELECT * FROM words WHERE id IN (:ids)")
     suspend fun wordsByIds(ids: List<Long>): List<WordEntity>
 

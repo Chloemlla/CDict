@@ -5,7 +5,21 @@ import argparse
 import sqlite3
 from pathlib import Path
 
-TABLES = {"metadata", "groups", "words", "derived_terms", "roots", "sentences", "word_sentence_links", "heatmap_entries", "word_search"}
+TABLES = {
+    "metadata",
+    "groups",
+    "words",
+    "derived_terms",
+    "roots",
+    "sentences",
+    "word_sentence_links",
+    "heatmap_entries",
+    "word_relations",
+    "word_forms",
+    "etymologies",
+    "study_notes",
+    "word_search",
+}
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -28,6 +42,8 @@ def main() -> int:
         words_columns = {row[1] for row in db.execute("PRAGMA table_info(words)")}
         if "aiSupplemented" not in words_columns:
             parser.error("words table missing required aiSupplemented column")
+        if "headwordSummary" not in words_columns:
+            parser.error("words table missing required headwordSummary column")
         fts = db.execute("SELECT COUNT(*) FROM word_search").fetchone()[0]
         if fts != words:
             parser.error(f"FTS row count {fts} does not match words {words}")

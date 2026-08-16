@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -92,7 +94,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.Accent
+import com.chloemlla.cdict.core.data.EtymologyEntity
+import com.chloemlla.cdict.core.data.StudyNoteEntity
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.core.data.WordFormEntity
+import com.chloemlla.cdict.core.data.WordRelationEntity
 import com.chloemlla.cdict.ui.about.AboutScreenRoute
 import com.chloemlla.cdict.ui.about.LocalAboutController
 
@@ -647,7 +653,10 @@ private fun WordResultCard(
     }
 }
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    ExperimentalLayoutApi::class,
+)
 @Composable
 private fun WordDetail(
     word: WordEntity,
@@ -673,6 +682,12 @@ private fun WordDetail(
     val derivedTermWords = detail?.derivedTermWords.orEmpty()
     val heatmap = detail?.heatmap.orEmpty().filter { it.period.isNotBlank() }
     val sentences = detail?.sentences.orEmpty().filter { it.english.isNotBlank() }
+    val relations = detail?.relations.orEmpty()
+    val relationWords = detail?.relationWords.orEmpty()
+    val forms = detail?.forms.orEmpty()
+    val etymologies = detail?.etymologies.orEmpty()
+    val studyNotes = detail?.studyNotes.orEmpty()
+    val headwordSummary = word.headwordSummary?.takeIf { it.isNotBlank() }
     val supplements = supplementedFields(word)
 
     Scaffold(
@@ -836,6 +851,20 @@ private fun WordDetail(
                 }
             }
 
+            if (headwordSummary != null) {
+                item(key = "headword-summary") {
+                    DetailSectionCard(title = "词条概览") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = headwordSummary,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            AiSupplementTrailing(show = "headwordSummary" in supplements)
+                        }
+                    }
+                }
+            }
+
             if (wordHasAnnotations(word)) {
                 item(key = "annotations") {
                     DetailSectionCard(title = "AI 语感标注") {
@@ -980,6 +1009,98 @@ private fun WordDetail(
                     }
                 }
 
+                if (relations.isNotEmpty()) {
+                    item(key = "relations") {
+                        DetailSectionCard(title = "词间关系") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                listOf(
+                                    "synonym" to "近义词",
+                                    "antonym" to "反义词",
+                                    "related_term" to "相关词",
+                                ).forEach { (type, label) ->
+                                    val group = relations.filter { it.relationType == type }
+                                    if (group.isNotEmpty()) {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            group.forEach { relation ->
+                                                val targetWord = relationWords[relation.targetWord.lowercase()]
+                                                RelationTargetChip(
+                                                    target = relation.targetWord,
+                                                    onClick = targetWord?.let { { onOpenWord(it) } },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                AiSupplementTrailing(show = "relations" in supplements)
+                            }
+                        }
+                    }
+                }
+
+                if (forms.isNotEmpty()) {
+                    item(key = "forms") {
+                        DetailSectionCard(title = "词形变化") {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    forms.forEach { form ->
+                                        FormChip(formText = form.formText, formTags = form.formTags)
+                                    }
+                                }
+                                AiSupplementTrailing(show = "forms" in supplements)
+                            }
+                        }
+                    }
+                }
+
+                if (etymologies.isNotEmpty()) {
+                    item(key = "etymologies") {
+                        DetailSectionCard(title = "词源") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                etymologies.forEachIndexed { index, etymology ->
+                                    if (index > 0) {
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    }
+                                    Text(
+                                        text = etymology.text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                                AiSupplementTrailing(show = "etymology" in supplements)
+                            }
+                        }
+                    }
+                }
+
+                if (studyNotes.isNotEmpty()) {
+                    item(key = "study-notes") {
+                        DetailSectionCard(title = "学习笔记") {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                studyNotes.forEachIndexed { index, note ->
+                                    if (index > 0) {
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    }
+                                    Text(
+                                        text = note.noteText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                                AiSupplementTrailing(show = "studyNotes" in supplements)
+                            }
+                        }
+                    }
+                }
+
                 if (heatmap.isNotEmpty()) {
                     item(key = "heatmap") {
                         DetailSectionCard(title = "历年出现频率") {
@@ -1084,6 +1205,69 @@ private fun DetailSectionCard(
             )
             Spacer(Modifier.height(10.dp))
             content()
+        }
+    }
+}
+
+/**
+ * A compact chip for a synonym/antonym/related_term target. When the target is a real
+ * dictionary word ([onClick] non-null) it renders in the primary container and opens
+ * that word; otherwise it is a static reference chip.
+ */
+@Composable
+private fun RelationTargetChip(
+    target: String,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = if (onClick != null) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        contentColor = if (onClick != null) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        shape = RoundedCornerShape(8.dp),
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
+    ) {
+        Text(
+            text = target,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+/** A chip showing an inflection form text with its POS/tense tag labels. */
+@Composable
+private fun FormChip(
+    formText: String,
+    formTags: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Text(
+                text = formText,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (formTags.isNotBlank()) {
+                Text(
+                    text = formTags.split(",").joinToString("、"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -10,10 +10,14 @@ import com.chloemlla.cdict.core.data.DatabaseState
 import com.chloemlla.cdict.core.data.DictionaryDatabase
 import com.chloemlla.cdict.core.data.DictionaryRepository
 import com.chloemlla.cdict.core.data.DictionaryUpdateManager
+import com.chloemlla.cdict.core.data.EtymologyEntity
 import com.chloemlla.cdict.core.data.HeatmapEntryEntity
 import com.chloemlla.cdict.core.data.RootEntity
 import com.chloemlla.cdict.core.data.SentenceEntity
+import com.chloemlla.cdict.core.data.StudyNoteEntity
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.core.data.WordFormEntity
+import com.chloemlla.cdict.core.data.WordRelationEntity
 import com.chloemlla.cdict.core.search.SearchEngine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,6 +33,11 @@ data class WordDetailData(
     val roots: List<RootEntity> = emptyList(),
     val sentences: List<SentenceEntity> = emptyList(),
     val heatmap: List<HeatmapEntryEntity> = emptyList(),
+    val relations: List<WordRelationEntity> = emptyList(),
+    val relationWords: Map<String, WordEntity> = emptyMap(),
+    val forms: List<WordFormEntity> = emptyList(),
+    val etymologies: List<EtymologyEntity> = emptyList(),
+    val studyNotes: List<StudyNoteEntity> = emptyList(),
 )
 
 enum class SortMode(val label: String) {
@@ -234,12 +243,20 @@ class DictionaryViewModel(
             val derivedTerms = dao.derivedTerms(word.id)
             val derivedTermWords = dao.wordsByText(derivedTerms.map { it.lowercase() })
                 .associateBy { it.word.lowercase() }
+            val relations = dao.relations(word.id)
+            val relationWords = dao.wordsByText(relations.map { it.targetWord.lowercase() })
+                .associateBy { it.word.lowercase() }
             val detail = WordDetailData(
                 derivedTerms = derivedTerms,
                 derivedTermWords = derivedTermWords,
                 roots = dao.roots(word.id),
                 sentences = dao.sentences(word.id, limit = 10, offset = 0),
                 heatmap = dao.heatmap(word.id),
+                relations = relations,
+                relationWords = relationWords,
+                forms = dao.forms(word.id),
+                etymologies = dao.etymologies(word.id),
+                studyNotes = dao.studyNotes(word.id),
             )
             detail.sentences.forEach { s -> s.english.takeIf(String::isNotBlank)?.let { pronunciationPlayer.prefetch(it, Accent.US) } }
             val latest = _state.value
