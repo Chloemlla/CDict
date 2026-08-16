@@ -2,8 +2,10 @@ package com.chloemlla.cdict.ui
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,11 +22,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -36,23 +41,30 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +76,9 @@ private val CorrectGreenContainer = Color(0xFFC8E6C9)
 private val WrongRed = Color(0xFFC62828)
 private val WrongRedContainer = Color(0xFFFFCDD2)
 
+/** Secret that unlocks the five-tap developer panel (source-controlled for this project's devs). */
+private const val DEVELOPER_KEY = "Chloemlla"
+
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun StudyScreen(
@@ -72,6 +87,7 @@ fun StudyScreen(
     onAnswer: (Int) -> Unit,
     onAdvance: () -> Unit,
     onQuestionPresented: () -> Unit,
+    onDebugLaunchReview: () -> Unit,
     onMarkLearned: () -> Unit,
     onDefer: () -> Unit,
     onContinueFreePlay: () -> Unit,
@@ -79,10 +95,52 @@ fun StudyScreen(
     onSetGoal: (Int) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
 ) {
+    // Developer backdoor: five rapid taps on the 背词 title open the developer panel.
+    var devTaps by remember { mutableIntStateOf(0) }
+    var lastDevTap by remember { mutableLongStateOf(0L) }
+    var showDevDialog by remember { mutableStateOf(false) }
+    var devKey by remember { mutableStateOf("") }
+    var devKeyWrong by remember { mutableStateOf(false) }
+    var devUnlocked by remember { mutableStateOf(false) }
+    fun onTitleTap() {
+        val now = SystemClock.uptimeMillis()
+        devTaps = if (now - lastDevTap < 2000L) devTaps + 1 else 1
+        lastDevTap = now
+        if (devTaps >= 5) {
+            devTaps = 0
+            showDevDialog = true
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("背词") },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.pointerInput(Unit) { detectTapGestures { onTitleTap() } },
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.School,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                        Column {
+                            Text("背词", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "IELTS 背词",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = onReload, modifier = Modifier.padding(end = 4.dp)) {
                         Icon(Icons.Filled.Refresh, contentDescription = "刷新背词计划")
@@ -126,6 +184,68 @@ fun StudyScreen(
                 }
             }
         }
+    }
+    if (showDevDialog) {
+        AlertDialog(
+            onDismissRequest = { showDevDialog = false },
+            title = { Text("开发者模式") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (devUnlocked) {
+                        Text(
+                            "开发者已解锁。点击下方按钮直接进入「复习单词考试」界面，仅供开发测试，不改动真实学习数据。",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Button(
+                            onClick = {
+                                showDevDialog = false
+                                onDebugLaunchReview()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("测试 复习单词考试页")
+                        }
+                    } else {
+                        Text(
+                            "请输入开发者密钥以解锁开发者模式。",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        OutlinedTextField(
+                            value = devKey,
+                            onValueChange = {
+                                devKey = it
+                                devKeyWrong = false
+                            },
+                            singleLine = true,
+                            label = { Text("开发者密钥") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            isError = devKeyWrong,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (devKeyWrong) {
+                            Text("密钥错误", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                        }
+                        Button(
+                            onClick = {
+                                if (devKey == DEVELOPER_KEY) {
+                                    devUnlocked = true
+                                    devKeyWrong = false
+                                } else {
+                                    devKeyWrong = true
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("解锁")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDevDialog = false }) { Text("关闭") }
+            },
+        )
     }
 }
 

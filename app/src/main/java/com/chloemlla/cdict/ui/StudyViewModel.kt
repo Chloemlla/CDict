@@ -220,6 +220,36 @@ class StudyViewModel(context: Context) : ViewModel() {
         questionShownAt = System.currentTimeMillis()
     }
 
+    /**
+     * Developer backdoor: launches the next-day review exam with a randomly sampled word so
+     * the review UI can be exercised without a real due queue. Invisible to normal use
+     * (only reachable via the five-tap developer panel in the study top bar).
+     */
+    fun debugLaunchReview() {
+        viewModelScope.launch {
+            val dictDao = dictDb?.dictionaryDao() ?: return@launch
+            val pool = dictDao.randomWords(300)
+            val target = pool.firstOrNull() ?: return@launch
+            val correctText = target.translation?.takeIf(String::isNotBlank)
+                ?: target.definition?.takeIf(String::isNotBlank) ?: return@launch
+            val distractors = buildReviewDistractors(target, pool)
+            if (distractors.size < 3) return@launch
+            val options = (listOf(correctText) + distractors).shuffled()
+            reviewQueue.clear()
+            reviewTotal = 1
+            reviewQueue.addLast(
+                ReviewQuestion(
+                    wordId = target.id,
+                    english = target.word,
+                    phonetic = phoneticsOf(target),
+                    options = options,
+                    correctIndex = options.indexOf(correctText),
+                ),
+            )
+            emit(StudyPhase.REVIEW, question = reviewQueue.first())
+        }
+    }
+
     // ---- Learning phase ----------------------------------------------------------------
 
     private suspend fun buildLearn() {
