@@ -13,6 +13,8 @@ import com.chloemlla.cdict.core.data.HeatmapEntryEntity
 import com.chloemlla.cdict.core.data.RootEntity
 import com.chloemlla.cdict.core.data.SentenceEntity
 import com.chloemlla.cdict.core.data.WordEntity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +33,8 @@ enum class SortMode(val label: String) {
     Alphabetical("按字母"),
     AlphabeticalDesc("字母倒序"),
 }
+
+private const val SEARCH_DEBOUNCE_MS = 300L
 
 sealed interface DictionaryScreenState {
     data object Loading : DictionaryScreenState
@@ -56,6 +60,7 @@ class DictionaryViewModel(
     private val pageSize = 100
     private var totalCount = 0L
     private var loadMoreInFlight = false
+    private var searchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -108,7 +113,11 @@ class DictionaryViewModel(
 
     fun search(query: String) {
         val db = database ?: return
-        viewModelScope.launch {
+        // Debounce rapid keystrokes: cancel the previous query so only the latest text runs,
+        // avoiding a storm of DB reads and stale-result flicker while the user keeps typing.
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
             val newState = if (query.isBlank()) {
                 totalCount = db.dictionaryDao().count()
                 val mode = currentSortMode()
