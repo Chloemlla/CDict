@@ -16,7 +16,7 @@
 
 **CDict** 是一款**离线优先**的雅思词典 Android 应用,基于 Kotlin、Jetpack Compose(Material 3)与 Room 构建,包名与应用 ID 均为 `com.chloemlla.cdict`。
 
-> **当前版本 `1.0.1`**(versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2024.12.01` · Room `2.8.4` · Kotlin/JVM 17
+> **当前版本 `1.0.1`**(versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2024.12.01` · Room `2.8.4` · Kotlin/JVM 21
 >
 > 词典核心**完全离线可用**;仅申请 `INTERNET` 权限,用于可选的在线翻译与发音。
 
@@ -174,7 +174,7 @@ Youdao 静态发音 (dict.youdao.com/dictvoice;整句/词)
 
 | 层次 | 选型 |
 |---|---|
-| 语言 | Kotlin / JVM 17 |
+| 语言 | Kotlin / JVM 21 |
 | UI | Jetpack Compose (Material 3),Compose BOM `2024.12.01`,实验版 window-size-class 实现响应式布局 |
 | 持久化 | Room `2.8.4`(词典 / 背词 / 翻译缓存三库),SQLite FTS5 |
 | 异步 | 协程、Repository 仓库模式 |

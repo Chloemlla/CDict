@@ -16,7 +16,7 @@
 
 **CDict** is an offline-first IELTS dictionary for Android, built with Kotlin, Jetpack Compose (Material 3), and Room. The package and application ID are `com.chloemlla.cdict`.
 
-> **Current release `1.0.1`** (versionCode `2`) 路 `minSdk 26` / `targetSdk 37` / `compileSdk 37` 路 Compose BOM `2024.12.01` 路 Room `2.8.4` 路 Kotlin/JVM 17
+> **Current release `1.0.1`** (versionCode `2`) 路 `minSdk 26` / `targetSdk 37` / `compileSdk 37` 路 Compose BOM `2024.12.01` 路 Room `2.8.4` 路 Kotlin/JVM 21
 >
 > The full dictionary **works completely offline**; the only permissions required are `INTERNET` for optional online translation and pronunciation.
 
@@ -174,7 +174,7 @@ The **Recommendation** tab builds a **fully offline** daily exploration feed (鏂
 
 | Layer | Choice |
 |---|---|
-| Language | Kotlin / JVM 17 |
+| Language | Kotlin / JVM 21 |
 | UI | Jetpack Compose (Material 3), Compose BOM `2024.12.01`, experimental window-size-class for responsive layouts |
 | Persistence | Room `2.8.4` (dictionary + study + translation-cache databases), SQLite FTS5 |
 | Async / threading | Coroutines, repositories |
