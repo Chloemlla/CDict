@@ -6,10 +6,12 @@ import java.security.MessageDigest
 
 /**
  * Disk LRU cache for pronounced audio (PRD §3.4). Files are keyed by the MD5 of
- * `<accent>:<text>` so the same word+accent maps to a stable, short filename; a 50MB
- * ceiling is enforced by evicting least-recently-played entries (tracked via file mtime)
- * when the folder grows past the limit. Lives in the app cache dir, so it is naturally
- * cleared by the OS under pressure and needs no manual cleanup.
+ * `<accent>:<source>:<text>` so the same word+accent maps to a stable, short filename;
+ * the [source] dimension (e.g. "vivo" / "youdao") keeps each pronunciation tier's audio
+ * in its own namespace so they never overwrite each other. A 50MB ceiling is enforced by
+ * evicting least-recently-played entries (tracked via file mtime) when the folder grows
+ * past the limit. Lives in the app cache dir, so it is naturally cleared by the OS under
+ * pressure and needs no manual cleanup.
  */
 class SpeechAudioCache(context: Context) {
     private val dir = File(context.cacheDir, "speech_cache")
@@ -17,24 +19,24 @@ class SpeechAudioCache(context: Context) {
     /** Human-readable cap for the PRD's 50MB budget. */
     fun budget(): Long = MAX_BYTES
 
-    fun find(text: String, accent: Accent): File? {
-        val file = fileFor(text, accent)
+    fun find(text: String, accent: Accent, source: String): File? {
+        val file = fileFor(text, accent, source)
         if (!file.isFile) return null
         // Touch mtime so LRU eviction counts this as recently used.
         file.setLastModified(System.currentTimeMillis())
         return file
     }
 
-    fun put(text: String, accent: Accent, bytes: ByteArray): File {
+    fun put(text: String, accent: Accent, source: String, bytes: ByteArray): File {
         dir.mkdirs()
-        val file = fileFor(text, accent)
+        val file = fileFor(text, accent, source)
         file.writeBytes(bytes)
         trim()
         return file
     }
 
-    private fun fileFor(text: String, accent: Accent): File =
-        File(dir, "${md5("${accent.name}:$text").take(16)}.$EXT")
+    private fun fileFor(text: String, accent: Accent, source: String): File =
+        File(dir, "${md5("${accent.name}:$source:$text").take(16)}.$EXT")
 
     private fun trim() {
         if (dirUsage() <= MAX_BYTES) return

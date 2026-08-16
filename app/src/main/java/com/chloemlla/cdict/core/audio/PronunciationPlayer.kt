@@ -24,13 +24,13 @@ interface PronunciationSpeaker {
 }
 
 /**
- * 发音播放器，三级回退：有道静态音频（默认，优先）→ vivo TTS → 系统 TextToSpeech。
- * 有道只保证单词；整句交由 vivo / 系统 TTS 整句朗读，绝不逐词拆读。
+ * 发音播放器，三级回退：vivo TTS（默认，优先）→ 有道静态音频 → 系统 TextToSpeech。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  *
  * 并发安全：每次 [play] 都会让之前的播放流水线失效（generation 递增 + 取消旧 job），
  * MediaPlayer 回调只作用于它自己的播放器（`player === media`），避免旧回调误杀新播放；
  * 同词同音色的下载经单飞（single-flight）共享一次 HTTP 请求，避免 prefetch 与 play 重复下载。
+ * 磁盘 LRU 缓存按来源（vivo / 有道）分命名空间，两级音频互不覆盖。
  */
 class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -50,7 +50,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         playGeneration++
         playJob?.cancel()
         releasePlayer()
-        playJob = scope.launch { playYoudao(playGeneration, word, accent) }
+        playJob = scope.launch { playVivoFirst(playGeneration, word, accent) }
     }
 
     /**
@@ -60,9 +60,9 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
      */
     fun prefetch(word: String, accent: Accent) {
         scope.launch {
-            if (cache.find(word, accent) == null) {
+            if (cache.find(word, accent, SOURCE_YOUDAO) == null) {
                 val bytes = downloadYoudao(word, accent)
-                if (bytes != null && bytes.isNotEmpty()) cache.put(word, accent, bytes)
+                if (bytes != null && bytes.isNotEmpty()) cache.put(word, accent, SOURCE_YOUDAO, bytes)
             }
         }
     }
@@ -72,21 +72,52 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         player = null
     }
 
-    /** 第一级：有道。命中磁盘 LRU 缓存则直接播放缓存文件；未命中下载字节并写缓存。 */
-    private suspend fun playYoudao(generation: Int, word: String, accent: Accent) {
+    /** 第一级：vivo TTS。命中 vivo 缓存直接播；未命中合成并写缓存；失败落到有道。 */
+    private suspend fun playVivoFirst(generation: Int, word: String, accent: Accent) {
         if (generation != playGeneration) return
-        val cached = cache.find(word, accent)
+        val cached = cache.find(word, accent, SOURCE_VIVO)
         if (cached != null) {
-            playFile(generation, cached, word, accent)
+            playFile(generation, cached) {
+                scope.launch { playYoudaoFallback(generation, word, accent) }
+            }
+            return
+        }
+        val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
+        if (generation != playGeneration) return
+        val audio = (result as? VivoTtsResult.Audio)?.bytes
+        if (audio == null || audio.isEmpty()) {
+            if (generation == playGeneration) playYoudaoFallback(generation, word, accent)
+            return
+        }
+        val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
+        if (generation == playGeneration) {
+            playFile(generation, file) {
+                scope.launch { playYoudaoFallback(generation, word, accent) }
+            }
+        }
+    }
+
+    /** 第二级：有道。命中缓存直接播；未命中下载并写缓存；失败落到系统 TTS。 */
+    private suspend fun playYoudaoFallback(generation: Int, word: String, accent: Accent) {
+        if (generation != playGeneration) return
+        val cached = cache.find(word, accent, SOURCE_YOUDAO)
+        if (cached != null) {
+            playFile(generation, cached) {
+                scope.launch { speak(generation, word, accent) }
+            }
             return
         }
         val bytes = downloadYoudao(word, accent)
         if (bytes == null || bytes.isEmpty()) {
-            playYoudaoSentenceFallback(generation, word, accent)
+            if (generation == playGeneration) speak(generation, word, accent)
             return
         }
-        val file = cache.put(word, accent, bytes)
-        if (generation == playGeneration) playFile(generation, file, word, accent)
+        val file = cache.put(word, accent, SOURCE_YOUDAO, bytes)
+        if (generation == playGeneration) {
+            playFile(generation, file) {
+                scope.launch { speak(generation, word, accent) }
+            }
+        }
     }
 
     /** 单飞下载：并发请求同一 <音色>:<文本> 只发一次 HTTP，其余复用结果。 */
@@ -127,7 +158,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         null
     }
 
-    private fun playFile(generation: Int, file: File, word: String, accent: Accent) {
+    private fun playFile(generation: Int, file: File, onFailure: () -> Unit) {
         val media = MediaPlayer().apply {
             setOnPreparedListener {
                 if (generation == playGeneration && player === this) start()
@@ -139,7 +170,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
                 if (player === this) {
                     releasePlayer()
                     file.delete()
-                    playYoudaoSentenceFallback(generation, word, accent)
+                    onFailure()
                 }
                 true
             }
@@ -151,70 +182,17 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         } catch (e: Exception) {
             if (player === media) releasePlayer()
             file.delete()
-            playYoudaoSentenceFallback(generation, word, accent)
+            onFailure()
         }
     }
 
-    /** 有道整句失败：不再逐词拆读（那会按词打断句子），直接把整句交给后备 TTS（vivo → 系统）整句朗读。 */
-    private fun playYoudaoSentenceFallback(generation: Int, word: String, accent: Accent) {
-        if (generation != playGeneration) return
-        scope.launch { playVivoFallback(generation, word, accent) }
-    }
-
-    /** 第二级：vivo TTS。失败时落到系统 TextToSpeech。 */
-    private suspend fun playVivoFallback(generation: Int, word: String, accent: Accent) {
-        if (generation != playGeneration) return
-        val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
-        if (generation != playGeneration) return
-        val audio = (result as? VivoTtsResult.Audio)?.bytes
-        if (audio == null || audio.isEmpty()) {
-            if (generation == playGeneration) speak(generation, word, accent)
-            return
-        }
-        val (bytes, ext) = when {
-            looksLikeWav(audio) -> audio to "wav"
-            looksLikeMp3(audio) -> audio to "mp3"
-            // vivo `/fy/tts` 的 auf=audio/L16;rate=16000 会返回无容器 PCM,MediaPlayer 无法直接播,
-            // 补一个 WAV 头让它可播放;若将来返回其它已封装格式则走上面的检测分支,此处是兜底。
-            else -> wavWrap(audio) to "wav"
-        }
-        val tmp = File(context.cacheDir, "tts_${System.nanoTime()}.$ext")
-        try {
-            tmp.writeBytes(bytes)
-        } catch (e: Exception) {
-            tmp.delete()
-            if (generation == playGeneration) speak(generation, word, accent)
-            return
-        }
-        val media = MediaPlayer().apply {
-            setOnPreparedListener {
-                if (generation == playGeneration && player === this) start()
-            }
-            setOnCompletionListener {
-                if (player === this) {
-                    releasePlayer()
-                    tmp.delete()
-                }
-            }
-            setOnErrorListener { _, _, _ ->
-                if (player === this) {
-                    releasePlayer()
-                    tmp.delete()
-                    if (generation == playGeneration) speak(generation, word, accent)
-                }
-                true
-            }
-        }
-        player = media
-        try {
-            media.setDataSource(tmp.path)
-        } catch (e: Exception) {
-            if (player === media) releasePlayer()
-            tmp.delete()
-            if (generation == playGeneration) speak(generation, word, accent)
-            return
-        }
-        if (generation == playGeneration) media.prepareAsync()
+    /** vivo 音频可能是有封装（wav/mp3）也可能是无容器 PCM，统一成 MediaPlayer 可播放的字节。 */
+    private fun preparePlayable(audio: ByteArray): ByteArray = when {
+        looksLikeWav(audio) -> audio
+        looksLikeMp3(audio) -> audio
+        // vivo `/fy/tts` 的 auf=audio/L16;rate=16000 会返回无容器 PCM,MediaPlayer 无法直接播,
+        // 补一个 WAV 头让它可播放;若将来返回其它已封装格式则走上面的检测分支,此处是兜底。
+        else -> wavWrap(audio)
     }
 
     private fun looksLikeMp3(bytes: ByteArray): Boolean {
@@ -284,6 +262,8 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     companion object {
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+        private const val SOURCE_VIVO = "vivo"
+        private const val SOURCE_YOUDAO = "youdao"
     }
 }
 

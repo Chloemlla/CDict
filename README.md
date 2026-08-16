@@ -102,12 +102,12 @@ Tapping an entry opens a detail page showing:
 The detail page provides **UK / US** pronunciation buttons. Speech is produced by a default **vivo TTS** client and falls back through three tiers — no audio files are packaged:
 
 ```
-Youdao static pronunciation (dict.youdao.com/dictvoice; word / sentence)
-  → vivo TTS synthesis (POST https://vivotrans.vivo.com.cn/fy/tts)
+vivo TTS synthesis (POST https://vivotrans.vivo.com.cn/fy/tts)
+  → Youdao static pronunciation (dict.youdao.com/dictvoice; word / sentence)
   → Android system TextToSpeech
 ```
 
-Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The Youdao `dictvoice` endpoint reliably reads single words; for whole sentences it first tries the sentence whole, and on failure hands the **entire sentence** to vivo → system TTS for whole-sentence reading (never word-by-word splitting, which would break the sentence). Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
+Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. **vivo TTS is the primary reader** for both words and whole sentences (never word-by-word splitting, which would break the sentence); when vivo is unavailable it falls back to the Youdao `dictvoice` static audio, then to Android system TTS. Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
 
 `VivoTtsClient` (reverse-engineered from `com.vivo.translator`):
 
@@ -117,7 +117,7 @@ Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) aut
 
 **Audio caching.** Pronounced audio is cached on disk so repeated lookups are instant and offline-friendly:
 
-- Files are keyed by the **MD5 of `<accent>:<text>`**, giving a stable short filename per word + accent.
+- Files are keyed by the **MD5 of `<accent>:<source>:<text>`**, giving a stable short filename per word + accent and keeping each tier's audio in its own namespace.
 - A **50 MB LRU** budget evicts least-recently-used files.
 - The detail page **pre-fetches** pronunciation ahead of use.
 
