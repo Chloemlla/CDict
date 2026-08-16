@@ -29,6 +29,11 @@ data class WordEntity(
     val translation: String? = null,
     val definition: String? = null,
     val mnemonic: String? = null,
+    val emotionColor: String? = null,
+    val register: String? = null,
+    val nuanceDescription: String? = null,
+    val usageWarning: String? = null,
+    val collocations: String? = null,
     @ColumnInfo(defaultValue = "0") val frequencyGroup: Int = 0,
     @ColumnInfo(defaultValue = "0") val frequency: Int = 0,
 )

@@ -797,6 +797,14 @@ private fun WordDetail(
                 }
             }
 
+            if (wordHasAnnotations(word)) {
+                item(key = "annotations") {
+                    DetailSectionCard(title = "AI 语感标注") {
+                        WordAnnotationSection(word = word)
+                    }
+                }
+            }
+
             item(key = "frequency") {
                 DetailSectionCard(title = "词频信息") {
                     Row(

@@ -38,6 +38,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -641,6 +642,10 @@ private fun LearnCard(
                     onSpeak = onSpeak,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
+            }
+            if (wordHasAnnotations(word)) {
+                HorizontalDivider(modifier = Modifier.padding(top = 14.dp))
+                WordAnnotationSection(word = word, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
             }
             Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { onPlayPronunciation(word, Accent.UK) }, contentPadding = ButtonDefaults.ContentPadding) {

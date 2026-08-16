@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -16,16 +18,30 @@ import androidx.room.RoomDatabase
         HeatmapEntryEntity::class,
         WordSearchEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class DictionaryDatabase : RoomDatabase() {
     abstract fun dictionaryDao(): DictionaryDao
 
     companion object {
+        // v1 -> v2 adds the AI annotation fields (emotionColor, register, nuanceDescription,
+        // usageWarning, collocations) as nullable columns; existing installs keep their data
+        // while freshly generated assets carry the columns from the start.
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE words ADD COLUMN emotionColor TEXT")
+                db.execSQL("ALTER TABLE words ADD COLUMN register TEXT")
+                db.execSQL("ALTER TABLE words ADD COLUMN nuanceDescription TEXT")
+                db.execSQL("ALTER TABLE words ADD COLUMN usageWarning TEXT")
+                db.execSQL("ALTER TABLE words ADD COLUMN collocations TEXT")
+            }
+        }
+
         fun open(context: Context): DictionaryDatabase =
             Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
                 .createFromAsset("dict.db")
+                .addMigrations(MIGRATION_1_2)
                 .fallbackToDestructiveMigration()
                 .build()
     }

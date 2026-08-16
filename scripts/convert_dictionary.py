@@ -35,6 +35,11 @@ CREATE TABLE words (
   translation TEXT,
   definition TEXT,
   mnemonic TEXT,
+  emotionColor TEXT,
+  register TEXT,
+  nuanceDescription TEXT,
+  usageWarning TEXT,
+  collocations TEXT,
   frequencyGroup INTEGER NOT NULL DEFAULT 0,
   frequency INTEGER NOT NULL DEFAULT 0
 );
@@ -56,6 +61,11 @@ ALIASES = {
     "translation": ("translation", "chinese", "meaningZh", "cn", "zh"),
     "definition": ("definition", "definitions", "englishDefinition", "explanation"),
     "mnemonic": ("mnemonic", "memory", "remember"),
+    "emotionColor": ("emotionColor", "emotion_color"),
+    "register": ("register", "registerStyle", "style"),
+    "nuanceDescription": ("nuanceDescription", "nuance", "nuance_description"),
+    "usageWarning": ("usageWarning", "usage_warning"),
+    "collocations": ("collocations", "common_collocations", "collocation"),
     "frequencyGroup": ("frequencyGroup", "group", "frequency_group", "level"),
     "frequency": ("frequency", "count", "rank", "order"),
 }
@@ -271,7 +281,7 @@ def main() -> int:
             word_id = as_int(record.get("id"), index)
             translation = normalize_delimited_text(get(record, "translation"), r"[；\r\n]+")
             definition = normalize_delimited_text(get(record, "definition"), r"；")
-            db.execute("INSERT INTO words VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (word_id, word, text(get(record, "phoneticUk")), text(get(record, "phoneticUs")), translation, definition, text(get(record, "mnemonic")), as_int(get(record, "frequencyGroup")), as_int(get(record, "frequency"))))
+            db.execute("INSERT INTO words VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (word_id, word, text(get(record, "phoneticUk")), text(get(record, "phoneticUs")), translation, definition, text(get(record, "mnemonic")), text(get(record, "emotionColor")), text(get(record, "register")), text(get(record, "nuanceDescription")), text(get(record, "usageWarning")), normalize_delimited_text(get(record, "collocations"), r"[；;、,]+"), as_int(get(record, "frequencyGroup")), as_int(get(record, "frequency"))))
             db.execute("INSERT INTO word_search(rowid, word, translation, definition) VALUES (?, ?, ?, ?)", (word_id, word, translation, definition))
             for term in record.get("derivedTerms", record.get("derivatives", [])) or []:
                 value = text(term.get("term") if isinstance(term, dict) else term)
