@@ -18,7 +18,8 @@ interface PronunciationSpeaker {
 }
 
 /**
- * 发音播放器，三级回退：有道静态音频（默认，优先；句子按词拆读）→ vivo TTS → 系统 TextToSpeech。
+ * 发音播放器，三级回退：有道静态音频（默认，优先）→ vivo TTS → 系统 TextToSpeech。
+ * 有道只保证单词；整句交由 vivo / 系统 TTS 整句朗读，绝不逐词拆读。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  */
 class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
@@ -39,7 +40,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         player = null
     }
 
-    /** 第一级：有道。先整句试一次；有道只认单词时，按空格拆词逐词朗读，仍失败才回退 vivo→系统 TTS。 */
+    /** 第一级：有道。整句试一次；失败时整句交给后备 TTS（vivo → 系统），不逐词拆读。 */
     private suspend fun playYoudao(word: String, accent: Accent) {
         val media = MediaPlayer().apply {
             setOnPreparedListener { start() }
@@ -60,37 +61,9 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** 有道整句失败：多词拆词逐词读；单词/失败回退 vivo→系统 TTS。 */
+    /** 有道整句失败：不再逐词拆读（那会按词打断句子），直接把整句交给后备 TTS（vivo → 系统）整句朗读。 */
     private fun playYoudaoSentenceFallback(word: String, accent: Accent) {
-        val words = word.split(Regex("\\s+")).filter { it.isNotBlank() }
-        if (words.size > 1) playYoudaoWords(words, 0, accent) else scope.launch { playVivoFallback(word, accent) }
-    }
-
-    private fun playYoudaoWords(words: List<String>, index: Int, accent: Accent) {
-        if (index >= words.size) {
-            releasePlayer()
-            return
-        }
-        val media = MediaPlayer().apply {
-            setOnPreparedListener { start() }
-            setOnCompletionListener {
-                releasePlayer()
-                playYoudaoWords(words, index + 1, accent)
-            }
-            setOnErrorListener { _, _, _ ->
-                releasePlayer()
-                scope.launch { playVivoFallback(words.joinToString(" "), accent) }
-                true
-            }
-            try {
-                setDataSource("https://dict.youdao.com/dictvoice?audio=${words[index].encodeUrl()}&type=${accent.youdaoType}")
-            } catch (e: Exception) {
-                releasePlayer()
-                scope.launch { playVivoFallback(words.joinToString(" "), accent) }
-            }
-            prepareAsync()
-        }
-        player = media
+        scope.launch { playVivoFallback(word, accent) }
     }
 
     /** 第二级：vivo TTS。失败时落到系统 TextToSpeech。 */
