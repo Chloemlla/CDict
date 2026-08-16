@@ -1,9 +1,14 @@
 package com.chloemlla.cdict.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.chloemlla.cdict.core.data.TranslationCacheDatabase
 import com.chloemlla.cdict.core.translate.LanguageListOutcome
+import com.chloemlla.cdict.core.translate.RoomTranslationCache
+import com.chloemlla.cdict.core.translate.TranslationCache
+import com.chloemlla.cdict.core.translate.TranslationCacheKey
 import com.chloemlla.cdict.core.translate.TranslationDirection
 import com.chloemlla.cdict.core.translate.TranslationOutcome
 import com.chloemlla.cdict.core.translate.TranslationRequest
@@ -23,6 +28,7 @@ sealed interface TranslationUiState {
 
 class TranslationViewModel(
     private val client: VivoTranslationClient = VivoTranslationClient(),
+    private val cache: TranslationCache = TranslationCache.NoOp,
 ) : ViewModel() {
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
@@ -57,20 +63,31 @@ class TranslationViewModel(
     fun translate() {
         val text = _query.value.trim()
         if (text.isEmpty()) return
+        val direction = _direction.value
         viewModelScope.launch {
+            val key = TranslationCacheKey.of(text, direction)
+            cache.get(key)?.let { cached ->
+                // 内存/磁盘命中：跳过网页请求，0ms 瞬间渲染。
+                _state.value = TranslationUiState.Success(cached)
+                return@launch
+            }
             _state.value = TranslationUiState.Translating
-            val outcome = client.translate(TranslationRequest(listOf(text), _direction.value))
-            _state.value = when (outcome) {
-                is TranslationOutcome.Success -> TranslationUiState.Success(outcome.result)
-                is TranslationOutcome.Failure -> TranslationUiState.Failure(outcome.message)
+            when (val outcome = client.translate(TranslationRequest(listOf(text), direction))) {
+                is TranslationOutcome.Success -> {
+                    cache.put(key, text, direction, outcome.result)
+                    _state.value = TranslationUiState.Success(outcome.result)
+                }
+                is TranslationOutcome.Failure -> _state.value = TranslationUiState.Failure(outcome.message)
             }
         }
     }
 }
 
-class TranslationViewModelFactory : ViewModelProvider.Factory {
+class TranslationViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        val db = TranslationCacheDatabase.open(context.applicationContext)
+        val cache = RoomTranslationCache(db.translationCacheDao())
         @Suppress("UNCHECKED_CAST")
-        return TranslationViewModel(VivoTranslationClient()) as T
+        return TranslationViewModel(VivoTranslationClient(), cache) as T
     }
 }

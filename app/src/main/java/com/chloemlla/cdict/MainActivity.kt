@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         DictionaryViewModelFactory(applicationContext)
     }
     private val translationViewModel: TranslationViewModel by viewModels {
-        TranslationViewModelFactory()
+        TranslationViewModelFactory(applicationContext)
     }
     private val studyViewModel: StudyViewModel by viewModels {
         StudyViewModelFactory(applicationContext)

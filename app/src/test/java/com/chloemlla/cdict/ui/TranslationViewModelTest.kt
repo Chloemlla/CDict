@@ -1,6 +1,10 @@
 package com.chloemlla.cdict.ui
 
 import com.chloemlla.cdict.core.translate.HttpResponse
+import com.chloemlla.cdict.core.translate.TranslationCache
+import com.chloemlla.cdict.core.translate.TranslationCacheKey
+import com.chloemlla.cdict.core.translate.TranslationDirection
+import com.chloemlla.cdict.core.translate.TranslationResult
 import com.chloemlla.cdict.core.translate.VivoTranslationClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,6 +18,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -128,5 +133,64 @@ class TranslationViewModelTest {
         advanceUntilIdle()
         assertFalse(called)
         assertEquals(emptyList<String>(), vm.supportedLanguages.value)
+    }
+
+    @Test
+    fun `cache hit renders without touching transport`() = runTest {
+        var called = false
+        val client = VivoTranslationClient(transport = { _, _, _ ->
+            called = true
+            HttpResponse(200, "{}")
+        })
+        val cached = TranslationResult(listOf("来自缓存"), "en", "zh-CHS", null)
+        val hitCache = object : TranslationCache {
+            override suspend fun get(key: String) = cached
+            override suspend fun put(
+                key: String,
+                sourceText: String,
+                direction: TranslationDirection,
+                result: TranslationResult,
+            ) = Unit
+
+            override suspend fun markFavorite(key: String, favorite: Boolean) = Unit
+        }
+        val vm = TranslationViewModel(client, hitCache)
+        vm.onQueryChange("hello")
+        vm.translate()
+        advanceUntilIdle()
+        assertFalse(called)
+        val success = vm.state.value as TranslationUiState.Success
+        assertEquals(listOf("来自缓存"), success.result.translations)
+    }
+
+    @Test
+    fun `network result is stored into cache`() = runTest {
+        var storedKey: String? = null
+        var storedResult: TranslationResult? = null
+        val recordingCache = object : TranslationCache {
+            override suspend fun get(key: String) = null
+            override suspend fun put(
+                key: String,
+                sourceText: String,
+                direction: TranslationDirection,
+                result: TranslationResult,
+            ) {
+                storedKey = key
+                storedResult = result
+            }
+
+            override suspend fun markFavorite(key: String, favorite: Boolean) = Unit
+        }
+        val vm = TranslationViewModel(okClient("你好"), recordingCache)
+        vm.onQueryChange("hello")
+        vm.translate()
+        advanceUntilIdle()
+        val success = vm.state.value as TranslationUiState.Success
+        assertEquals(listOf("你好"), success.result.translations)
+        assertNotNull(storedResult)
+        assertEquals(
+            TranslationCacheKey.of("hello", TranslationDirection.AUTO_TO_ZH),
+            storedKey,
+        )
     }
 }
