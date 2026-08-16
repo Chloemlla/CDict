@@ -34,6 +34,8 @@ data class WordEntity(
     val nuanceDescription: String? = null,
     val usageWarning: String? = null,
     val collocations: String? = null,
+    /** Comma-separated fields (phoneticUk/phoneticUs/mnemonic/derived/sentences) enriched from the AI distribution merge. */
+    val aiSupplemented: String? = null,
     @ColumnInfo(defaultValue = "0") val frequencyGroup: Int = 0,
     @ColumnInfo(defaultValue = "0") val frequency: Int = 0,
 )

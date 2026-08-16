@@ -661,6 +661,7 @@ private fun WordDetail(
     val derivedTermWords = detail?.derivedTermWords.orEmpty()
     val heatmap = detail?.heatmap.orEmpty().filter { it.period.isNotBlank() }
     val sentences = detail?.sentences.orEmpty().filter { it.english.isNotBlank() }
+    val supplements = supplementedFields(word)
 
     Scaffold(
         topBar = {
@@ -716,23 +717,31 @@ private fun WordDetail(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                         if (phoneticUk != null || phoneticUs != null) {
-                            Column(
+                            Row(
                                 modifier = Modifier.padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                phoneticUk?.let {
-                                    Text(
-                                        text = "英式  $it",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    phoneticUk?.let {
+                                        Text(
+                                            text = "英式  $it",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    phoneticUs?.let {
+                                        Text(
+                                            text = "美式  $it",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                 }
-                                phoneticUs?.let {
-                                    Text(
-                                        text = "美式  $it",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
+                                if ("phoneticUk" in supplements || "phoneticUs" in supplements) {
+                                    AiSupplementPill()
                                 }
                             }
                         }
@@ -866,7 +875,10 @@ private fun WordDetail(
 
             if (mnemonic != null) {
                 item(key = "mnemonic") {
-                    DetailSectionCard(title = "记忆提示") {
+                    DetailSectionCard(
+                        title = "记忆提示",
+                        trailing = { if ("mnemonic" in supplements) AiSupplementPill() },
+                    ) {
                         SpeakableEnglishText(
                             en = mnemonic,
                             pinnedZh = null,
@@ -934,7 +946,10 @@ private fun WordDetail(
 
                 if (derivedTerms.isNotEmpty()) {
                     item(key = "derived-terms") {
-                        DetailSectionCard(title = "派生词") {
+                        DetailSectionCard(
+                            title = "派生词",
+                            trailing = { if ("derived" in supplements) AiSupplementPill() },
+                        ) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 derivedTerms.forEach { term ->
                                     val targetWord = derivedTermWords[term.lowercase()]
@@ -1005,7 +1020,10 @@ private fun WordDetail(
                 }
 
                 item(key = "sentences") {
-                    DetailSectionCard(title = "真题句子") {
+                    DetailSectionCard(
+                        title = "真题句子",
+                        trailing = { if ("sentences" in supplements) AiSupplementPill() },
+                    ) {
                         if (sentences.isEmpty()) {
                             Text(
                                 text = "暂无真题句子",
@@ -1038,6 +1056,7 @@ private fun WordDetail(
 @Composable
 private fun DetailSectionCard(
     title: String,
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -1048,12 +1067,19 @@ private fun DetailSectionCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                trailing?.invoke()
+            }
             Spacer(Modifier.height(10.dp))
             content()
         }

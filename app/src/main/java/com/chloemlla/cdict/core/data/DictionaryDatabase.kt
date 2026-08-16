@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WordSearchEntity::class,
         MetadataEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class DictionaryDatabase : RoomDatabase() {
@@ -39,10 +39,18 @@ abstract class DictionaryDatabase : RoomDatabase() {
             }
         }
 
+        // v2 -> v3 adds the aiSupplemented column that flags which word fields were
+        // enriched from the distribution merge, so the UI can show an AI marker.
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE words ADD COLUMN aiSupplemented TEXT")
+            }
+        }
+
         fun open(context: Context): DictionaryDatabase =
             Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
                 .createFromAsset("dict.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
     }

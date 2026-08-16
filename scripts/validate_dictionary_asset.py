@@ -25,6 +25,9 @@ def main() -> int:
         groups = db.execute("SELECT COUNT(*) FROM groups").fetchone()[0]
         if words != args.expected_word_count or groups != args.expected_groups:
             parser.error(f"unexpected counts: words={words}, groups={groups}")
+        words_columns = {row[1] for row in db.execute("PRAGMA table_info(words)")}
+        if "aiSupplemented" not in words_columns:
+            parser.error("words table missing required aiSupplemented column")
         fts = db.execute("SELECT COUNT(*) FROM word_search").fetchone()[0]
         if fts != words:
             parser.error(f"FTS row count {fts} does not match words {words}")

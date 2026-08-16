@@ -67,6 +67,20 @@ private fun emotionColors(value: String?): Pair<Color, Color>? = when (value?.tr
 fun parseCollocations(value: String?): List<String> =
     value?.split("；", ";", "、", ",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 
+/**
+ * Parse the comma-separated aiSupplemented column into the set of fields that were
+ * enriched from the distribution merge (phoneticUk / phoneticUs / mnemonic / derived /
+ * sentences). Returns an empty set when the word carries no AI-supplemented content.
+ */
+fun supplementedFields(word: WordEntity): Set<String> =
+    word.aiSupplemented?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+
+/** True when any of the word's displayed fields was added by the AI enrichment merge. */
+fun wordHasAiSupplement(word: WordEntity): Boolean = supplementedFields(word).isNotEmpty()
+
+/** True when the given merge field was supplemented by the AI enrichment for this word. */
+fun fieldSupplemented(word: WordEntity, field: String): Boolean = field in supplementedFields(word)
+
 /** True when any annotation field carries content worth rendering. */
 fun wordHasAnnotations(word: WordEntity): Boolean =
     word.emotionColor?.isNotBlank() == true ||
@@ -80,6 +94,28 @@ private fun AnnotationPill(text: String, bg: Color, fg: Color) {
     Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(8.dp)) {
         Text(
             text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+        )
+    }
+}
+
+/**
+ * Small "AI 补充" badge marking content that was enriched by the AI distribution merge
+ * (phonetics, mnemonic, derived terms, sentences). Rendered next to the section that
+ * carries supplemented content.
+ */
+@Composable
+fun AiSupplementPill(modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            text = "AI 补充",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),

@@ -40,6 +40,7 @@ CREATE TABLE words (
   nuanceDescription TEXT,
   usageWarning TEXT,
   collocations TEXT,
+  aiSupplemented TEXT,
   frequencyGroup INTEGER NOT NULL DEFAULT 0,
   frequency INTEGER NOT NULL DEFAULT 0
 );
