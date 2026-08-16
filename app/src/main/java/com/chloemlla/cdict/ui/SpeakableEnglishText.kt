@@ -31,6 +31,7 @@ internal fun SpeakableEnglishText(
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
     modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     LaunchedEffect(en) {
         if (pinnedZh == null && ui == null) onTranslate(en)
@@ -58,6 +59,7 @@ internal fun SpeakableEnglishText(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            trailing?.invoke()
         }
         when {
             !pinnedZh.isNullOrBlank() -> Text(

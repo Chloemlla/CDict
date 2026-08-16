@@ -99,6 +99,7 @@ fun DictionaryApp(
     state: DictionaryScreenState,
     onQueryChanged: (String) -> Unit,
     onSelect: (WordEntity) -> Unit,
+    onOpenDerivedWord: (WordEntity) -> Unit = {},
     onBackFromDetail: () -> Unit = {
         // Default: close the detail and return to the browse list.
         (state as? DictionaryScreenState.Ready)?.selected?.let { onSelect(it.copy(id = -1)) }
@@ -156,7 +157,7 @@ fun DictionaryApp(
                             word = sel,
                             detail = state.detail,
                             onBack = onBackFromDetail,
-                            onOpenWord = onSelect,
+                            onOpenWord = onOpenDerivedWord,
                             onPlayPronunciation = onPlayPronunciation,
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
@@ -936,25 +937,18 @@ private fun WordDetail(
                         DetailSectionCard(title = "派生词") {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 derivedTerms.forEach { term ->
-                                    val headword = derivedTermWords[term.lowercase()]
-                                    Row(
+                                    val targetWord = derivedTermWords[term.lowercase()]
+                                    SpeakableEnglishText(
+                                        en = term,
+                                        pinnedZh = null,
+                                        ui = phraseStates[term],
+                                        onTranslate = onPhraseTranslate,
+                                        onSpeak = onPhraseSpeak,
                                         modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        SpeakableEnglishText(
-                                            en = term,
-                                            pinnedZh = null,
-                                            ui = phraseStates[term],
-                                            onTranslate = onPhraseTranslate,
-                                            onSpeak = onPhraseSpeak,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        if (headword != null) {
-                                            TextButton(onClick = { onOpenWord(headword) }) {
-                                                Text("前往")
-                                            }
-                                        }
-                                    }
+                                        trailing = if (targetWord == null) null else {
+                                            { TextButton(onClick = { onOpenWord(targetWord) }) { Text("前往") } }
+                                        },
+                                    )
                                 }
                             }
                         }

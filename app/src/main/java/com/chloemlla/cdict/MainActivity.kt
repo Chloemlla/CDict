@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
                             dictionaryState = state,
                             onDictionaryQueryChanged = dictionaryViewModel::search,
                             onDictionarySelect = dictionaryViewModel::select,
+                            onDictionaryOpenDerived = dictionaryViewModel::openDerivedWord,
                             onDictionaryDeselect = dictionaryViewModel::deselect,
                             onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
                             onDictionaryLoadMore = dictionaryViewModel::loadMore,

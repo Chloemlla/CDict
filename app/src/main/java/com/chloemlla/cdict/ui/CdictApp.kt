@@ -90,7 +90,8 @@ fun CdictApp(
     dictionaryState: DictionaryScreenState,
     onDictionaryQueryChanged: (String) -> Unit,
     onDictionarySelect: (WordEntity) -> Unit,
-    onDictionaryDeselect: () -> Unit,
+    onDictionaryOpenDerived: (WordEntity) -> Unit,
+    onDictionaryDeselect: () -> Boolean,
     onDictionaryPlayPronunciation: (WordEntity, Accent) -> Unit,
     onDictionaryLoadMore: () -> Unit,
     onDictionarySortModeChanged: (SortMode) -> Unit,
@@ -150,14 +151,17 @@ fun CdictApp(
         }
     }
     // Dictionary detail back: a cross-tab jump returns to where the word was opened from;
-    // otherwise the detail simply closes back onto the browse list.
+    // otherwise back walks the in-detail history (派生词「前往」) and only closes onto the
+    // browse list once that history is exhausted.
     val onDictionaryBackFromDetail: () -> Unit = {
-        onDictionaryDeselect()
-        val origin = dictionaryJumpFrom
-        if (origin != null) {
-            dictionaryJumpFrom = null
-            selectedTab = origin
-            navStack = navStack.filterNot { it == origin }
+        val stillInDetail = onDictionaryDeselect()
+        if (!stillInDetail) {
+            val origin = dictionaryJumpFrom
+            if (origin != null) {
+                dictionaryJumpFrom = null
+                selectedTab = origin
+                navStack = navStack.filterNot { it == origin }
+            }
         }
     }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
@@ -226,6 +230,7 @@ fun CdictApp(
                         dictionaryState = dictionaryState,
                         onDictionaryQueryChanged = onDictionaryQueryChanged,
                         onDictionarySelect = onDictionarySelect,
+                        onDictionaryOpenDerived = onDictionaryOpenDerived,
                         onDictionaryBackFromDetail = onDictionaryBackFromDetail,
                         onDictionaryPlayPronunciation = onDictionaryPlayPronunciation,
                         onDictionaryLoadMore = onDictionaryLoadMore,
@@ -258,6 +263,7 @@ fun CdictApp(
                     dictionaryState = dictionaryState,
                     onDictionaryQueryChanged = onDictionaryQueryChanged,
                     onDictionarySelect = onDictionarySelect,
+                    onDictionaryOpenDerived = onDictionaryOpenDerived,
                     onDictionaryBackFromDetail = onDictionaryBackFromDetail,
                     onDictionaryPlayPronunciation = onDictionaryPlayPronunciation,
                     onDictionaryLoadMore = onDictionaryLoadMore,
@@ -286,6 +292,7 @@ private fun DestinationContent(
     dictionaryState: DictionaryScreenState,
     onDictionaryQueryChanged: (String) -> Unit,
     onDictionarySelect: (WordEntity) -> Unit,
+    onDictionaryOpenDerived: (WordEntity) -> Unit,
     onDictionaryBackFromDetail: () -> Unit,
     onDictionaryPlayPronunciation: (WordEntity, Accent) -> Unit,
     onDictionaryLoadMore: () -> Unit,
@@ -344,6 +351,7 @@ private fun DestinationContent(
                 state = dictionaryState,
                 onQueryChanged = onDictionaryQueryChanged,
                 onSelect = onDictionarySelect,
+                onOpenDerivedWord = onDictionaryOpenDerived,
                 onBackFromDetail = onDictionaryBackFromDetail,
                 onPlayPronunciation = onDictionaryPlayPronunciation,
                 onLoadMore = onDictionaryLoadMore,

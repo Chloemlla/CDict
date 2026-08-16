@@ -67,6 +67,9 @@ class DictionaryViewModel(
     private var totalCount = 0L
     private var loadMoreInFlight = false
     private var searchJob: Job? = null
+    // Words whose detail is still open underneath the current one (派生词「前往」跳转等),
+    // so back walks back through details instead of dumping straight onto the browse list.
+    private val detailStack = ArrayDeque<WordEntity>()
 
     init {
         viewModelScope.launch {
@@ -199,9 +202,26 @@ class DictionaryViewModel(
         val current = _state.value
         if (current !is DictionaryScreenState.Ready) return
         if (word.id == -1L) {
+            detailStack.clear()
             _state.value = current.copy(selected = null, detail = null)
             return
         }
+        // A fresh selection (browse list tap or cross-tab jump) starts a new detail session.
+        detailStack.clear()
+        openWord(word)
+    }
+
+    /** Opens a derived-term headword, keeping the current detail as the back destination. */
+    fun openDerivedWord(word: WordEntity) {
+        val current = _state.value
+        if (current !is DictionaryScreenState.Ready || word.id == -1L) return
+        current.selected?.takeIf { it.id != word.id }?.let { detailStack.addLast(it) }
+        openWord(word)
+    }
+
+    private fun openWord(word: WordEntity) {
+        val current = _state.value
+        if (current !is DictionaryScreenState.Ready) return
         _state.value = current.copy(selected = word, detail = null)
         val db = database
         if (db == null) return
@@ -229,12 +249,20 @@ class DictionaryViewModel(
         }
     }
 
-    /** Closes the open word detail, returning the dictionary tab to its browse list. */
-    fun deselect() {
+    /**
+     * Closes the current word detail. When a detail was reached via a 派生词「前往」jump,
+     * returns to the previous detail; otherwise closes back onto the browse list.
+     * @return true if a detail is still showing after walking back, false if fully closed.
+     */
+    fun deselect(): Boolean {
         val current = _state.value
-        if (current is DictionaryScreenState.Ready && current.selected != null) {
+        if (current !is DictionaryScreenState.Ready || current.selected == null) return false
+        if (detailStack.isEmpty()) {
             _state.value = current.copy(selected = null, detail = null)
+            return false
         }
+        openWord(detailStack.removeLast())
+        return true
     }
 
     /** Rebuild the installed dictionary database from the bundled asset. */
@@ -242,6 +270,7 @@ class DictionaryViewModel(
         viewModelScope.launch {
             database?.close()
             database = null
+            detailStack.clear()
             _state.value = DictionaryScreenState.Loading
             when (val result = repository.rebuild()) {
                 is DatabaseState.Ready -> {
