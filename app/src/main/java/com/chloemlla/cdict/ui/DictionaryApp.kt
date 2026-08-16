@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -384,6 +385,11 @@ private fun WordList(
             if (state.words.isEmpty()) {
                 EmptySearchState(
                     query = query,
+                    suggestion = state.suggestion,
+                    onSuggestionClick = { suggestion ->
+                        query = suggestion.word
+                        onQueryChanged(suggestion.word)
+                    },
                     onClear = {
                         query = ""
                         onQueryChanged("")
@@ -459,6 +465,8 @@ private fun WordList(
 @Composable
 private fun ColumnScope.EmptySearchState(
     query: String,
+    suggestion: WordEntity?,
+    onSuggestionClick: (WordEntity) -> Unit,
     onClear: () -> Unit,
 ) {
     Box(
@@ -489,6 +497,40 @@ private fun ColumnScope.EmptySearchState(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // "Did you mean?" (PRD §3.1): the closest headword within edit distance <= 2,
+                // shown because nothing matched the typed query.
+                if (suggestion != null) {
+                    OutlinedCard(
+                        onClick = { onSuggestionClick(suggestion) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        ),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = "是否查找：${suggestion.word}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+                }
                 TextButton(
                     onClick = onClear,
                     modifier = Modifier.heightIn(min = 48.dp),

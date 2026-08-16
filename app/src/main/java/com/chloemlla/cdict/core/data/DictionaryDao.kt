@@ -29,6 +29,13 @@ interface DictionaryDao {
     @Query("SELECT words.* FROM words JOIN word_search ON words.id = word_search.rowid WHERE word_search MATCH :query ORDER BY words.frequencyGroup, words.frequency, words.word LIMIT :limit")
     fun searchEnglish(query: String, limit: Int = 100): Flow<List<WordEntity>>
 
+    // Typo-tolerance candidate pool (优化项): edit distance <= 2 implies the corrected word
+    // and the query differ in length by at most 2, so bounding word length shrinks the
+    // 49k-entry set to a small neighborhood before scanning. Sorted by core frequency first
+    // so the most likely IELTS word wins ties.
+    @Query("SELECT * FROM words WHERE length(word) BETWEEN :minLength AND :maxLength ORDER BY frequencyGroup, frequency, word LIMIT :limit")
+    suspend fun wordsInLengthRange(minLength: Int, maxLength: Int, limit: Int): List<WordEntity>
+
     @Query("SELECT * FROM words WHERE word LIKE '%' || :query || '%' OR translation LIKE '%' || :query || '%' ORDER BY frequencyGroup, frequency, word LIMIT :limit")
     fun searchChinese(query: String, limit: Int = 100): Flow<List<WordEntity>>
 

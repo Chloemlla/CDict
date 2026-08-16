@@ -13,6 +13,7 @@ import com.chloemlla.cdict.core.data.HeatmapEntryEntity
 import com.chloemlla.cdict.core.data.RootEntity
 import com.chloemlla.cdict.core.data.SentenceEntity
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.core.search.SearchEngine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,7 @@ sealed interface DictionaryScreenState {
         val words: List<WordEntity>,
         val selected: WordEntity? = null,
         val query: String = "",
+        val suggestion: WordEntity? = null,
         val detail: WordDetailData? = null,
         val sortMode: SortMode = SortMode.Frequency,
         val hasMore: Boolean = false,
@@ -134,9 +136,26 @@ class DictionaryViewModel(
                     query = query,
                 )
             } else {
+                val trimmed = query.trim()
+                val dao = db.dictionaryDao()
+                val words = SearchEngine.reorderForSearch(
+                    trimmed,
+                    dao.searchEnglish("$trimmed*").first(),
+                )
+                // Typo tolerance (PRD §3.1): nothing matched on the headword prefix, so look
+                // for a close neighbour (edit distance <= 2) within a length-bounded pool and
+                // offer it as a "did you mean?" suggestion. Skipped once a real match exists.
+                val suggestion =
+                    if (words.isNotEmpty()) null
+                    else dao.wordsInLengthRange(
+                        minLength = maxOf(1, trimmed.length - 2),
+                        maxLength = trimmed.length + 2,
+                        limit = 300,
+                    ).let { pool -> SearchEngine.suggest(trimmed, pool) }
                 DictionaryScreenState.Ready(
-                    words = db.dictionaryDao().searchEnglish("${query.trim()}*").first(),
+                    words = words,
                     query = query,
+                    suggestion = suggestion,
                 )
             }
             _state.value = newState
