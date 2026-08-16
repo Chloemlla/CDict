@@ -124,15 +124,18 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
             )
         },
     ) { paddingValues ->
-        Column(
+        ResponsiveContentBox(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+                .imePadding(),
         ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "即时翻译",
@@ -331,6 +334,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                     )
                 }
             }
+        }
         }
     }
 }

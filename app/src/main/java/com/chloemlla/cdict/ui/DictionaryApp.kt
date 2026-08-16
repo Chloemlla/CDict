@@ -301,11 +301,11 @@ private fun WordList(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+        ResponsiveContentBox(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize(),
+            ) {
             OutlinedTextField(
                 value = query,
                 onValueChange = {
@@ -451,6 +451,7 @@ private fun WordList(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -627,13 +628,13 @@ private fun WordDetail(
             )
         },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        ResponsiveContentBox(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             item(key = "word-header") {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -951,75 +952,10 @@ private fun WordDetail(
                 }
             }
         }
+        }
     }
 }
 
-@Composable
-private fun SpeakableEnglishText(
-    en: String,
-    pinnedZh: String?,
-    ui: PhraseUiState?,
-    onTranslate: (String) -> Unit,
-    onSpeak: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LaunchedEffect(en) {
-        if (pinnedZh == null && ui == null) onTranslate(en)
-    }
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = en,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(
-                onClick = { onSpeak(en) },
-                modifier = Modifier.semantics { contentDescription = "朗读 $en" },
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        when {
-            !pinnedZh.isNullOrBlank() -> Text(
-                text = pinnedZh,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ui is PhraseUiState.Loading -> Text(
-                text = "翻译中…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
-            )
-            ui is PhraseUiState.Done -> Text(
-                text = ui.zh,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ui is PhraseUiState.Error -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = "翻译失败",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-                TextButton(onClick = { onTranslate(en) }) { Text("重试") }
-            }
-        }
-    }
-}
 
 @Composable
 private fun DetailSectionCard(

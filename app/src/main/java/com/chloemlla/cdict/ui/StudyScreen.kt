@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
@@ -68,6 +70,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 
@@ -95,6 +99,12 @@ fun StudyScreen(
     onSetGoal: (Int) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
 ) {
+    // 与词典词条一致：背词卡片的英文释义也经 vivo 网关自动翻译为中文，翻译状态按文本缓存。
+    val context = LocalContext.current
+    val phraseViewModel: PhraseSpeechViewModel = viewModel(
+        factory = remember { PhraseSpeechViewModelFactory(context) },
+    )
+    val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
     // Developer backdoor: five rapid taps on the 背词 title open the developer panel.
     var devTaps by remember { mutableIntStateOf(0) }
     var lastDevTap by remember { mutableLongStateOf(0L) }
@@ -175,6 +185,9 @@ fun StudyScreen(
                         onExitFreePlay = onExitFreePlay,
                         onSetGoal = onSetGoal,
                         onPlayPronunciation = onPlayPronunciation,
+                        phraseStates = phraseStates,
+                        onTranslate = phraseViewModel::translate,
+                        onSpeak = phraseViewModel::speak,
                     )
                     StudyPhase.DONE -> DoneFlow(
                         state = state,
@@ -309,10 +322,16 @@ private fun ReviewFlow(
     DisposableEffect(tone) {
         onDispose { tone.release() }
     }
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    // 手机小屏：整列可滚动避免裁剪；换题时回到顶部。
+    val scrollState = rememberScrollState()
+    LaunchedEffect(question.wordId, question.attempt, question.forceReveal) {
+        scrollState.scrollTo(0)
+    }
+    ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         Text(
             text = "昨日复习  ${state.reviewTotal - state.reviewRemaining + 1} / ${state.reviewTotal}",
             style = MaterialTheme.typography.labelLarge,
@@ -359,7 +378,6 @@ private fun ReviewFlow(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                 )
             }
-            Spacer(Modifier.weight(1f))
             return@Column
         }
         if (question.confusionRetry) {
@@ -380,7 +398,6 @@ private fun ReviewFlow(
                 onClick = { onAnswer(index) },
             )
         }
-        Spacer(Modifier.weight(1f))
         val feedback = state.feedback
         when {
             feedback != null && feedback.correct -> {
@@ -402,6 +419,7 @@ private fun ReviewFlow(
                 }
             }
         }
+    }
     }
 }
 
@@ -474,13 +492,17 @@ private fun LearnFlow(
     onExitFreePlay: () -> Unit,
     onSetGoal: (Int) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    phraseStates: Map<String, PhraseUiState>,
+    onTranslate: (String) -> Unit,
+    onSpeak: (String) -> Unit,
 ) {
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
         StudyProgressBar(state)
         if (isFree) {
@@ -492,12 +514,26 @@ private fun LearnFlow(
                 textAlign = TextAlign.Center,
             )
         }
-        card?.let { word ->
-            LearnCard(word = word, onPlayPronunciation = onPlayPronunciation)
-        } ?: Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            Text("正在为你挑选新词…", style = MaterialTheme.typography.bodyMedium)
+        // 卡片区域随屏幕高度滚动（小屏 / 大字体不裁剪），顶部进度与底部操作始终可见。
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (card != null) {
+                Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                ) {
+                    LearnCard(
+                        word = card,
+                        phraseUi = card.definition?.takeIf(String::isNotBlank)?.let(phraseStates::get),
+                        onTranslate = onTranslate,
+                        onSpeak = onSpeak,
+                        onPlayPronunciation = onPlayPronunciation,
+                    )
+                }
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("正在为你挑选新词…", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
-        Spacer(Modifier.weight(1f))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(
                 onClick = onDefer,
@@ -523,11 +559,15 @@ private fun LearnFlow(
             }
         }
     }
+    }
 }
 
 @Composable
 private fun LearnCard(
     word: WordEntity,
+    phraseUi: PhraseUiState?,
+    onTranslate: (String) -> Unit,
+    onSpeak: (String) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
 ) {
     val pos = word.translation?.takeIf(String::isNotBlank)?.let { primaryPartOfSpeech(it) }
@@ -542,7 +582,7 @@ private fun LearnCard(
         ) {
             Text(
                 text = word.word,
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -578,13 +618,14 @@ private fun LearnCard(
                     modifier = Modifier.padding(top = 14.dp),
                 )
             }
-            word.definition?.takeIf(String::isNotBlank)?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
+            word.definition?.takeIf(String::isNotBlank)?.let { def ->
+                SpeakableEnglishText(
+                    en = def,
+                    pinnedZh = null,
+                    ui = phraseUi,
+                    onTranslate = onTranslate,
+                    onSpeak = onSpeak,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
             }
             Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -666,11 +707,12 @@ private fun DoneFlow(
     onContinueFreePlay: () -> Unit,
     onSetGoal: (Int) -> Unit,
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
         item(key = "summary") {
             GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
             StudyProgressBar(state)
@@ -707,6 +749,7 @@ private fun DoneFlow(
                 LearnedWordRow(word)
             }
         }
+    }
     }
 }
 
