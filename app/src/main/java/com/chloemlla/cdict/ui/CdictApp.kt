@@ -78,7 +78,7 @@ private enum class CdictDestination(
 
 /** Saver for the tab visit-history stack so it survives configuration changes. */
 private val IntListSaver = listSaver<List<Int>, Int>(
-    save = { _, list -> list },
+    save = { list -> list },
     restore = { it },
 )
 
