@@ -30,6 +30,17 @@ object WhatsNewData {
             tip = "可左右滑动浏览；同一构建确认后不会再次自动弹出。",
         ),
         WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "「AI 补充」英文内容支持朗读与翻译",
+            subtitle = "词详情页的「AI 补充」分区中，英文内容（词间关系、词形变化、词源）均可点按朗读并自动附中文翻译。",
+            bullets = listOf(
+                "词间关系：近义词 / 反义词 / 相关词逐条朗读与翻译；目标词在词库中时仍可点「前往」跳转。",
+                "词形变化：每个变形词均可朗读与翻译，变形标签（如 participle、present）保留在行尾。",
+                "词源：每条词源段落均可朗读并附中文翻译。",
+            ),
+            tip = "入口：词详情页 → 对应分区 → 点喇叭朗读，译文自动显示在下方。",
+        ),
+        WhatsNewSlide(
             icon = Icons.AutoMirrored.Filled.MenuBook,
             title = "词详情页派生词「前往」跳转",
             subtitle = "词详情页的派生词条目新增「前往」入口，可跳转到对应词条的完整详情。",

@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -653,10 +651,7 @@ private fun WordResultCard(
     }
 }
 
-@OptIn(
-    androidx.compose.material3.ExperimentalMaterial3Api::class,
-    ExperimentalLayoutApi::class,
-)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun WordDetail(
     word: WordEntity,
@@ -1025,15 +1020,19 @@ private fun WordDetail(
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.primary,
                                         )
-                                        FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                                        ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             group.forEach { relation ->
                                                 val targetWord = relationWords[relation.targetWord.lowercase()]
-                                                RelationTargetChip(
-                                                    target = relation.targetWord,
-                                                    onClick = targetWord?.let { { onOpenWord(it) } },
+                                                SpeakableEnglishText(
+                                                    en = relation.targetWord,
+                                                    pinnedZh = null,
+                                                    ui = phraseStates[relation.targetWord],
+                                                    onTranslate = onPhraseTranslate,
+                                                    onSpeak = onPhraseSpeak,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    trailing = if (targetWord == null) null else {
+                                                        { TextButton(onClick = { onOpenWord(targetWord) }) { Text("前往") } }
+                                                    },
                                                 )
                                             }
                                         }
@@ -1049,13 +1048,24 @@ private fun WordDetail(
                     item(key = "forms") {
                         DetailSectionCard(title = "词形变化") {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    forms.forEach { form ->
-                                        FormChip(formText = form.formText, formTags = form.formTags)
-                                    }
+                                forms.forEach { form ->
+                                    SpeakableEnglishText(
+                                        en = form.formText,
+                                        pinnedZh = null,
+                                        ui = phraseStates[form.formText],
+                                        onTranslate = onPhraseTranslate,
+                                        onSpeak = onPhraseSpeak,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        trailing = if (form.formTags.isBlank()) null else {
+                                            {
+                                                Text(
+                                                    text = form.formTags.split(",").joinToString("、"),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        },
+                                    )
                                 }
                                 AiSupplementTrailing(show = "forms" in supplements)
                             }
@@ -1071,9 +1081,13 @@ private fun WordDetail(
                                     if (index > 0) {
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                     }
-                                    Text(
-                                        text = etymology.text,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                    SpeakableEnglishText(
+                                        en = etymology.text,
+                                        pinnedZh = null,
+                                        ui = phraseStates[etymology.text],
+                                        onTranslate = onPhraseTranslate,
+                                        onSpeak = onPhraseSpeak,
+                                        modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
                                 AiSupplementTrailing(show = "etymology" in supplements)
@@ -1205,69 +1219,6 @@ private fun DetailSectionCard(
             )
             Spacer(Modifier.height(10.dp))
             content()
-        }
-    }
-}
-
-/**
- * A compact chip for a synonym/antonym/related_term target. When the target is a real
- * dictionary word ([onClick] non-null) it renders in the primary container and opens
- * that word; otherwise it is a static reference chip.
- */
-@Composable
-private fun RelationTargetChip(
-    target: String,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-) {
-    Surface(
-        color = if (onClick != null) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest
-        },
-        contentColor = if (onClick != null) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        },
-        shape = RoundedCornerShape(8.dp),
-        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
-    ) {
-        Text(
-            text = target,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-    }
-}
-
-/** A chip showing an inflection form text with its POS/tense tag labels. */
-@Composable
-private fun FormChip(
-    formText: String,
-    formTags: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(8.dp),
-        modifier = modifier,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Text(
-                text = formText,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            if (formTags.isNotBlank()) {
-                Text(
-                    text = formTags.split(",").joinToString("、"),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
