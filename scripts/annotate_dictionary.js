@@ -15,7 +15,7 @@
  * 用法：
  *   node annotate_dictionary.js dict.db                          # AI 标注缺数据的词
  *   node annotate_dictionary.js dict.db --parallel 5             # 并发 5（默认，上限 10）
- *   node annotate_dictionary.js dict.db --base-url https://api.deepseek.com --api-key sk-xxx --model deepseek-chat
+ *   node annotate_dictionary.js dict.db --base-url https://tokenrhythm.studio/v1 --api-key sk-xxx --model deepseek-chat
  *   node annotate_dictionary.js dict.db --limit 100              # 只标前 100 个缺失词
  *   node annotate_dictionary.js dict.db --groups 1,2             # 只标 1/2 组
  *   node annotate_dictionary.js dict.db --input ann.jsonl        # 合并外部标注，不调 API
@@ -50,7 +50,7 @@ function getOpt(name, fallback) {
 const CONFIG = {
   database: positionals[0] || process.env.DICT_DB || '',
   concurrency: Math.max(1, Math.min(10, parseInt(getOpt('--parallel', process.env.PARALLEL || '5'), 10) || 5)),
-  baseUrl: (getOpt('--base-url', process.env.AI_BASE_URL || 'https://api.deepseek.com') || '').replace(/\/+$/, ''),
+  baseUrl: (getOpt('--base-url', process.env.AI_BASE_URL || 'https://tokenrhythm.studio/v1') || '').replace(/\/+$/, ''),
   apiKey: getOpt('--api-key', process.env.AI_API_KEY || ''),
   model: getOpt('--model', process.env.AI_MODEL || 'deepseek-chat'),
   input: getOpt('--input', process.env.ANNOTATE_INPUT || ''),
@@ -76,9 +76,15 @@ function log(tag, ...out) {
 function loadState() {
   try {
     const obj = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    if (obj && obj.completed && typeof obj.completed === 'object') return obj;
+    if (obj && obj.completed && typeof obj.completed === 'object') {
+      return {
+        version: obj.version || 1,
+        completed: obj.completed,
+        failed: obj.failed && typeof obj.failed === 'object' ? obj.failed : {},
+      };
+    }
   } catch (e) { /* 无状态文件 */ }
-  return { version: 1, completed: {} };
+  return { version: 1, completed: {}, failed: {} };
 }
 
 let state = loadState();
@@ -91,6 +97,40 @@ function saveState() {
   } catch (e) {
     console.error(`状态文件写入失败: ${e.message}`);
   }
+}
+
+// 断点续传的落盘策略：成功项先记到内存（DB 本身就是持久化源头），按节流定时写；
+// 失败项出错后立即 saveState()，保证 API 大面积报错/中断时进度不丢。
+let stateDirty = false;
+let lastStateSave = 0;
+const STATE_SAVE_THROTTLE_MS = 2000;
+
+function maybeSaveState() {
+  if (CONFIG.dryRun || !stateDirty) return;
+  const now = Date.now();
+  if (now - lastStateSave < STATE_SAVE_THROTTLE_MS) return;
+  lastStateSave = now;
+  stateDirty = false;
+  saveState();
+}
+
+function flushState() {
+  if (CONFIG.dryRun) return;
+  stateDirty = false;
+  saveState();
+}
+
+function recordSuccess(id, word) {
+  state.completed[String(id)] = { word, ts: Date.now() };
+  delete state.failed[String(id)];
+  stateDirty = true;
+  maybeSaveState();
+}
+
+function recordFailure(id, word, error) {
+  state.failed[String(id)] = { word, error, ts: Date.now() };
+  stateDirty = true;
+  saveState();
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +243,8 @@ const SYSTEM_PROMPT = `你是一个严谨的雅思英语语言专家。分析用
 
 const activeControllers = new Set();
 process.on('SIGINT', () => {
-  log(null, '\n收到中断，正在终止标注任务...');
+  log(null, '\n收到中断，正在保存进度并终止标注任务...');
+  flushState();
   for (const c of activeControllers) c.abort();
   process.exit(130);
 });
@@ -341,10 +382,10 @@ async function runMerge(db, words) {
     const ann = rec && validateAnnotation(rec);
     if (!ann) { missing++; continue; }
     persistAnnotation(db, w, ann);
-    state.completed[String(w.id)] = { word: w.word, ts: Date.now() };
+    recordSuccess(w.id, w.word);
     imported++;
   }
-  saveState();
+  flushState();
   return { imported, missing, pending: pending.length, skipped: words.length - pending.length };
 }
 
@@ -384,18 +425,19 @@ async function runAi(db, words) {
       try {
         const ann = await annotateOne(pending[i], tag);
         persistAnnotation(db, pending[i], ann);
-        state.completed[String(pending[i].id)] = { word: pending[i].word, ts: Date.now() };
+        recordSuccess(pending[i].id, pending[i].word);
         if (CONFIG.output) appendJsonl(ann, pending[i].word);
         results[i] = { ok: true, word: pending[i].word };
         log(tag, `✔ ${pending[i].word} → ${ann.emotionColor || '-'} / ${ann.register || '-'}`);
       } catch (e) {
         results[i] = { ok: false, word: pending[i].word, error: e.message };
+        recordFailure(pending[i].id, pending[i].word, e.message);
         console.error(`${tag} [失败] ${pending[i].word}: ${e.message}`);
       }
     }
   });
   await Promise.all(workers);
-  saveState();
+  flushState();
   const ok = results.filter((r) => r && r.ok).length;
   const fail = results.filter((r) => r && !r.ok).length;
   return { ok, fail, pending: pending.length, skipped };
