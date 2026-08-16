@@ -47,7 +47,8 @@
 | 🔊 **Pronunciation** | Three-tier fallback (vivo TTS → Youdao → system TTS) with on-disk audio caching — no audio files shipped. |
 | 🌐 **Online translation** | Built-in translation engine backed by the vivo gateway, with a **three-layer cache**. |
 | 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
-| 📅 **Daily recommendations** | A fully offline daily feed mixing review, new core words, and easy transition words in a **3:5:2 ratio**. |
+| 🤖 **AI word annotations** | AI-generated 语感 annotations — emotion color, register, nuance, usage warnings, and speakable / auto-translated collocations. |
+| 📅 **Daily recommendations** | A fully offline daily exploration feed mixing core-new, root-expansion, and high-frequency transition words in a **5:3:2 ratio** (review stays in the Study tab). |
 | 🔒 **Privacy** | Data is entirely local; only `INTERNET` is requested, and nothing is collected or uploaded. |
 | 🛡 **Crash reporting** | Integrated **Lumen Crash SDK** capture with an in-app Compose report screen. |
 
@@ -62,7 +63,7 @@ A four-tab bottom navigation bar (a side rail on large screens):
 3. **翻译 · Translation** — online translation
 4. **推荐 · Recommendation** — daily recommendation feed
 
-Navigation is responsive: the bottom bar collapses into a navigation rail on large screens, and it supports Android system back / gesture navigation with word-detail slide transitions.
+The app opens on the **Dictionary** tab by default. Navigation is responsive: the bottom bar collapses into a navigation rail on large screens, and it supports Android system back / gesture navigation with word-detail slide transitions. A real visit-history stack makes the system back button return to the tab you actually came from — including cross-tab word jumps (e.g. recommendation → word detail → back to the recommendation feed) — and each tab's scroll / search / detail state is preserved via saveable state holders.
 
 ---
 
@@ -93,6 +94,7 @@ Tapping an entry opens a detail page showing:
 - **Derived terms** — `derivedTerms`
 - **Historical heatmap** — `heatmap` of appearance scores over time
 - **Real exam sentences** — `sentences` (English + Chinese), up to 10 per word
+- **AI 语感 annotations** — an emotion-color badge (`emotionColor`) + register chip (`register`), a nuance description (`nuanceDescription`), a highlighted usage-warning box (`usageWarning`), and 常见搭配 collocations (`collocations`) that auto-translate to Chinese and can be read aloud. Shared by the word detail page and the study card.
 - **Pronunciation buttons** for UK / US accent
 
 ### 🔊 Pronunciation
@@ -147,16 +149,18 @@ The **Study** tab is an adaptive spaced word-learning mode:
 - **Error attribution & retry**: wrong answers are immediately re-queued within the session with feedback.
 - **Success tone**: a correct review answer plays a short success sound.
 - **Adaptive daily goal** with a `StudyStatus` memory state machine persisted in a separate `StudyDatabase`.
+- **Test today's words immediately**: an "立即测试今日所学" entry point on the learning and summary screens runs today's newly-learned words through the review engine on demand; a correct answer advances the spaced-repetition ladder exactly as an on-time review would, pulling the schedule forward rather than granting a free pass.
 
 ### 📅 Daily Recommendations
 
-The **Recommendation** tab builds a **fully offline** daily feed:
+The **Recommendation** tab builds a **fully offline** daily exploration feed (方案A positioning: the tab is for light reading / preheating; review is owned by the Study tab):
 
-- A **3:5:2 ratio** across three word pools (PRD golden mix):
-  1. **Review** (~30%) — words due by the forgetting curve / yesterday's errors.
-  2. **Simple transition** (~20%) — unlearned, ultra-high-frequency words (group 1) for a smooth flow.
-  3. **Core new** (remainder) — unlearned new words in your target IELTS frequency groups (1–3), highest frequency first.
-- The daily goal is configurable; raising it appends new 3:5:2 slices and lowering it trims from the tail.
+- A **5:3:2 ratio** across three word pools:
+  1. **Core new** (50%) — unlearned new words in your target IELTS frequency groups (1–3), highest frequency first, with full context.
+  2. **Root expansion** (30%) — new words that share a **word root** with words you've already studied, so the feed extends from familiar vocabulary; when root data is sparse it falls back to sampling the target neighborhood (groups 2–4).
+  3. **Simple transition** (20%) — unlearned, ultra-high-frequency words (group 1) for a smooth, low-friction flow.
+- Cold start (nothing learned yet) falls back to the most common group-1 words so you can start swiping in seconds; a pool that runs short is topped up from core-new / full-corpus so the feed is always exactly `goal` items.
+- The daily goal is configurable; raising it appends new 5:3:2 slices and lowering it trims from the tail.
 - Progress is persisted per-day so the feed stays stable across app launches.
 
 ### 🔒 Permissions & Privacy
@@ -210,10 +214,11 @@ com.chloemlla.cdict
 
 ## Data Pipeline
 
-The dictionary is built from two sources:
+The dictionary is built from three sources:
 
-1. **Annotated base** — `scripts/CDict-dict.db` (49,213 words, 7 groups), committed in the repo, with AI annotation fields (`emotionColor`, `register`, `nuanceDescription`, `usageWarning`, `collocations`) produced by `scripts/annotate_dictionary.js` (node:sqlite, no Python).
+1. **Annotated base** — `scripts/CDict-dict.db` (49,213 words, 7 groups), committed in the repo, with AI annotation fields (`emotionColor`, `register`, `nuanceDescription`, `usageWarning`, `collocations`) produced by `scripts/annotate_dictionary.js` (node:sqlite, no Python). The annotator batches 10 words per OpenAI-compatible request (~10× fewer round-trips), checkpoint-resumes so interrupted runs keep progress, and retries / degrades failed words to protect annotation quality.
 2. **Rich-content merge** — `.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated base: `scripts/merge_distribution.py` matches ~17,925 headwords and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences. The result is validated and **published as a GitHub Release asset** (`dictionary-asset` tag) plus a `dict.signature` content checksum.
+3. **FLDC reference source** — `scripts/fetch_fldc_export.py` decodes the custom binary payload served by fldc.pages.dev (two gzip chunk containers + a shared-prefix string pool) into the converter's JSON shape. `.github/workflows/export-fldc.yml` (manual `workflow_dispatch`) runs `convert_dictionary.py` end-to-end in CI and uploads the resulting ~107,143-word / 7-group reference asset as a workflow artifact.
 
 CI stages the merged dictionary at build time by downloading from the hardcoded release URL, verifying the SHA-256 checksum, and copying it into `app/src/main/assets/dict.db`:
 
@@ -249,6 +254,8 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
 
 The pipeline: `keytool` verifies the decoded keystore → build APK / AAB → `apksigner` verifies the APK → generate SHA-256 checksums → upload artifacts → clean up temporary signing material. No keystore or plaintext credentials live in the repo. The **Lumen Crash SDK version is auto-resolved at build time** so it stays current without manual bumps.
 
+Two auxiliary `workflow_dispatch` workflows maintain the dictionary data: `merge-distribution.yml` publishes the merged rich-content asset to the `dictionary-asset` GitHub Release (downloaded by the build at compile time), and `export-fldc.yml` rebuilds the FLDC reference asset in CI.
+
 Release builds enable **R8 minification** (`proguard-android-optimize.txt` + `proguard-rules.pro`) and **resource shrinking**, and emit per-ABI split APKs (`*universal*.apk` is the all-architecture package; the AAB lets Google Play split per device). A dedicated `releaseAab` build type produces the AAB with resource shrinking off (AGP cannot combine ABI splits + resource shrink + AAB in one build type; Play performs per-device shrinking at serve time).
 
 ---
@@ -266,6 +273,12 @@ The app grew from a dictionary into a daily learning companion:
 - **Offline search quality**: Levenshtein typo suggestions and Exact > Prefix > Frequency ranking so core words surface first (`5f7d90e`).
 - **Audio caching**: pronunciation is now cached on disk by MD5 key within a 50 MB LRU and pre-fetched on the detail page (`c1be4e9`); Youdao became the first tier and can read whole sentences (`9a91bde`, `8a4fc36`).
 - **Study & search fixes**: mark DAO call suspend, pin Robolectric SDK in tests, and finish the recommendation rail layout (`34b6c0d`, `5edef02`, `09e30ff`).
+- **AI 语感 annotations**: five nullable annotation columns surfaced across the pipeline, app and tooling (`ff75e50`); the annotated `scripts/CDict-dict.db` is committed and staged directly as the app asset, with the `neutral` register mapped to 中性 (`8be57c0`); collocations are speakable and auto-translated like definitions (`98dfb41`). The annotator batches 10 words per request (`e93024a`), checkpoints immediately on API failure (`004a3b6`), adds the neutral register for ordinary words (`6f4608e`), re-annotates words missing core fields (`fc2537f`), and reports elapsed-runtime heartbeats (`bf7aa6d`).
+- **Dictionary release distribution**: the rich-content merge from an authorized `distribution.sqlite` (`1b87c6f`) now publishes the merged DB as a **GitHub Release** asset (`dictionary-asset`); CI downloads it at build time, and the app prompts a local-DB rebuild when the bundled `dict.signature` no longer matches the installed asset signature (`1c2fde9`), with `MetadataEntity` declared so the DAO metadata query compiles (`783eb43`).
+- **FLDC export decoder**: `fetch_fldc_export.py` decodes the fldc.pages.dev binary payload into converter JSON, so `export-fldc.yml` can build a ~107,143-word reference asset in CI (`fa532b9`, `5dfb9f5`).
+- **Tab navigation**: a real visit-history stack makes system back return to the actual previous tab (including cross-tab word jumps), with each tab's state preserved (`390440c`, `d0c7e6c`); the app opens on the Dictionary tab by default (`ca299c7`).
+- **Study**: 立即测试今日所学 lets learners run today's words through the review engine on demand, advancing the spaced-repetition ladder exactly like an on-time review (`a66239c`).
+- **Recommendation repositioning**: 方案A separates the 推荐 tab from study — the feed now mixes core-new / root-expansion / high-frequency transition at 5:3:2, leaving review to the Study tab (`b055c42`).
 
 ### 1.0 — Translation, audio & release hardening
 

@@ -47,7 +47,8 @@
 | 🔊 **发音** | 三级回退(vivo 合成 → 有道 → 系统 TTS),配合磁盘音频缓存,无需打包任何音频文件。 |
 | 🌐 **在线翻译** | 内置 vivo 网关注入的翻译引擎,带**三层缓存**。 |
 | 🧠 **背词模式** | 按 IELTS 频率加权的自适应间隔重复,含干扰项引擎与次日四选一复习。 |
-| 📅 **每日推荐** | 完全离线的每日流,按 **3:5:2** 配比混合复习 / 核心新词 / 简单过渡词。 |
+| 🤖 **AI 语感标注** | AI 逐词生成的语感标注——感情色彩、语体、精细语意、避坑提示,以及可朗读、自动译文的常见搭配。 |
+| 📅 **每日推荐** | 完全离线的每日探索流,按 **5:3:2** 配比混合核心新词 / 词根拓展 / 高频过渡词(复习留在背词页)。 |
 | 🔒 **隐私** | 数据完全本地;仅申请 `INTERNET`,不收集、不上传任何个人信息。 |
 | 🛡 **崩溃上报** | 集成 **Lumen Crash SDK** 采集,并内置 Compose 报告页。 |
 
@@ -62,7 +63,7 @@
 3. **翻译 · Translation** —— 在线翻译
 4. **推荐 · Recommendation** —— 每日推荐流
 
-导航是响应式的:窄窗口用底部导航栏,平板 / 大屏用侧边导航栏;支持 Android 系统返回 / 手势导航与词详情滑页切换。
+App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用底部导航栏,平板 / 大屏用侧边导航栏;支持 Android 系统返回 / 手势导航与词详情滑页切换。外壳维护真实的访问历史栈,系统返回回到你真正来源的标签页(含跨标签跳词,如 推荐 → 词详情 → 返回推荐流),并通过 saveable state holder 保存每个标签页的滚动 / 搜索 / 详情状态。
 
 ---
 
@@ -93,6 +94,7 @@
 - **派生词** `derivedTerms`
 - **历年出现频率热力图** `heatmap`:各时间段出现得分
 - **真题句子** `sentences`:英文原文 + 中文翻译,每词最多 10 条
+- **AI 语感标注**:感情色彩徽标(`emotionColor`)+ 语体标签(`register`)、精细语意(`nuanceDescription`)、高亮避坑提示(`usageWarning`),以及**常见搭配**(`collocations`)——每条搭配自动翻译为中文并可朗读。词详情页与背词卡片共用。
 - **英音 / 美音发音按钮**
 
 ### 🔊 发音
@@ -147,16 +149,18 @@ Youdao 静态发音 (dict.youdao.com/dictvoice;整句/词)
 - **错误归因与重试**:答错会在本次会话内立即重新入队并给出反馈。
 - **答对音效**:答对复习题播放短暂成功音。
 - **自适应每日目标**:以独立的 `StudyDatabase` 持久化 `StudyStatus` 记忆状态机。
+- **立即测试今日所学**:学习页与小结页提供「立即测试今日所学」入口,按需把今日新学词跑一遍复习引擎;答对时与按时复习完全一样推进间隔阶梯——把计划提前,而非免费放行。
 
 ### 📅 每日推荐
 
-**推荐**标签页构建**完全离线**的每日流:
+**推荐**标签页构建**完全离线**的每日探索流(方案A 定位分离:本页只做轻度阅读 / 预热,复习权交还背词页):
 
-- 按 **3:5:2** 黄金配比混合三种词池:
-  1. **复习巩固**(约 30%)——遗忘曲线到期 / 昨日错题的待复习词。
-  2. **简单过渡**(约 20%)——未学的绝对高频词(组 1),给流式心流体验。
-  3. **核心新词**(其余)——目标雅思频率组(组 1..3)的未学新词,高频优先。
-- 每日目标可配置:调高会追加新的 3:5:2 切片,调低则从队尾裁剪。
+- 按 **5:3:2** 配比混合三种词池:
+  1. **核心新词**(50%)——目标雅思频率组(组 1..3)的未学新词,高频优先,带完整上下文。
+  2. **词根拓展**(30%)——与你已学词**共享词根**派生出的新词,从熟悉词汇向外延伸;词根数据稀疏时退回目标邻域抽样(组 2..4)。
+  3. **简单过渡**(20%)——未学的绝对高频词(组 1),给流式心流体验。
+- 冷启动(整库未学)退回「组 1 最常见词」,3 秒内即可开刷;任一词池不足时用核心新词 / 全域兜底,保证整流恰好等于 `goal`。
+- 每日目标可配置:调高会追加新的 5:3:2 切片,调低则从队尾裁剪。
 - 进度按天持久化,跨启动保持稳定。
 
 ### 🔒 权限与隐私
@@ -210,10 +214,11 @@ com.chloemlla.cdict
 
 ## 数据管线
 
-词典由两路数据源构建:
+词典由三路数据源构建:
 
-1. **已标注底库** — `scripts/CDict-dict.db`(49,213 词,7 组),随仓库提交,AI 标注字段(`emotionColor`、`register`、`nuanceDescription`、`usageWarning`、`collocations`)由 `scripts/annotate_dictionary.js`(node:sqlite,不使用 Python)生成。
+1. **已标注底库** — `scripts/CDict-dict.db`(49,213 词,7 组),随仓库提交,AI 标注字段(`emotionColor`、`register`、`nuanceDescription`、`usageWarning`、`collocations`)由 `scripts/annotate_dictionary.js`(node:sqlite,不使用 Python)生成。标注脚本每批 10 词合并为一次 OpenAI 兼容请求(往返次数降约 90%),带断点续传(中断后进度不丢),并对失败词重试 / 降级兜底以保证标注质量。
 2. **富内容合并** — `.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权导出的 `distribution.sqlite` 富内容并入已标注底库:`scripts/merge_distribution.py` 匹配约 17,925 个共有词,补充 US/UK 音标、空位助记(含词源)、派生词,以及带中文译文的例句。产物经校验后**发布到 GitHub Release**(tag `dictionary-asset`),包含合并数据库、`dict.signature` 内容校验和、以及 SHA-256 校验文件。
+3. **FLDC 参考数据源** — `scripts/fetch_fldc_export.py` 解码 fldc.pages.dev 分发的自定义二进制载荷(两个 gzip 分块容器 + 共享前缀字符串池)为转换器 JSON。`.github/workflows/export-fldc.yml`(手动 `workflow_dispatch`)在 CI 中端到端运行 `convert_dictionary.py`,并把产出的约 107,143 词 / 7 组参考资产上传为工作流构件。
 
 CI 在构建时从硬编码的 Release 地址下载合并后的词典,校验 SHA-256 后复制到 `app/src/main/assets/dict.db`:
 
@@ -251,6 +256,8 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
 
 发布构建开启 **R8 混淆**(`proguard-android-optimize.txt` + `proguard-rules.pro`)与**资源收缩**,并按 ABI 产出拆分 APK(`*universal*.apk` 为全架构包;AAB 交给 Google Play 按设备拆分)。专门的 `releaseAab` buildType 以关闭资源收缩的方式产出 AAB(AGP 无法在同一种 buildType 内同时启用 ABI 拆分 + 资源收缩 + AAB;Play 在服务端按设备做资源收缩)。
 
+另有两条手动 `workflow_dispatch` 工作流维护词典数据:`merge-distribution.yml` 把合并后的富内容资产发布到 `dictionary-asset` GitHub Release(构建阶段下载),`export-fldc.yml` 在 CI 中重建 FLDC 参考资产。
+
 ---
 
 ## 版本历史
@@ -266,6 +273,12 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
 - **离线搜索质量**:Levenshtein 拼写纠错,以及 精确 > 前缀 > 频率 排序,让核心词优先浮现(`5f7d90e`)。
 - **音频缓存**:发音按 MD5 键缓存到磁盘(50 MB LRU),并在详情页预取(`c1be4e9`);有道成为第一级且可整句朗读(`9a91bde`、`8a4fc36`)。
 - **背词与搜索修复**:DAO 调用改为 suspend、测试锁定 Robolectric SDK、补全推荐页导航栏布局(`34b6c0d`、`5edef02`、`09e30ff`)。
+- **AI 语感标注**:新增 5 个可空标注列,贯通管线、App 与工具(`ff75e50`);把已标注的 `scripts/CDict-dict.db` 直接提交并作为 App 资产,`neutral` 语体映射为「中性」(`8be57c0`);常见搭配可自动译文并朗读(`98dfb41`)。标注脚本每批 10 词合并请求(`e93024a`)、API 失败立即打点续传(`004a3b6`)、为普通词补「中性」语体(`6f4608e`)、重标缺失核心字段的词(`fc2537f`)、每 10s 上报运行时长心跳(`bf7aa6d`)。
+- **词典 Release 分发**:授权 `distribution.sqlite` 富内容合并(`1b87c6f`)后,合并库改为**发布为 GitHub Release** 资产(`dictionary-asset`);CI 在构建时下载,App 在内置 `dict.signature` 与已装库资产签名不一致时提示重建本地库(`1c2fde9`),并声明 `MetadataEntity` 使 DAO 元数据查询可编译(`783eb43`)。
+- **FLDC 导出解码器**:`fetch_fldc_export.py` 把 fldc.pages.dev 的二进制载荷解码为转换器 JSON,`export-fldc.yml` 可在 CI 中构建约 107,143 词的参考资产(`fa532b9`、`5dfb9f5`)。
+- **标签页导航**:外壳维护真实访问历史栈,系统返回回到实际来源标签页(含跨标签跳词),各标签页状态经 saveable state holder 保存(`390440c`、`d0c7e6c`);启动默认打开词典标签页(`ca299c7`)。
+- **背词**:「立即测试今日所学」让你按需用复习引擎测今日新学词,答对与按时复习同样推进间隔阶梯(`a66239c`)。
+- **推荐定位调整**:方案A 将推荐页与背词分离——流改为 核心新词 / 词根拓展 / 高频过渡 的 5:3:2 配比,复习交还背词页(`b055c42`)。
 
 ### 1.0 —— 翻译、发音与发布加固
 
