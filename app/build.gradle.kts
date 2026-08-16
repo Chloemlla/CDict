@@ -11,6 +11,12 @@ fun propertyOrEnvironment(name: String): String? =
     providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
 
+// Build identity injected by CI for the 关于 page (Commit Hash / Build Time).
+// Local and test builds fall back to N/A / 0, which the UI treats as a dev build.
+val cdictCommitHash: String = propertyOrEnvironment("CDICT_COMMIT_HASH") ?: "N/A"
+val cdictBuildTimeSeconds: Long =
+    propertyOrEnvironment("CDICT_BUILD_TIME")?.toLongOrNull()?.takeIf { it > 0 } ?: 0L
+
 // CI materializes the lumen-crash SDK via scripts/fetch-lumen-crash-sdk.py and writes the
 // resolved version to lumen-crash.resolved.version; gradle.properties is a local fallback.
 val lumenCrashSdkVersion: String =
@@ -43,6 +49,8 @@ android {
         targetSdk = 37
         versionCode = 2
         versionName = "1.0.1"
+        buildConfigField("String", "COMMIT_HASH", "\"${cdictCommitHash.replace("\"", "\\\"")}\"")
+        buildConfigField("long", "BUILD_TIME", "${cdictBuildTimeSeconds}L")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }

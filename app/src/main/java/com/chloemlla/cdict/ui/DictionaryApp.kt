@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.ButtonDefaults
@@ -92,6 +93,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.ui.about.AboutScreenRoute
+import com.chloemlla.cdict.ui.about.LocalAboutController
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -310,6 +313,14 @@ private fun WordList(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { LocalAboutController.current.push(AboutScreenRoute.About) },
+                        modifier = Modifier.semantics { contentDescription = "关于" },
+                    ) {
+                        Icon(Icons.Filled.Info, contentDescription = null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

@@ -145,10 +145,20 @@ jobs:
           chmod 600 "$keytool_path"
           keytool -list -keystore "$keytool_path" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keytool-error" || { echo "::error::Keystore alias/password validation failed"; rm -f "$RUNNER_TEMP/keytool-error"; exit 1; }
           rm -f "$RUNNER_TEMP/keytool-error"
+      - name: Set build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CDICT_COMMIT_HASH=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "CDICT_BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
       - name: Build signed APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        run: >-
+          ./gradlew :app:assembleRelease
+          -PCDICT_COMMIT_HASH="${{ env.CDICT_COMMIT_HASH }}"
+          -PCDICT_BUILD_TIME="${{ env.CDICT_BUILD_TIME }}"
+          --no-daemon --stacktrace
       - name: Locate Android SDK apksigner
         id: locate-apksigner
         shell: bash

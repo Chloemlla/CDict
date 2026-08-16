@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.ui.CdictApp
 import com.chloemlla.cdict.ui.CdictTheme
+import com.chloemlla.cdict.ui.about.AboutOverlayHost
 import com.chloemlla.cdict.ui.DictionaryViewModel
 import com.chloemlla.cdict.ui.DictionaryViewModelFactory
 import com.chloemlla.cdict.ui.RecommendationViewModel
@@ -44,21 +45,23 @@ class MainActivity : ComponentActivity() {
                 val state by dictionaryViewModel.state.collectAsStateWithLifecycle()
                 CdictTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
-                        CdictApp(
-                            dictionaryState = state,
-                            onDictionaryQueryChanged = dictionaryViewModel::search,
-                            onDictionarySelect = dictionaryViewModel::select,
-                            onDictionaryOpenDerived = dictionaryViewModel::openDerivedWord,
-                            onDictionaryDeselect = dictionaryViewModel::deselect,
-                            onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
-                            onDictionaryLoadMore = dictionaryViewModel::loadMore,
-                            onDictionarySortModeChanged = dictionaryViewModel::setSortMode,
-                            onDictionaryRebuild = dictionaryViewModel::rebuildDictionary,
-                            onDictionaryDismissUpdate = dictionaryViewModel::dismissUpdate,
-                            translationViewModel = translationViewModel,
-                            studyViewModel = studyViewModel,
-                            recommendationViewModel = recommendationViewModel,
-                        )
+                        AboutOverlayHost {
+                            CdictApp(
+                                dictionaryState = state,
+                                onDictionaryQueryChanged = dictionaryViewModel::search,
+                                onDictionarySelect = dictionaryViewModel::select,
+                                onDictionaryOpenDerived = dictionaryViewModel::openDerivedWord,
+                                onDictionaryDeselect = dictionaryViewModel::deselect,
+                                onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
+                                onDictionaryLoadMore = dictionaryViewModel::loadMore,
+                                onDictionarySortModeChanged = dictionaryViewModel::setSortMode,
+                                onDictionaryRebuild = dictionaryViewModel::rebuildDictionary,
+                                onDictionaryDismissUpdate = dictionaryViewModel::dismissUpdate,
+                                translationViewModel = translationViewModel,
+                                studyViewModel = studyViewModel,
+                                recommendationViewModel = recommendationViewModel,
+                            )
+                        }
                     }
                 }
             }
