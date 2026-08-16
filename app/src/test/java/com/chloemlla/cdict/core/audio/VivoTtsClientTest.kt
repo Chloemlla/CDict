@@ -32,6 +32,22 @@ class VivoTtsClientTest {
     }
 
     @Test
+    fun `error result json is detected with code and message`() {
+        val client = VivoTtsClient()
+        val body = """{"errorResult":{"errorCode":10101,"errorMsg":"文本过长，无法合成"}}"""
+        val err = client.parseErrorResult(body.toByteArray(Charsets.UTF_8))
+        assertEquals("vivo TTS 拒绝 errorCode=10101 errorMsg=文本过长，无法合成", err)
+    }
+
+    @Test
+    fun `audio response is not mistaken for error`() {
+        val client = VivoTtsClient()
+        assertEquals(null, client.parseErrorResult(
+            byteArrayOf(0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00),
+        ))
+    }
+
+    @Test
     fun `accent maps to tts langType`() {
         assertEquals("en-GBR", Accent.UK.ttsLangType)
         assertEquals("en-USA", Accent.US.ttsLangType)

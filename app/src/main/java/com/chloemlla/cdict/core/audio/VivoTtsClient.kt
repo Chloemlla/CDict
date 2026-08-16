@@ -72,7 +72,8 @@ class VivoTtsClient(
                 val status = connection.responseCode
                 if (status in 200..299) {
                     val bytes = connection.inputStream.use { it.readBytes() }
-                    VivoTtsResult.Audio(bytes)
+                    val err = parseErrorResult(bytes)
+                    if (err != null) VivoTtsResult.Error(err) else VivoTtsResult.Audio(bytes)
                 } else {
                     val err = connection.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
                     VivoTtsResult.Error("HTTP $status $err".trim())
@@ -105,6 +106,19 @@ class VivoTtsClient(
     private fun randomAlphanumeric(length: Int): String = buildString {
         repeat(length) {
             append(ALPHANUMERIC[RandomSource.nextInt(ALPHANUMERIC.length)])
+        }
+    }
+
+    /** 2xx 响应体若是 {"errorResult":{...}} 则返回诊断文案，否则返回 null（视为正常音频）。 */
+    internal fun parseErrorResult(bytes: ByteArray): String? {
+        val s = String(bytes.take(1024).toByteArray(), Charsets.UTF_8)
+        if (!s.contains("errorResult")) return null
+        val code = Regex("\"errorCode\"\\s*:\\s*\"?([^,\"}\\s]+)\"?").find(s)?.groupValues?.get(1)
+        val msg = Regex("\"errorMsg\"\\s*:\\s*\"([^\"]*)\"").find(s)?.groupValues?.get(1)
+        return buildString {
+            append("vivo TTS 拒绝")
+            if (code != null) append(" errorCode=$code")
+            if (msg != null) append(" errorMsg=$msg")
         }
     }
 

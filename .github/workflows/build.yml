@@ -187,7 +187,8 @@ jobs:
           cp app/build/outputs/apk/release/app-x86_64-release.apk release-assets/CDict-x86_64.apk
           cp app/build/outputs/apk/release/app-universal-release.apk release-assets/CDict.apk
           cp app/build/outputs/bundle/releaseAab/app-releaseAab.aab release-assets/CDict.aab
-          (cd release-assets && sha256sum CDict.apk CDict.aab CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk > checksums.txt)
+          cp app/src/main/assets/dict.db release-assets/CDict-dict.db
+          (cd release-assets && sha256sum CDict.apk CDict.aab CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk CDict-dict.db > checksums.txt)
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
