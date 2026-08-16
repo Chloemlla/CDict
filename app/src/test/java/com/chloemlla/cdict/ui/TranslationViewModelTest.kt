@@ -100,4 +100,31 @@ class TranslationViewModelTest {
         vm.onQueryChange("你好 world")
         assertEquals("你好 world", vm.query.value)
     }
+
+    @Test
+    fun `loadSupportedLanguages populates supportedLanguages`() = runTest {
+        var getCalled = false
+        val client = VivoTranslationClient(getTransport = {
+            getCalled = true
+            HttpResponse(200, """["en","zh-CHS","ja"]""")
+        })
+        val vm = TranslationViewModel(client)
+        vm.loadSupportedLanguages()
+        advanceUntilIdle()
+        assertTrue(getCalled)
+        assertEquals(listOf("en", "ja", "zh-chs"), vm.supportedLanguages.value)
+    }
+
+    @Test
+    fun `constructing viewmodel does not invoke transport`() = runTest {
+        var called = false
+        val client = VivoTranslationClient(
+            transport = { _, _, _ -> called = true; HttpResponse(200, "{}") },
+            getTransport = { called = true; HttpResponse(200, "[]") },
+        )
+        val vm = TranslationViewModel(client)
+        advanceUntilIdle()
+        assertFalse(called)
+        assertEquals(emptyList<String>(), vm.supportedLanguages.value)
+    }
 }

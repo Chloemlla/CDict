@@ -9,6 +9,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -27,6 +28,7 @@ class VivoTranslationClient(
     private val userId: String = "com.vivo.translator",
     private val sign: Boolean = false,
     private val transport: suspend (url: String, headers: Map<String, String>, body: String) -> HttpResponse = ::httpPost,
+    private val getTransport: suspend (url: String) -> HttpResponse = ::httpGet,
 ) {
     suspend fun translate(request: TranslationRequest): TranslationOutcome {
         val body = encodeForm(buildTranslationForm(request.texts, request.direction, appId, userId))
@@ -53,8 +55,21 @@ class VivoTranslationClient(
         return parseTranslationResponse(response)
     }
 
+    /** GET 语言列表（文档 §4）。设备参数走查询串；异常→Failure，非 200→Failure，结构未知时稳健解析兜底为空集 Success。 */
+    suspend fun fetchLanguages(): LanguageListOutcome {
+        val query = encodeForm(deviceParams())
+        val url = serverUrl + LANG_LIST_PATH + "?" + query
+        val response = try {
+            getTransport(url)
+        } catch (e: Exception) {
+            return LanguageListOutcome.Failure("网络请求失败: ${e.message ?: e.javaClass.simpleName}")
+        }
+        return parseLanguageListResponse(response)
+    }
+
     companion object {
         private const val PATH = "/translation/query"
+        private const val LANG_LIST_PATH = "/translation/lang/list"
     }
 }
 
@@ -77,6 +92,67 @@ private suspend fun httpPost(url: String, headers: Map<String, String>, body: St
             connection.disconnect()
         }
     }
+
+private suspend fun httpGet(url: String): HttpResponse =
+    withContext(Dispatchers.IO) {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 30_000
+            readTimeout = 30_000
+        }
+        try {
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+            HttpResponse(status, text)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+/** 稳健解析语言列表：兼容顶层字符串数组 / 对象下 data·list·languages·data.list·langs 等路径；
+ *  元素可为纯字符串码或含 code/lang/langCode/name 字段的对象。异常/未知结构→空集 Success，绝不抛异常。 */
+internal fun parseLanguageListResponse(resp: HttpResponse): LanguageListOutcome {
+    if (resp.status !in 200..299) {
+        return LanguageListOutcome.Failure("语言列表请求失败 HTTP ${resp.status}")
+    }
+    val json: Any = try {
+        if (resp.body.trimStart().startsWith("[")) JSONArray(resp.body) else JSONObject(resp.body)
+    } catch (e: Exception) {
+        return LanguageListOutcome.Failure("语言列表非 JSON 响应: ${resp.body.take(300)}")
+    }
+    val languages = linkedSetOf<String>()
+    fun collectArray(arr: JSONArray?) {
+        if (arr == null) return
+        for (i in 0 until arr.length()) {
+            val item = arr.opt(i)
+            val code: String = when (item) {
+                is String -> item
+                is JSONObject -> listOf("code", "lang", "langCode", "name")
+                    .mapNotNull { key -> item.optString(key).takeIf { it.isNotEmpty() } }
+                    .firstOrNull().orEmpty()
+                else -> ""
+            }
+            val normalized = code.trim().lowercase()
+            if (normalized.isNotEmpty()) languages.add(normalized)
+        }
+    }
+    when (json) {
+        is JSONArray -> collectArray(json)
+        is JSONObject -> {
+            val data = json.optJSONObject("data")
+            listOf(
+                json.optJSONArray("data"),
+                data?.optJSONArray("list"),
+                data?.optJSONArray("languages"),
+                json.optJSONArray("list"),
+                json.optJSONArray("languages"),
+                json.optJSONArray("langs"),
+            ).forEach(::collectArray)
+        }
+    }
+    return LanguageListOutcome.Success(languages)
+}
 
 /** 与 java.net.URLEncoder 语义一致：空格 -> '+', 安全字符 A-Za-z0-9.-*_ 不编码，其余 UTF-8 大写百分号编码。 */
 internal fun javaUrlEncode(s: String): String = URLEncoder.encode(s, Charsets.UTF_8.name())

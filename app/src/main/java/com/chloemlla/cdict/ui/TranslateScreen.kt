@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,8 +70,11 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val direction by viewModel.direction.collectAsStateWithLifecycle()
+    val supportedLanguages by viewModel.supportedLanguages.collectAsStateWithLifecycle()
     val keyboardController = LocalSoftwareKeyboardController.current
     val canTranslate = query.isNotBlank() && state !is TranslationUiState.Translating
+
+    LaunchedEffect(Unit) { viewModel.loadSupportedLanguages() }
 
     Scaffold(
         topBar = {
@@ -263,6 +267,15 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                         enabled = canTranslate,
                     )
                 }
+            }
+
+            if (supportedLanguages.isNotEmpty()) {
+                Text(
+                    "支持语种：${supportedLanguages.joinToString(" ")} 等",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

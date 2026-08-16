@@ -2,10 +2,28 @@ package com.chloemlla.cdict.core.translate
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VivoTranslationClientTest {
+
+    private val supportedCodes = setOf(
+        "de", "en", "es", "fr", "hi", "id", "it", "ja", "ko", "pt", "ru", "th", "vi",
+        "zh-CHS", "zh", "auto",
+    )
+
+    @Test
+    fun `every translation direction is canonical and within gateway supported set`() {
+        assertEquals(21, TranslationDirection.entries.size)
+        TranslationDirection.entries.forEach { direction ->
+            assertTrue("empty from: ${direction.name}", direction.from.isNotEmpty())
+            assertTrue("empty to: ${direction.name}", direction.to.isNotEmpty())
+            assertTrue("unsupported from ${direction.from} at ${direction.name}", supportedCodes.contains(direction.from))
+            assertTrue("unsupported to ${direction.to} at ${direction.name}", supportedCodes.contains(direction.to))
+            assertFalse("bare zh (not zh-CHS): ${direction.name}", direction.from == "zh" || direction.to == "zh")
+        }
+    }
 
     @Test
     fun `java url encode mirrors javascript javaEncode`() {
@@ -162,5 +180,43 @@ class VivoTranslationClientTest {
         )
         val outcome = client.translate(TranslationRequest(listOf("hi"), TranslationDirection.AUTO_TO_ZH))
         assertTrue((outcome as TranslationOutcome.Failure).message.contains("网络请求失败"))
+    }
+
+    @Test
+    fun `fetchLanguages parses top-level string array shape`() = runTest {
+        val client = VivoTranslationClient(getTransport = { url ->
+            assertTrue(url.startsWith("https://vivotrans.vivo.com/translation/lang/list?"))
+            HttpResponse(200, """["zh-CHS","EN","ja","ko"]""")
+        })
+        val outcome = client.fetchLanguages() as LanguageListOutcome.Success
+        assertEquals(setOf("zh-chs", "en", "ja", "ko"), outcome.languages)
+    }
+
+    @Test
+    fun `fetchLanguages parses object with code fields under data list`() = runTest {
+        val client = VivoTranslationClient(getTransport = {
+            HttpResponse(200, """{"retcode":0,"code":0,"data":{"list":[{"code":"en"},{"lang":"zh-CHS"},{"langCode":"Ja"},{"code":"fr"}]}}""")
+        })
+        val outcome = client.fetchLanguages() as LanguageListOutcome.Success
+        assertEquals(setOf("en", "zh-chs", "ja", "fr"), outcome.languages)
+    }
+
+    @Test
+    fun `fetchLanguages returns empty set on unexpected shape without throwing`() = runTest {
+        val client = VivoTranslationClient(getTransport = { HttpResponse(200, """{"foo":123}""") })
+        val outcome = client.fetchLanguages() as LanguageListOutcome.Success
+        assertEquals(emptySet<String>(), outcome.languages)
+    }
+
+    @Test
+    fun `fetchLanguages non 200 yields failure`() = runTest {
+        val client = VivoTranslationClient(getTransport = { HttpResponse(500, "boom") })
+        assertTrue((client.fetchLanguages() as LanguageListOutcome.Failure).message.contains("500"))
+    }
+
+    @Test
+    fun `fetchLanguages malformed body yields failure without throwing`() = runTest {
+        val client = VivoTranslationClient(getTransport = { HttpResponse(200, "not json") })
+        assertTrue((client.fetchLanguages() as LanguageListOutcome.Failure).message.contains("非 JSON"))
     }
 }

@@ -3,6 +3,7 @@ package com.chloemlla.cdict.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.chloemlla.cdict.core.translate.LanguageListOutcome
 import com.chloemlla.cdict.core.translate.TranslationDirection
 import com.chloemlla.cdict.core.translate.TranslationOutcome
 import com.chloemlla.cdict.core.translate.TranslationRequest
@@ -32,12 +33,25 @@ class TranslationViewModel(
     private val _state = MutableStateFlow<TranslationUiState>(TranslationUiState.Idle)
     val state: StateFlow<TranslationUiState> = _state.asStateFlow()
 
+    private val _supportedLanguages = MutableStateFlow<List<String>>(emptyList())
+    val supportedLanguages: StateFlow<List<String>> = _supportedLanguages.asStateFlow()
+
     fun onQueryChange(text: String) {
         _query.value = text
     }
 
     fun onDirectionChange(direction: TranslationDirection) {
         _direction.value = direction
+    }
+
+    /** 仅在显式调用时才发起网络请求，构造 VM 本身不会触发网络。 */
+    fun loadSupportedLanguages() {
+        viewModelScope.launch {
+            val outcome = client.fetchLanguages()
+            if (outcome is LanguageListOutcome.Success) {
+                _supportedLanguages.value = outcome.languages.sorted()
+            }
+        }
     }
 
     fun translate() {
