@@ -657,19 +657,11 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                 ) {
                     Spacer(Modifier.height(24.dp))
                     if (page == 0) {
-                        Surface(
+                        Image(
+                            painter = painterResource(R.mipmap.ic_launcher),
+                            contentDescription = null,
                             modifier = Modifier.size(112.dp),
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Box(Modifier.padding(22.dp)) {
-                                Image(
-                                    painter = painterResource(R.mipmap.ic_launcher),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                        }
+                        )
                     } else {
                         Surface(
                             modifier = Modifier.size(112.dp),
