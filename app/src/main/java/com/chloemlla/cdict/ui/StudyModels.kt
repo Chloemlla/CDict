@@ -145,8 +145,8 @@ private data class DistractorCandidate(
  *
  *  A. word-class strict match: only distractors sharing [primaryPartOfSpeech] are first
  *     choice, so an easy ADJ/A is never confused with a verb target;
- *  B. difficulty decay: prefer distractors within one [frequencyGroup] band of the target
- *     (±1), falling back outward only when the band is too thin;
+ *  B. difficulty decay (PRD §3.2): strictly prefer the same [frequencyGroup] first, then the
+ *     ±1 band, falling back outward only when that neighbourhood is too thin;
  *  C. semantic-vector filter: discard any candidate whose [semanticSimilarity] to the
  *     correct sense exceeds the 0.65 confusion ceiling;
  *  D. orthographic weighting: nearer-spelling distractors (Levenshtein <= 2) rank first.
@@ -182,12 +182,17 @@ fun buildReviewDistractors(
     fun byOrtho(list: List<DistractorCandidate>) =
         list.sortedWith(compareByDescending<DistractorCandidate> { it.orthoWeight })
 
-    // Strictest layer: same POS within the difficulty band.
+    // Strictest layer (PRD §3.2): same frequencyGroup AND strict word-class match — options
+    // come from the exact difficulty neighbourhood so the question is fair.
     take(
         byOrtho(
-            candidates.filter { primaryPartOfSpeech(it.label) == pos && it.bandDistance <= 1 },
+            candidates.filter { primaryPartOfSpeech(it.label) == pos && it.bandDistance == 0 },
         ),
     )
+    // Same word class within the ±1 band, allowing the same difficulty neighbourhood to fill up.
+    if (picked.size < k) {
+        take(byOrtho(candidates.filter { primaryPartOfSpeech(it.label) == pos && it.bandDistance == 1 }))
+    }
     // Relax the difficulty band, keep the word-class match.
     if (picked.size < k) {
         take(byOrtho(candidates.filter { primaryPartOfSpeech(it.label) == pos }))
