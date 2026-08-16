@@ -45,7 +45,11 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.SaveableStateHolder
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,12 +76,19 @@ private enum class CdictDestination(
     Recommendation("推荐", "CDict 推荐", Icons.Filled.Recommend),
 }
 
+/** Saver for the tab visit-history stack so it survives configuration changes. */
+private val IntListSaver = listSaver<List<Int>, Int>(
+    save = { _, list -> list },
+    restore = { it },
+)
+
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun CdictApp(
     dictionaryState: DictionaryScreenState,
     onDictionaryQueryChanged: (String) -> Unit,
     onDictionarySelect: (WordEntity) -> Unit,
+    onDictionaryDeselect: () -> Unit,
     onDictionaryPlayPronunciation: (WordEntity, Accent) -> Unit,
     onDictionaryLoadMore: () -> Unit,
     onDictionarySortModeChanged: (SortMode) -> Unit,
@@ -90,10 +101,16 @@ fun CdictApp(
     val studyState by studyViewModel.state.collectAsStateWithLifecycle()
     val masteredIds by studyViewModel.masteredIds.collectAsStateWithLifecycle()
     val recommendationState by recommendationViewModel.state.collectAsStateWithLifecycle()
-    // System back (button or edge-swipe gesture) walks up the tab stack toward Study,
-    // mirroring bottom-navigation back behaviour.
-    BackHandler(enabled = selectedTab > 0) {
-        selectedTab -= 1
+    // Visit-history stack for the bottom bar: system back returns to the tab the user actually
+    // came from (instead of walking the destination enum order toward Study). Empty stack means
+    // there is nowhere to go back to, so the default system-back exit applies.
+    var navStack by rememberSaveable(stateSaver = IntListSaver) { mutableStateOf<List<Int>>(emptyList()) }
+    // Non-null while the dictionary tab is showing a word that was jumped to from another tab
+    // (e.g. the recommendation feed), so back closes the detail and returns to the jump origin.
+    var dictionaryJumpFrom by rememberSaveable { mutableStateOf<Int?>(null) }
+    BackHandler(enabled = navStack.isNotEmpty()) {
+        selectedTab = navStack.last()
+        navStack = navStack.dropLast(1)
     }
 
     // 响应式导航：窄窗口（COMPACT）用底部导航栏；平板/大屏（MEDIUM/EXPANDED）用侧边导航栏，
@@ -110,13 +127,39 @@ fun CdictApp(
     val needsStatusBarPadding =
         selectedTab == CdictDestination.Dictionary.ordinal && dictionaryState !is DictionaryScreenState.Ready
 
-    val switchTab: (Int) -> Unit = { index -> selectedTab = index }
-    // “查看详情 / 切词典”：先让词典选中该词，再切到词典标签页渲染详情。
+    // Manual tab switch records the tab being left so back can return to it. Tapping the
+    // dictionary tab explicitly starts a fresh dictionary session (clears any pending jump).
+    val switchTab: (Int) -> Unit = { index ->
+        if (index != selectedTab) {
+            navStack = navStack + selectedTab
+            if (index == CdictDestination.Dictionary.ordinal) dictionaryJumpFrom = null
+            selectedTab = index
+        }
+    }
+    // “查看详情 / 切词典”：先让词典选中该词，再切到词典标签页渲染详情，并记下跳转来源。
     val onOpenDictionaryWord: (WordEntity) -> Unit = { word ->
         onDictionarySelect(word)
-        selectedTab = CdictDestination.Dictionary.ordinal
+        if (selectedTab != CdictDestination.Dictionary.ordinal) {
+            dictionaryJumpFrom = selectedTab
+            navStack = navStack + selectedTab
+            selectedTab = CdictDestination.Dictionary.ordinal
+        }
+    }
+    // Dictionary detail back: a cross-tab jump returns to where the word was opened from;
+    // otherwise the detail simply closes back onto the browse list.
+    val onDictionaryBackFromDetail: () -> Unit = {
+        onDictionaryDeselect()
+        val origin = dictionaryJumpFrom
+        if (origin != null) {
+            dictionaryJumpFrom = null
+            selectedTab = origin
+            navStack = navStack.filterNot { it == origin }
+        }
     }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
+    // Keeps each tab's UI state (scroll position, search text, open detail) alive across tab
+    // switches so returning to a tab restores exactly where the user left off.
+    val tabStateHolder = rememberSaveableStateHolder()
 
     Scaffold(
         modifier = Modifier
@@ -153,9 +196,11 @@ fun CdictApp(
                     DestinationContent(
                         tab = selectedTab,
                         wideLayout = wideLayout,
+                        stateHolder = tabStateHolder,
                         dictionaryState = dictionaryState,
                         onDictionaryQueryChanged = onDictionaryQueryChanged,
                         onDictionarySelect = onDictionarySelect,
+                        onDictionaryBackFromDetail = onDictionaryBackFromDetail,
                         onDictionaryPlayPronunciation = onDictionaryPlayPronunciation,
                         onDictionaryLoadMore = onDictionaryLoadMore,
                         onDictionarySortModeChanged = onDictionarySortModeChanged,
@@ -183,9 +228,11 @@ fun CdictApp(
                 DestinationContent(
                     tab = selectedTab,
                     wideLayout = wideLayout,
+                    stateHolder = tabStateHolder,
                     dictionaryState = dictionaryState,
                     onDictionaryQueryChanged = onDictionaryQueryChanged,
                     onDictionarySelect = onDictionarySelect,
+                    onDictionaryBackFromDetail = onDictionaryBackFromDetail,
                     onDictionaryPlayPronunciation = onDictionaryPlayPronunciation,
                     onDictionaryLoadMore = onDictionaryLoadMore,
                     onDictionarySortModeChanged = onDictionarySortModeChanged,
@@ -195,7 +242,7 @@ fun CdictApp(
                     masteredIds = masteredIds,
                     recommendationViewModel = recommendationViewModel,
                     recommendationState = recommendationState,
-                        onMarkMastered = recommendationViewModel::markMastered,
+                    onMarkMastered = recommendationViewModel::markMastered,
                     onToggleMastered = { word -> studyViewModel.toggleMastered(word.id) },
                     onOpenDictionaryWord = onOpenDictionaryWord,
                     modifier = Modifier.fillMaxSize(),
@@ -209,9 +256,11 @@ fun CdictApp(
 private fun DestinationContent(
     tab: Int,
     wideLayout: Boolean,
+    stateHolder: SaveableStateHolder,
     dictionaryState: DictionaryScreenState,
     onDictionaryQueryChanged: (String) -> Unit,
     onDictionarySelect: (WordEntity) -> Unit,
+    onDictionaryBackFromDetail: () -> Unit,
     onDictionaryPlayPronunciation: (WordEntity, Accent) -> Unit,
     onDictionaryLoadMore: () -> Unit,
     onDictionarySortModeChanged: (SortMode) -> Unit,
@@ -247,6 +296,8 @@ private fun DestinationContent(
         },
         label = "Destination transition",
     ) { t ->
+        // Save/restore each tab's UI state across switches (scroll, text fields, open detail).
+        stateHolder.SaveableStateProvider(key = t) {
         when (t) {
             0 -> StudyScreen(
                 state = studyState,
@@ -267,6 +318,7 @@ private fun DestinationContent(
                 state = dictionaryState,
                 onQueryChanged = onDictionaryQueryChanged,
                 onSelect = onDictionarySelect,
+                onBackFromDetail = onDictionaryBackFromDetail,
                 onPlayPronunciation = onDictionaryPlayPronunciation,
                 onLoadMore = onDictionaryLoadMore,
                 onSortModeChanged = onDictionarySortModeChanged,
@@ -286,6 +338,7 @@ private fun DestinationContent(
                 onPlayPronunciation = onDictionaryPlayPronunciation,
                 wideLayout = wideLayout,
             )
+        }
         }
     }
 }

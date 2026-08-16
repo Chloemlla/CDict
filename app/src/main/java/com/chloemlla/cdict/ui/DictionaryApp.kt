@@ -69,6 +69,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,6 +99,10 @@ fun DictionaryApp(
     state: DictionaryScreenState,
     onQueryChanged: (String) -> Unit,
     onSelect: (WordEntity) -> Unit,
+    onBackFromDetail: () -> Unit = {
+        // Default: close the detail and return to the browse list.
+        (state as? DictionaryScreenState.Ready)?.selected?.let { onSelect(it.copy(id = -1)) }
+    },
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     onLoadMore: () -> Unit,
     onSortModeChanged: (SortMode) -> Unit,
@@ -114,10 +119,15 @@ fun DictionaryApp(
         is DictionaryScreenState.Error -> ErrorScreen(state.message)
         is DictionaryScreenState.Ready -> {
             val selected = state.selected
-            // System back (button or edge-swipe gesture) returns from the word detail to the list.
+            // System back (button or edge-swipe gesture) leaves the word detail. Whether it
+            // returns to the browse list or to another tab depends on how the detail was opened;
+            // the shell owns that decision via onBackFromDetail.
             BackHandler(enabled = selected != null) {
-                selected?.let { onSelect(it.copy(id = -1)) }
+                onBackFromDetail()
             }
+            // Save the browse list's state (scroll position, search text) while a detail is
+            // showing, so going back lands where the user left off instead of at the top.
+            val detailStateHolder = rememberSaveableStateHolder()
             AnimatedContent(
                 targetState = selected,
                 modifier = Modifier.fillMaxSize(),
@@ -138,20 +148,24 @@ fun DictionaryApp(
                 },
                 label = "word detail navigation",
             ) { sel ->
-                if (sel != null) {
-                    WordDetail(
-                        word = sel,
-                        detail = state.detail,
-                        onBack = { onSelect(sel.copy(id = -1)) },
-                        onPlayPronunciation = onPlayPronunciation,
-                        phraseStates = phraseStates,
-                        onPhraseTranslate = phraseViewModel::translate,
-                        onPhraseSpeak = phraseViewModel::speak,
-                        masteredIds = masteredIds,
-                        onToggleMastered = onToggleMastered,
-                    )
-                } else {
-                    WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
+                detailStateHolder.SaveableStateProvider(
+                    key = if (sel != null) "detail-${sel.id}" else "list",
+                ) {
+                    if (sel != null) {
+                        WordDetail(
+                            word = sel,
+                            detail = state.detail,
+                            onBack = onBackFromDetail,
+                            onPlayPronunciation = onPlayPronunciation,
+                            phraseStates = phraseStates,
+                            onPhraseTranslate = phraseViewModel::translate,
+                            onPhraseSpeak = phraseViewModel::speak,
+                            masteredIds = masteredIds,
+                            onToggleMastered = onToggleMastered,
+                        )
+                    } else {
+                        WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
+                    }
                 }
             }
         }
@@ -658,7 +672,7 @@ private fun WordDetail(
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier.semantics {
-                            contentDescription = "返回词典列表"
+                            contentDescription = "返回"
                         },
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)

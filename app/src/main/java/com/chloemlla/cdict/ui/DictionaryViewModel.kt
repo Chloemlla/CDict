@@ -219,6 +219,14 @@ class DictionaryViewModel(
         }
     }
 
+    /** Closes the open word detail, returning the dictionary tab to its browse list. */
+    fun deselect() {
+        val current = _state.value
+        if (current is DictionaryScreenState.Ready && current.selected != null) {
+            _state.value = current.copy(selected = null, detail = null)
+        }
+    }
+
     fun playPronunciation(word: WordEntity, accent: Accent) {
         pronunciationPlayer.play(word.word, accent)
     }
