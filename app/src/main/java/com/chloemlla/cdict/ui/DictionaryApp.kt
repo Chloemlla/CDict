@@ -117,10 +117,12 @@ fun DictionaryApp(
                             fadeIn(animationSpec = tween(durationMillis = 150)))
                             .togetherWith(fadeOut(animationSpec = tween(durationMillis = 120)))
                     } else {
-                        // Returning slides out to the right, echoing the system back gesture.
-                        (slideOutHorizontally(animationSpec = tween(durationMillis = 260)) { it } +
-                            fadeOut(animationSpec = tween(durationMillis = 150)))
-                            .togetherWith(fadeIn(animationSpec = tween(durationMillis = 120)))
+                        // Returning: the detail slides back out to the right while the list fades back in.
+                        fadeIn(animationSpec = tween(durationMillis = 150))
+                            .togetherWith(
+                                slideOutHorizontally(animationSpec = tween(durationMillis = 260)) { it } +
+                                    fadeOut(animationSpec = tween(durationMillis = 150))
+                            )
                     }
                 },
                 label = "word detail navigation",
