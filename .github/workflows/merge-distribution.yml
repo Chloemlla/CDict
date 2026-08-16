@@ -1,0 +1,75 @@
+name: Merge distribution dictionary
+
+on:
+  workflow_dispatch:
+    inputs:
+      distribution_url:
+        description: "URL of the distribution.sqlite source (plain or .gz)"
+        required: false
+        default: "https://github.com/ahpxex/open-dictionary/releases/download/v2.0/distribution.sqlite.gz"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  merge:
+    name: Merge distribution.sqlite into CDict-dict.db
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download and decompress distribution source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o "$RUNNER_TEMP/distribution.sqlite.gz" "${{ inputs.distribution_url }}"
+          python - "$RUNNER_TEMP/distribution.sqlite.gz" "$RUNNER_TEMP/distribution.sqlite" <<'PY'
+          import gzip
+          import pathlib
+          import sys
+          src = pathlib.Path(sys.argv[1])
+          dst = pathlib.Path(sys.argv[2])
+          raw = src.read_bytes()
+          if raw[:2] == b"\x1f\x8b":
+              dst.write_bytes(gzip.decompress(raw))
+          else:
+              dst.write_bytes(raw)
+          PY
+          test -s "$RUNNER_TEMP/distribution.sqlite"
+          echo "source bytes: $(stat -c %s "$RUNNER_TEMP/distribution.sqlite")"
+
+      - name: Merge rich content into dictionary asset
+        run: |
+          set -euo pipefail
+          python scripts/merge_distribution.py \
+            scripts/CDict-dict.db \
+            "$RUNNER_TEMP/distribution.sqlite" \
+            "$RUNNER_TEMP/CDict-dict-merged.db" \
+            --expected-word-count 49213 \
+            --expected-groups 7
+
+      - name: Verify merged dictionary asset integrity
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/CDict-dict-merged.db"
+          python scripts/validate_dictionary_asset.py \
+            "$RUNNER_TEMP/CDict-dict-merged.db" \
+            --expected-word-count 49213 \
+            --expected-groups 7
+
+      - name: Upload merged dictionary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CDict-dict-merged
+          path: ${{ runner.temp }}/CDict-dict-merged.db
+          if-no-files-found: error
+          retention-days: 30

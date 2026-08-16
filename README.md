@@ -220,6 +220,10 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
 
 `app/src/main/assets/dict.db` is a git-ignored build copy; it stays **compressed** (no `noCompress` override) and ships via AAB per-device delivery. `scripts/convert_dictionary.py` remains available for rebuilding an unannotated base from an authorized export if the source data ever needs regenerating.
 
+### Rich-content merge (distribution)
+
+`.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated asset: `scripts/merge_distribution.py` matches the headwords common to both word lists (~17,925) and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences carrying Chinese translations into `sentences` (existing sentences only get their chinese filled, never duplicated). The result is validated by `validate_dictionary_asset.py` and uploaded as the `CDict-dict-merged` artifact; it does not overwrite `scripts/CDict-dict.db` — replace and commit it manually to ship the richer dictionary.
+
 ---
 
 ## CI / CD

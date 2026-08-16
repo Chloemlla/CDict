@@ -220,6 +220,10 @@ python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
 
 `app/src/main/assets/dict.db` 是 Git 忽略的构建副本;它保持**压缩**存储(不设 `noCompress` 覆盖),并交给 AAB 按设备分发。若未来需要从授权导出重建无标注的底库,`scripts/convert_dictionary.py` 仍可使用。
 
+### 富内容合并(distribution)
+
+`.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权分发的 `distribution.sqlite` 富内容并入已标注资产:`scripts/merge_distribution.py` 按 headword 匹配两个词表共有的词(约 17,925 个),补 US/UK 音标、空位助记(含词源)、派生词,并把带中文译文的例句并入 `sentences`(已存在的例句只补中文,不重复插入)。产物经 `validate_dictionary_asset.py` 校验后作为 `CDict-dict-merged` artifact 上传,不直接改写 `scripts/CDict-dict.db`;如需让 App 携带,再手动替换并提交。
+
 ---
 
 ## CI / CD
