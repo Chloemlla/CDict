@@ -1,5 +1,6 @@
 package com.chloemlla.cdict.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
@@ -66,6 +67,11 @@ fun CdictApp(
     translationViewModel: TranslationViewModel,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // System back (button or edge-swipe gesture) on the Translation tab returns to the
+    // Dictionary tab, matching bottom-navigation back behaviour.
+    BackHandler(enabled = selectedTab == 1) {
+        selectedTab = 0
+    }
     val destination = if (selectedTab == 0) {
         CdictDestination.Dictionary
     } else {

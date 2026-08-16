@@ -1,5 +1,13 @@
 package com.chloemlla.cdict.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -94,18 +102,42 @@ fun DictionaryApp(
         DictionaryScreenState.Loading -> LoadingScreen()
         is DictionaryScreenState.Error -> ErrorScreen(state.message)
         is DictionaryScreenState.Ready -> {
-            if (state.selected != null) {
-                WordDetail(
-                    word = state.selected,
-                    detail = state.detail,
-                    onBack = { onSelect(state.selected.copy(id = -1)) },
-                    onPlayPronunciation = onPlayPronunciation,
-                    phraseStates = phraseStates,
-                    onPhraseTranslate = phraseViewModel::translate,
-                    onPhraseSpeak = phraseViewModel::speak,
-                )
-            } else {
-                WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
+            val selected = state.selected
+            // System back (button or edge-swipe gesture) returns from the word detail to the list.
+            BackHandler(enabled = selected != null) {
+                selected?.let { onSelect(it.copy(id = -1)) }
+            }
+            AnimatedContent(
+                targetState = selected,
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = {
+                    if (targetState != null) {
+                        // Opening a word slides in from the right; the list fades underneath.
+                        (slideInHorizontally(animationSpec = tween(durationMillis = 260)) { it } +
+                            fadeIn(animationSpec = tween(durationMillis = 150)))
+                            .togetherWith(fadeOut(animationSpec = tween(durationMillis = 120)))
+                    } else {
+                        // Returning slides out to the right, echoing the system back gesture.
+                        (slideOutHorizontally(animationSpec = tween(durationMillis = 260)) { it } +
+                            fadeOut(animationSpec = tween(durationMillis = 150)))
+                            .togetherWith(fadeIn(animationSpec = tween(durationMillis = 120)))
+                    }
+                },
+                label = "word detail navigation",
+            ) { sel ->
+                if (sel != null) {
+                    WordDetail(
+                        word = sel,
+                        detail = state.detail,
+                        onBack = { onSelect(sel.copy(id = -1)) },
+                        onPlayPronunciation = onPlayPronunciation,
+                        phraseStates = phraseStates,
+                        onPhraseTranslate = phraseViewModel::translate,
+                        onPhraseSpeak = phraseViewModel::speak,
+                    )
+                } else {
+                    WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
+                }
             }
         }
     }
@@ -187,6 +219,15 @@ private fun WordList(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
+
+    // System back (button or edge-swipe gesture) with a non-blank query clears the search
+    // before exiting, mirroring standard search-box behaviour. Dismiss once blank.
+    BackHandler(enabled = state.query.isNotBlank()) {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+        query = ""
+        onQueryChanged("")
+    }
 
     // Jump back to the top whenever a fresh search or sort change replaces the browse list.
     var lastListKey by rememberSaveable { mutableStateOf("") }
