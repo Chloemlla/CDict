@@ -11,15 +11,23 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+/** 文本朗读能力抽象，便于注入与测试；[PronunciationPlayer] 为其默认实现。 */
+interface PronunciationSpeaker {
+    fun speak(text: String)
+    fun release()
+}
+
 /**
  * 发音播放器，三级回退：vivo TTS（默认）→ 有道静态音频 → 系统 TextToSpeech。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  */
-class PronunciationPlayer(private val context: Context) {
+class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var player: MediaPlayer? = null
     private var tts: TextToSpeech? = null
     private val vivoClient = VivoTtsClient()
+
+    override fun speak(text: String) = play(text, Accent.US)
 
     fun play(word: String, accent: Accent) {
         player?.release()
@@ -83,7 +91,7 @@ class PronunciationPlayer(private val context: Context) {
         }.also { it.language = locale }
     }
 
-    fun release() {
+    override fun release() {
         scope.cancel()
         player?.release()
         tts?.shutdown()

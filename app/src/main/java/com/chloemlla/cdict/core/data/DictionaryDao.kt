@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DictionaryDao {
+    @Query("SELECT COUNT(*) FROM words")
+    suspend fun count(): Long
+
     @Query("SELECT * FROM words ORDER BY frequencyGroup, frequency, word LIMIT :limit OFFSET :offset")
     fun browse(limit: Int, offset: Int): Flow<List<WordEntity>>
 

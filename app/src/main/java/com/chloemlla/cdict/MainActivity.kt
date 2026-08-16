@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
                         onDictionaryQueryChanged = dictionaryViewModel::search,
                         onDictionarySelect = dictionaryViewModel::select,
                         onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
+                        onDictionaryLoadMore = dictionaryViewModel::loadMore,
                         translationViewModel = translationViewModel,
                     )
                 }

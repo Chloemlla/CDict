@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,12 +47,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -63,6 +68,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
@@ -74,7 +81,13 @@ fun DictionaryApp(
     onQueryChanged: (String) -> Unit,
     onSelect: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    onLoadMore: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val phraseViewModel: PhraseSpeechViewModel = viewModel(
+        factory = remember { PhraseSpeechViewModelFactory(context) },
+    )
+    val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
     when (state) {
         DictionaryScreenState.Loading -> LoadingScreen()
         is DictionaryScreenState.Error -> ErrorScreen(state.message)
@@ -85,9 +98,12 @@ fun DictionaryApp(
                     detail = state.detail,
                     onBack = { onSelect(state.selected.copy(id = -1)) },
                     onPlayPronunciation = onPlayPronunciation,
+                    phraseStates = phraseStates,
+                    onPhraseTranslate = phraseViewModel::translate,
+                    onPhraseSpeak = phraseViewModel::speak,
                 )
             } else {
-                WordList(state, onQueryChanged, onSelect)
+                WordList(state, onQueryChanged, onSelect, onLoadMore)
             }
         }
     }
@@ -162,10 +178,35 @@ private fun WordList(
     state: DictionaryScreenState.Ready,
     onQueryChanged: (String) -> Unit,
     onSelect: (WordEntity) -> Unit,
+    onLoadMore: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf(state.query) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val listState = rememberLazyListState()
+
+    // Jump back to the top whenever a fresh search replaces the browse list.
+    var lastQuery by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(state.query) {
+        if (state.query != lastQuery) {
+            lastQuery = state.query
+            listState.scrollToItem(0)
+        }
+    }
+
+    // Load more when the user scrolls near the end of the browse list.
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= layoutInfo.totalItemsCount - 3
+        }
+    }
+    LaunchedEffect(shouldLoadMore, state.words.size) {
+        if (shouldLoadMore && state.hasMore && !state.isLoadingMore) {
+            onLoadMore()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -266,7 +307,7 @@ private fun WordList(
                 )
             } else {
                 Text(
-                    text = if (query.isBlank()) "按频率浏览" else "匹配词条",
+                    text = if (query.isBlank()) "全部词条 · 按频率" else "匹配词条",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
@@ -275,6 +316,7 @@ private fun WordList(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
+                    state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -283,6 +325,45 @@ private fun WordList(
                             word = word,
                             onSelect = onSelect,
                         )
+                    }
+                    if (state.query.isBlank() && state.words.isNotEmpty()) {
+                        item(key = "browse-footer") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                when {
+                                    state.isLoadingMore -> Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                        Text(
+                                            text = "加载更多…",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+
+                                    state.hasMore -> Text(
+                                        text = "继续下滑加载更多",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+
+                                    else -> Text(
+                                        text = "已展示全部 ${state.words.size} 个词条",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -418,6 +499,9 @@ private fun WordDetail(
     detail: WordDetailData?,
     onBack: () -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    phraseStates: Map<String, PhraseUiState>,
+    onPhraseTranslate: (String) -> Unit,
+    onPhraseSpeak: (String) -> Unit,
 ) {
     val phoneticUk = word.phoneticUk?.takeIf { it.isNotBlank() }
     val phoneticUs = word.phoneticUs?.takeIf { it.isNotBlank() }
@@ -519,9 +603,12 @@ private fun WordDetail(
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                SpeakableEnglishText(
+                                    en = it,
+                                    pinnedZh = null,
+                                    ui = phraseStates[it],
+                                    onTranslate = onPhraseTranslate,
+                                    onSpeak = onPhraseSpeak,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
@@ -604,7 +691,13 @@ private fun WordDetail(
             if (mnemonic != null) {
                 item(key = "mnemonic") {
                     DetailSectionCard(title = "记忆提示") {
-                        Text(text = mnemonic, style = MaterialTheme.typography.bodyLarge)
+                        SpeakableEnglishText(
+                            en = mnemonic,
+                            pinnedZh = null,
+                            ui = phraseStates[mnemonic],
+                            onTranslate = onPhraseTranslate,
+                            onSpeak = onPhraseSpeak,
+                        )
                     }
                 }
             }
@@ -641,14 +734,15 @@ private fun WordDetail(
                                 if (index > 0) {
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                                 }
-                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    root.root.takeIf { it.isNotBlank() }?.let {
-                                        Text(
-                                            text = it,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                    }
+                                if (root.root.isNotBlank()) {
+                                    SpeakableEnglishText(
+                                        en = root.root,
+                                        pinnedZh = root.meaning?.takeIf { it.isNotBlank() },
+                                        ui = phraseStates[root.root],
+                                        onTranslate = onPhraseTranslate,
+                                        onSpeak = onPhraseSpeak,
+                                    )
+                                } else {
                                     root.meaning?.takeIf { it.isNotBlank() }?.let {
                                         Text(
                                             text = it,
@@ -665,10 +759,17 @@ private fun WordDetail(
                 if (derivedTerms.isNotEmpty()) {
                     item(key = "derived-terms") {
                         DetailSectionCard(title = "派生词") {
-                            Text(
-                                text = derivedTerms.joinToString(" · "),
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                derivedTerms.forEach { term ->
+                                    SpeakableEnglishText(
+                                        en = term,
+                                        pinnedZh = null,
+                                        ui = phraseStates[term],
+                                        onTranslate = onPhraseTranslate,
+                                        onSpeak = onPhraseSpeak,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -712,23 +813,84 @@ private fun WordDetail(
                                 if (index > 0) {
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                                 }
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        text = sentence.english,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                    )
-                                    sentence.chinese?.takeIf { it.isNotBlank() }?.let {
-                                        Text(
-                                            text = it,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                }
+                                SpeakableEnglishText(
+                                    en = sentence.english,
+                                    pinnedZh = sentence.chinese?.takeIf { it.isNotBlank() },
+                                    ui = phraseStates[sentence.english],
+                                    onTranslate = onPhraseTranslate,
+                                    onSpeak = onPhraseSpeak,
+                                )
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeakableEnglishText(
+    en: String,
+    pinnedZh: String?,
+    ui: PhraseUiState?,
+    onTranslate: (String) -> Unit,
+    onSpeak: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LaunchedEffect(en) {
+        if (pinnedZh == null && ui == null) onTranslate(en)
+    }
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = en,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = { onSpeak(en) },
+                modifier = Modifier.semantics { contentDescription = "朗读 $en" },
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        when {
+            !pinnedZh.isNullOrBlank() -> Text(
+                text = pinnedZh,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ui is PhraseUiState.Loading -> Text(
+                text = "译中…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            ui is PhraseUiState.Done -> Text(
+                text = ui.zh,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ui is PhraseUiState.Error -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "翻译失败",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                TextButton(onClick = { onTranslate(en) }) { Text("重试") }
             }
         }
     }

@@ -16,6 +16,7 @@ import com.chloemlla.cdict.core.data.WordEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class WordDetailData(
@@ -32,6 +33,8 @@ sealed interface DictionaryScreenState {
         val selected: WordEntity? = null,
         val query: String = "",
         val detail: WordDetailData? = null,
+        val hasMore: Boolean = false,
+        val isLoadingMore: Boolean = false,
     ) : DictionaryScreenState
     data class Error(val message: String) : DictionaryScreenState
 }
@@ -43,15 +46,22 @@ class DictionaryViewModel(
     private val _state = MutableStateFlow<DictionaryScreenState>(DictionaryScreenState.Loading)
     val state: StateFlow<DictionaryScreenState> = _state.asStateFlow()
     private var database: DictionaryDatabase? = null
+    private val pageSize = 100
+    private var totalCount = 0L
+    private var loadMoreInFlight = false
 
     init {
         viewModelScope.launch {
             when (val result = repository.open()) {
                 is DatabaseState.Ready -> {
-                    database = result.database
-                    result.database.dictionaryDao().browse(50, 0).collect { words ->
-                        _state.value = DictionaryScreenState.Ready(words)
-                    }
+                    val db = result.database
+                    database = db
+                    totalCount = db.dictionaryDao().count()
+                    val words = firstPageWords(db)
+                    _state.value = DictionaryScreenState.Ready(
+                        words = words,
+                        hasMore = words.size.toLong() < totalCount,
+                    )
                 }
                 is DatabaseState.Failed -> _state.value = DictionaryScreenState.Error(result.message)
                 DatabaseState.Loading -> Unit
@@ -59,18 +69,57 @@ class DictionaryViewModel(
         }
     }
 
+    private suspend fun firstPageWords(db: DictionaryDatabase): List<WordEntity> =
+        db.dictionaryDao().browse(pageSize, 0).first()
+
     fun search(query: String) {
         val db = database ?: return
         viewModelScope.launch {
-            val flow = if (query.any { it.code > 127 }) {
-                db.dictionaryDao().searchChinese(query)
-            } else if (query.isBlank()) {
-                db.dictionaryDao().browse(50, 0)
+            val newState = if (query.isBlank()) {
+                totalCount = db.dictionaryDao().count()
+                val words = firstPageWords(db)
+                DictionaryScreenState.Ready(
+                    words = words,
+                    query = "",
+                    hasMore = words.size.toLong() < totalCount,
+                )
+            } else if (query.any { it.code > 127 }) {
+                DictionaryScreenState.Ready(
+                    words = db.dictionaryDao().searchChinese(query).first(),
+                    query = query,
+                )
             } else {
-                db.dictionaryDao().searchEnglish("${query.trim()}*")
+                DictionaryScreenState.Ready(
+                    words = db.dictionaryDao().searchEnglish("${query.trim()}*").first(),
+                    query = query,
+                )
             }
-            flow.collect { words ->
-                _state.value = DictionaryScreenState.Ready(words, query = query)
+            _state.value = newState
+        }
+    }
+
+    fun loadMore() {
+        val state = _state.value as? DictionaryScreenState.Ready ?: return
+        if (state.query.isNotBlank() || !state.hasMore || loadMoreInFlight) return
+        val db = database ?: return
+        val offset = state.words.size
+        // Flip the loading footer synchronously (no suspension in between) so the UI never re-requests.
+        _state.value = state.copy(isLoadingMore = true)
+        loadMoreInFlight = true
+        viewModelScope.launch {
+            try {
+                val more = db.dictionaryDao().browse(pageSize, offset).first()
+                val latest = _state.value as? DictionaryScreenState.Ready ?: return@launch
+                // Discard stale results when a newer search superseded this page.
+                if (latest.query.isNotBlank() || latest.words.size != offset) return@launch
+                val merged = latest.words + more
+                _state.value = latest.copy(
+                    words = merged,
+                    hasMore = merged.size.toLong() < totalCount,
+                    isLoadingMore = false,
+                )
+            } finally {
+                loadMoreInFlight = false
             }
         }
     }
