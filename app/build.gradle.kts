@@ -123,11 +123,9 @@ kapt {
 // the AAB variant's kapt to run strictly after release's so the file is complete
 // before it is read. Room schema export is not a declared task output, so Gradle
 // cannot know they conflict and would otherwise parallelize them.
-androidComponents {
-    onVariants { variant ->
-        if (variant.name == "releaseAab") {
-            tasks.named("kaptReleaseAabKotlin") { it.mustRunAfter("kaptReleaseKotlin") }
-        }
+tasks.configureEach {
+    if (name == "kaptReleaseAabKotlin") {
+        mustRunAfter("kaptReleaseKotlin")
     }
 }
 
