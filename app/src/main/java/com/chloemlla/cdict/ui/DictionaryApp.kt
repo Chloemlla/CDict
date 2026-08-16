@@ -36,6 +36,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Search
@@ -50,6 +52,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -97,6 +100,8 @@ fun DictionaryApp(
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     onLoadMore: () -> Unit,
     onSortModeChanged: (SortMode) -> Unit,
+    masteredIds: Set<Long> = emptySet(),
+    onToggleMastered: (WordEntity) -> Unit = {},
 ) {
     val context = LocalContext.current
     val phraseViewModel: PhraseSpeechViewModel = viewModel(
@@ -141,6 +146,8 @@ fun DictionaryApp(
                         phraseStates = phraseStates,
                         onPhraseTranslate = phraseViewModel::translate,
                         onPhraseSpeak = phraseViewModel::speak,
+                        masteredIds = masteredIds,
+                        onToggleMastered = onToggleMastered,
                     )
                 } else {
                     WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
@@ -579,6 +586,8 @@ private fun WordDetail(
     phraseStates: Map<String, PhraseUiState>,
     onPhraseTranslate: (String) -> Unit,
     onPhraseSpeak: (String) -> Unit,
+    masteredIds: Set<Long>,
+    onToggleMastered: (WordEntity) -> Unit,
 ) {
     val phoneticUk = word.phoneticUk?.takeIf { it.isNotBlank() }
     val phoneticUs = word.phoneticUs?.takeIf { it.isNotBlank() }
@@ -724,6 +733,22 @@ private fun WordDetail(
                                 Spacer(Modifier.size(8.dp))
                                 Text("美音")
                             }
+                        }
+                        val mastered = word.id in masteredIds
+                        OutlinedButton(
+                            onClick = { onToggleMastered(word) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp)
+                                .heightIn(min = 48.dp),
+                            contentPadding = ButtonDefaults.ContentPadding,
+                        ) {
+                            Icon(
+                                imageVector = if (mastered) Icons.Filled.Check else Icons.Filled.Add,
+                                contentDescription = null,
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(if (mastered) "已掌握 · 移出背词计划" else "加入背词计划")
                         }
                     }
                 }

@@ -14,6 +14,8 @@ import com.chloemlla.cdict.ui.CdictApp
 import com.chloemlla.cdict.ui.CdictTheme
 import com.chloemlla.cdict.ui.DictionaryViewModel
 import com.chloemlla.cdict.ui.DictionaryViewModelFactory
+import com.chloemlla.cdict.ui.StudyViewModel
+import com.chloemlla.cdict.ui.StudyViewModelFactory
 import com.chloemlla.cdict.ui.TranslationViewModel
 import com.chloemlla.cdict.ui.TranslationViewModelFactory
 import com.chloemlla.lumen.crash.ui.LumenCrashGate
@@ -24,6 +26,9 @@ class MainActivity : ComponentActivity() {
     }
     private val translationViewModel: TranslationViewModel by viewModels {
         TranslationViewModelFactory()
+    }
+    private val studyViewModel: StudyViewModel by viewModels {
+        StudyViewModelFactory(applicationContext)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,6 +47,7 @@ class MainActivity : ComponentActivity() {
                             onDictionaryLoadMore = dictionaryViewModel::loadMore,
                             onDictionarySortModeChanged = dictionaryViewModel::setSortMode,
                             translationViewModel = translationViewModel,
+                            studyViewModel = studyViewModel,
                         )
                     }
                 }

@@ -50,6 +50,14 @@ interface DictionaryDao {
     @Query("SELECT * FROM heatmap_entries WHERE wordId = :wordId ORDER BY period")
     suspend fun heatmap(wordId: Long): List<HeatmapEntryEntity>
 
+    @Query("SELECT * FROM words WHERE id IN (:ids)")
+    suspend fun wordsByIds(ids: List<Long>): List<WordEntity>
+
+    // Random sample of words with a non-empty Chinese translation, used to draw
+    // distractor options for the next-day review questions.
+    @Query("SELECT * FROM words WHERE translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit")
+    suspend fun randomWords(limit: Int): List<WordEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWords(words: List<WordEntity>)
 }

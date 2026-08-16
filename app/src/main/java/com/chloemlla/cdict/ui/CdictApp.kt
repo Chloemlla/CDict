@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 
@@ -52,6 +54,7 @@ private enum class CdictDestination(
     val label: String,
     val paneTitle: String,
 ) {
+    Study("背词", "CDict 背词"),
     Dictionary("词典", "CDict 词典"),
     Translation("翻译", "CDict 翻译"),
 }
@@ -65,19 +68,22 @@ fun CdictApp(
     onDictionaryLoadMore: () -> Unit,
     onDictionarySortModeChanged: (SortMode) -> Unit,
     translationViewModel: TranslationViewModel,
+    studyViewModel: StudyViewModel,
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    // System back (button or edge-swipe gesture) on the Translation tab returns to the
-    // Dictionary tab, matching bottom-navigation back behaviour.
-    BackHandler(enabled = selectedTab == 1) {
-        selectedTab = 0
+    val studyState by studyViewModel.state.collectAsStateWithLifecycle()
+    val masteredIds by studyViewModel.masteredIds.collectAsStateWithLifecycle()
+    // System back (button or edge-swipe gesture) walks up the tab stack toward Study,
+    // mirroring bottom-navigation back behaviour.
+    BackHandler(enabled = selectedTab > 0) {
+        selectedTab -= 1
     }
-    val destination = if (selectedTab == 0) {
-        CdictDestination.Dictionary
-    } else {
-        CdictDestination.Translation
+    val destination = when (selectedTab) {
+        0 -> CdictDestination.Study
+        1 -> CdictDestination.Dictionary
+        else -> CdictDestination.Translation
     }
-    val needsStatusBarPadding = selectedTab == 0 && dictionaryState !is DictionaryScreenState.Ready
+    val needsStatusBarPadding = selectedTab == 1 && dictionaryState !is DictionaryScreenState.Ready
 
     Scaffold(
         modifier = Modifier
@@ -122,13 +128,27 @@ fun CdictApp(
                 label = "Destination transition",
             ) { tab ->
                 when (tab) {
-                    0 -> DictionaryApp(
+                    0 -> StudyScreen(
+                        state = studyState,
+                        onReload = studyViewModel::reload,
+                        onAnswer = studyViewModel::answerReview,
+                        onAdvance = studyViewModel::advanceAfterFeedback,
+                        onMarkLearned = studyViewModel::markLearned,
+                        onDefer = studyViewModel::deferWord,
+                        onContinueFreePlay = studyViewModel::continueFreePlay,
+                        onExitFreePlay = studyViewModel::exitFreePlay,
+                        onSetGoal = studyViewModel::setGoal,
+                        onPlayPronunciation = onDictionaryPlayPronunciation,
+                    )
+                    1 -> DictionaryApp(
                         state = dictionaryState,
                         onQueryChanged = onDictionaryQueryChanged,
                         onSelect = onDictionarySelect,
                         onPlayPronunciation = onDictionaryPlayPronunciation,
                         onLoadMore = onDictionaryLoadMore,
                         onSortModeChanged = onDictionarySortModeChanged,
+                        masteredIds = masteredIds,
+                        onToggleMastered = studyViewModel::toggleMastered,
                     )
                     else -> TranslateScreen(translationViewModel)
                 }
@@ -142,10 +162,10 @@ private fun CdictNavigationBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
 ) {
-    val selectedDestination = if (selectedTab == 0) {
-        CdictDestination.Dictionary
-    } else {
-        CdictDestination.Translation
+    val selectedDestination = when (selectedTab) {
+        0 -> CdictDestination.Study
+        1 -> CdictDestination.Dictionary
+        else -> CdictDestination.Translation
     }
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -194,6 +214,24 @@ private fun CdictNavigationBar(
                     onClick = { onTabSelected(0) },
                     icon = {
                         Icon(
+                            imageVector = Icons.Filled.School,
+                            contentDescription = null,
+                        )
+                    },
+                    label = { Text(CdictDestination.Study.label, maxLines = 1) },
+                    alwaysShowLabel = true,
+                    colors = itemColors,
+                    modifier = Modifier
+                        .heightIn(min = 64.dp)
+                        .semantics {
+                            role = Role.Tab
+                        },
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { onTabSelected(1) },
+                    icon = {
+                        Icon(
                             imageVector = Icons.AutoMirrored.Filled.MenuBook,
                             contentDescription = null,
                         )
@@ -208,8 +246,8 @@ private fun CdictNavigationBar(
                         },
                 )
                 NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { onTabSelected(1) },
+                    selected = selectedTab == 2,
+                    onClick = { onTabSelected(2) },
                     icon = {
                         Icon(
                             imageVector = Icons.Filled.Translate,
