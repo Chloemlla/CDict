@@ -112,7 +112,7 @@ Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) aut
 `VivoTtsClient` (reverse-engineered from `com.vivo.translator`):
 
 - Request body is **JSON** (not a form), with `auf=audio/L16;rate=16000`. Responses may be MP3 or container-less PCM; the format is detected before playback and PCM is wrapped in a WAV header. A `{"errorResult":{...}}` response is treated as an explicit error, not audio.
-- **HMAC-SHA256** signature via `Sign.sign` (`hmacSha256Hex`); headers carry `product/model/sysVer/appVer` client fingerprints.
+- **Nested signature** `MD5(HMAC-SHA256(appKey, sortedParams) + "&key=" + appKey)` reverse-engineered from `libspeech_sec.so`; headers carry `product/model/sysVer/appVer` client fingerprints.
 - Uses credentials **independent from the translation engine**: `appId=1336541186` / `appKey=9925f42b…`; UK accent `langType=en-GBR`, US accent `en-USA`.
 
 **Audio caching.** Pronounced audio is cached on disk so repeated lookups are instant and offline-friendly:

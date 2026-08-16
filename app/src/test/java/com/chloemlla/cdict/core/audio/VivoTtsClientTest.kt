@@ -7,22 +7,26 @@ import org.junit.Test
 class VivoTtsClientTest {
 
     @Test
-    fun `signature is 64 lowercase hex hmac sha256`() {
-        val sig = VivoTtsClient.hmacSha256Hex(
+    fun `signature is 32 lowercase hex md5 of hmac sha256`() {
+        val hmac = VivoTtsClient.hmacSha256Hex(
             key = "9925f42b456c96de8e424ddc7c06d5d9",
-            data = "appId=1336541186&deviceid=00000000000000&nonce_str=AbCdEf1234567890&taskid=t1&text=dGVzdA==&key=9925f42b456c96de8e424ddc7c06d5d9",
+            data = "appId=1336541186&deviceid=00000000000000&nonce_str=AbCdEf1234567890&taskid=t1&text=dGVzdA==",
         )
-        assertEquals(64, sig.length)
-        assertTrue(sig.all { it in '0'..'9' || it in 'a'..'f' })
+        assertEquals(64, hmac.length)
+        val sign = VivoTtsClient.md5Hex("$hmac&key=9925f42b456c96de8e424ddc7c06d5d9")
+        assertEquals(32, sign.length)
+        assertTrue(sign.all { it in '0'..'9' || it in 'a'..'f' })
     }
 
     @Test
     fun `signature matches offline oracle vector`() {
-        val sig = VivoTtsClient.hmacSha256Hex(
+        val hmac = VivoTtsClient.hmacSha256Hex(
             key = "9925f42b456c96de8e424ddc7c06d5d9",
-            data = "appId=1336541186&deviceid=00000000000000&nonce_str=AbCdEf1234567890&taskid=t1&text=dGVzdA==&key=9925f42b456c96de8e424ddc7c06d5d9",
+            data = "appId=1336541186&deviceid=00000000000000&nonce_str=AbCdEf1234567890&taskid=t1&text=dGVzdA==",
         )
-        assertEquals("6489b3c239081cfd66fdc5d721f6fb941d14d09a8c16bc4bef7cb31a03780cc5", sig)
+        assertEquals("1547db4e608d4e732c7574e1b839a421f023b29ac48c51aa288e472bc820ac53", hmac)
+        val sign = VivoTtsClient.md5Hex("$hmac&key=9925f42b456c96de8e424ddc7c06d5d9")
+        assertEquals("891f06f2fcaf97b386feff7bf4f870bb", sign)
     }
 
     @Test

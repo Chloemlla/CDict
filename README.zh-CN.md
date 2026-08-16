@@ -112,7 +112,7 @@ Youdao 静态发音 (dict.youdao.com/dictvoice;整句/词)
 `VivoTtsClient`(逆向 `com.vivo.translator` 的语音合成链路):
 
 - 请求体为 **JSON**(非表单),`auf=audio/L16;rate=16000`;有返回 MP3 也有返回无容器 PCM 的情况,播放前会识别格式并给 PCM 补 WAV 头;`{"errorResult":{...}}` 会被识别为明确错误而非当作音频。
-- **HMAC-SHA256** 签名 `Sign.sign`(`hmacSha256Hex`),请求头含 `product/model/sysVer/appVer` 客户端指纹。
+- 嵌套签名 `MD5(HMAC-SHA256(appKey, 排序参数拼接) + "&key=" + appKey)`(逆向自 `libspeech_sec.so`),请求头含 `product/model/sysVer/appVer` 客户端指纹。
 - 使用**独立于翻译引擎**的凭证 `appId=1336541186` / `appKey=9925f42b…`;英音 `langType=en-GBR`、美音 `en-USA`。
 
 **音频缓存。** 发音会缓存到磁盘,重复查询即时返回、且离线更友好:

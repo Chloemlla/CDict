@@ -2,6 +2,7 @@ package com.chloemlla.cdict.core.audio
 
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
 import javax.crypto.Mac
@@ -11,7 +12,12 @@ import kotlinx.coroutines.withContext
 
 /**
  * vivo 语音合成（/fy/tts）客户端，逆向对应 speechsdk ttsonline（Protocol.java 字段布局）与
- * libsecurity.so 的 Sign.sign 签名（hmacSha256Hex）。
+ * libspeech_sec.so 的 sign JNI 签名。
+ *
+ * 签名算法（libspeech_sec.so 0x2b44c 反编译确认）：
+ *   1. 参数按 key 升序拼接：appId & deviceid & nonce_str & taskid & text
+ *   2. hmacHex = hex(HMAC-SHA256(appKey, joinedParams))
+ *   3. sign = hex(MD5(hmacHex + "&key=" + appKey))
  *
  * 请求体为 JSON（非表单）；成功时返回音频二进制（aue=3 → MP3），失败时返回
  * {"errorResult":{"errorCode":…,"errorMsg":…}}。
@@ -37,10 +43,9 @@ class VivoTtsClient(
         val taskId = UUID.randomUUID().toString().replace("-", "")
         val nonce = randomAlphanumeric(16)
         val textB64 = Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
-        val sign = hmacSha256Hex(
-            appKey,
-            "appId=$appId&deviceid=$deviceId&nonce_str=$nonce&taskid=$taskId&text=$textB64&key=$appKey",
-        )
+        val params = "appId=$appId&deviceid=$deviceId&nonce_str=$nonce&taskid=$taskId&text=$textB64"
+        val hmacHex = hmacSha256Hex(appKey, params)
+        val sign = md5Hex("$hmacHex&key=$appKey")
         val body = buildString {
             append("""{"appId":""").append(jsonEscape(appId))
             append(""","deviceid":""").append(jsonEscape(deviceId))
@@ -136,6 +141,9 @@ class VivoTtsClient(
             mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256"))
             return mac.doFinal(data.toByteArray(Charsets.UTF_8)).toHex()
         }
+
+        fun md5Hex(data: String): String =
+            MessageDigest.getInstance("MD5").digest(data.toByteArray(Charsets.UTF_8)).toHex()
     }
 }
 
