@@ -105,6 +105,12 @@ android {
         resources.excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/*.kotlin_module")
     }
 
+    // PRD §4.3 zero-copy copy acceleration: keep dict.db uncompressed in the APK so AGP can
+    // memory-map and copy it once at first launch instead of deflating a ~83MB asset.
+    androidResources {
+        noCompress += setOf("db")
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

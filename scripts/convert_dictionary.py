@@ -243,6 +243,11 @@ def main() -> int:
         args.output.unlink()
     db = sqlite3.connect(args.output)
     try:
+        # PRD §4.2 physical-page tuning: a larger page (matching modern flash block size) and
+        # full auto-vacuum shrink the asset, then VACUUM compacts fragmented pages. Both pragmas
+        # must be set before tables are created to take effect.
+        db.execute("PRAGMA page_size = 4096;")
+        db.execute("PRAGMA auto_vacuum = FULL;")
         db.executescript(SCHEMA)
         metadata = {
             "source": "https://isdc.pages.dev/",
@@ -292,6 +297,8 @@ def main() -> int:
                 except (TypeError, ValueError):
                     raise ValueError(f"invalid heatmap score for {word}")
         db.commit()
+        # Compact freed space so the shipped asset reflects the smaller page/free-list layout.
+        db.execute("VACUUM;")
         counts = {table: db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in ("words", "derived_terms", "roots", "sentences", "word_sentence_links", "heatmap_entries")}
         if counts["words"] != len(seen):
             raise ValueError(f"word count mismatch after normalization: {counts['words']} != {len(seen)}")
