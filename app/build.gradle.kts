@@ -117,6 +117,20 @@ kapt {
     }
 }
 
+// Room exports the schema to a shared project dir per database. `release` and
+// `releaseAab` both run kapt and would concurrently read/write that file, racing
+// (KaptWithoutKotlincTask provokes "Expected end of object, but had EOF"). Force
+// the AAB variant's kapt to run strictly after release's so the file is complete
+// before it is read. Room schema export is not a declared task output, so Gradle
+// cannot know they conflict and would otherwise parallelize them.
+androidComponents {
+    onVariants { variant ->
+        if (variant.name == "releaseAab") {
+            tasks.named("kaptReleaseAabKotlin") { it.mustRunAfter("kaptReleaseKotlin") }
+        }
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
