@@ -118,6 +118,8 @@ gh run view <RUN_ID> --log-failed | grep -aE "FAILED|Syntax error|Location:|Exce
 5. **kapt 只报第一个语法错误**：一次运行可能只暴露一处错误，修完再推可能暴露下一处 → 耐心多轮迭代，或用花括号平衡静态检查兜底。
 6. **基线档案失败常是模糊的**：`Target package ... failed to stay running after launch` 无 logcat 细节时，用"最后一个通过的 commit 与当前 commit 的差异"来锁定肇事改动（二分思维）。
 7. **`--log-failed` 偶发抓空**：网络抖动时输出 0 行，重试即可。
+8. **注释里的 `/*` 会开启未闭合块注释**：KDoc 中写 `audio/*` 之类措辞，Kotlin 把其中的 `/*` 当作块注释起始，外层 `/**` 永不闭合，编译器报 `Syntax error: Missing '}'` + `Unclosed comment`（错误往往在文件另一处），且静态花括号平衡检查查不出。写注释时避免裸 `/*`，用"audio 类型"等说法。
+9. **在自身初始化表达式内引用变量是未解析引用**：`val media = MediaPlayer().apply { ... player === media ... }` 与 `val tts = TextToSpeech(ctx) { ... tts ... }` 中引用同名变量会报 `Unresolved reference 'media'/'tts'`。修复：apply 块内用 `this`（接收者即实例）；异步回调捕获自身用先声明后赋值的 `var`。
 
 ---
 
