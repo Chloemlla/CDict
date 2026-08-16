@@ -39,16 +39,14 @@
 词详情页提供 **英音 / 美音** 按钮,发音由内置的 **vivo 语音合成**客户端默认生成,按三级顺序回退,无需打包任何音频文件:
 
 ```
-vivo 语音合成 (POST https://vivotrans.vivo.com.cn/fy/tts,返回 MP3)
-  → Youdao 静态发音 (dict.youdao.com/dictvoice)
+Youdao 静态发音 (dict.youdao.com/dictvoice;整句/词)
+  → vivo 语音合成 (POST https://vivotrans.vivo.com.cn/fy/tts)
   → Android 系统 TextToSpeech
 ```
 
-任一级失败(超时 / 非 2xx / 音频损坏 / 网络不可用)自动降级到下一级;发音不可用时词典浏览与离线搜索完全不受影响。
+任一级失败(超时 / 非 2xx / 音频损坏 / 网络不可用)自动降级到下一级;发音不可用时词典浏览与离线搜索完全不受影响。有道 `dictvoice` 只稳定读单词,遇到整句时先整句试一次,失败则按空格**拆词逐词读**,再失败才回退 vivo→系统 TTS。`VivoTtsClient`(逆向 `com.vivo.translator` 的语音合成链路):
 
-`VivoTtsClient`(逆向 `com.vivo.translator` 的语音合成链路):
-
-- 请求体为 JSON(非表单),`auf=audio/L16;rate=16000`、`aue=3` → 返回 MP3 二进制;失败返回 `{"errorResult":{...}}`
+- 请求体为 JSON(非表单),`auf=audio/L16;rate=16000`;有返回 MP3 也有返回无容器 PCM 的情况,播放前会识别格式并给 PCM 补 WAV 头;请求失败返回 `{"errorResult":{...}}` 会被识别为明确错误而非当作音频
 - HMAC-SHA256 签名`Sign.sign`(`hmacSha256Hex`),请求头含 `product/model/sysVer/appVer` 客户端指纹
 - 使用**独立于翻译引擎**的凭证 `appId=1336541186` / `appKey=9925f42b…`;英音 `langType=en-GBR`、美音 `en-USA`
 

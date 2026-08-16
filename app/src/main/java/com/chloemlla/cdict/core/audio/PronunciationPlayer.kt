@@ -18,7 +18,7 @@ interface PronunciationSpeaker {
 }
 
 /**
- * 发音播放器，三级回退：vivo TTS（默认）→ 有道静态音频 → 系统 TextToSpeech。
+ * 发音播放器，三级回退：有道静态音频（默认，优先；句子按词拆读）→ vivo TTS → 系统 TextToSpeech。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  */
 class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
@@ -30,16 +30,75 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     override fun speak(text: String) = play(text, Accent.US)
 
     fun play(word: String, accent: Accent) {
-        player?.release()
-        player = null
-        scope.launch { playVivo(word, accent) }
+        releasePlayer()
+        scope.launch { playYoudao(word, accent) }
     }
 
-    private suspend fun playVivo(word: String, accent: Accent) {
+    private fun releasePlayer() {
+        player?.release()
+        player = null
+    }
+
+    /** 第一级：有道。先整句试一次；有道只认单词时，按空格拆词逐词朗读，仍失败才回退 vivo→系统 TTS。 */
+    private suspend fun playYoudao(word: String, accent: Accent) {
+        val media = MediaPlayer().apply {
+            setOnPreparedListener { start() }
+            setOnCompletionListener { releasePlayer() }
+            setOnErrorListener { _, _, _ ->
+                releasePlayer()
+                playYoudaoSentenceFallback(word, accent)
+                true
+            }
+        }
+        player = media
+        try {
+            media.setDataSource("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
+            media.prepareAsync()
+        } catch (e: Exception) {
+            releasePlayer()
+            playYoudaoSentenceFallback(word, accent)
+        }
+    }
+
+    /** 有道整句失败：多词拆词逐词读；单词/失败回退 vivo→系统 TTS。 */
+    private fun playYoudaoSentenceFallback(word: String, accent: Accent) {
+        val words = word.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (words.size > 1) playYoudaoWords(words, 0, accent) else scope.launch { playVivoFallback(word, accent) }
+    }
+
+    private fun playYoudaoWords(words: List<String>, index: Int, accent: Accent) {
+        if (index >= words.size) {
+            releasePlayer()
+            return
+        }
+        val media = MediaPlayer().apply {
+            setOnPreparedListener { start() }
+            setOnCompletionListener {
+                releasePlayer()
+                playYoudaoWords(words, index + 1, accent)
+            }
+            setOnErrorListener { _, _, _ ->
+                releasePlayer()
+                scope.launch { playVivoFallback(words.joinToString(" "), accent) }
+                true
+            }
+            try {
+                setDataSource("https://dict.youdao.com/dictvoice?audio=${words[index].encodeUrl()}&type=${accent.youdaoType}")
+            } catch (e: Exception) {
+                releasePlayer()
+                scope.launch { playVivoFallback(words.joinToString(" "), accent) }
+            }
+            prepareAsync()
+        }
+        player = media
+    }
+
+    /** 第二级：vivo TTS。失败时落到系统 TextToSpeech。 */
+    private suspend fun playVivoFallback(word: String, accent: Accent) {
         val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
         val audio = (result as? VivoTtsResult.Audio)?.bytes
         if (audio == null || audio.isEmpty()) {
-            playYoudaoOrTts(word, accent)
+            speak(word, accent)
             return
         }
         val (bytes, ext) = when {
@@ -54,22 +113,22 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             tmp.writeBytes(bytes)
         } catch (e: Exception) {
             tmp.delete()
-            playYoudaoOrTts(word, accent)
+            speak(word, accent)
             return
         }
         player = MediaPlayer().apply {
             setOnPreparedListener { start() }
-            setOnCompletionListener { release(); player = null; tmp.delete() }
+            setOnCompletionListener { releasePlayer(); tmp.delete() }
             setOnErrorListener { _, _, _ ->
-                release(); player = null
+                releasePlayer()
                 tmp.delete()
-                playYoudaoOrTts(word, accent)
+                speak(word, accent)
                 true
             }
             try {
                 setDataSource(tmp.path)
             } catch (e: Exception) {
-                playYoudaoOrTts(word, accent)
+                speak(word, accent)
             }
             prepareAsync()
         }
@@ -110,21 +169,6 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         putStr(36, "data"); put32(40, dataSize)
         pcm.copyInto(out, 44)
         return out
-    }
-
-    private fun playYoudaoOrTts(word: String, accent: Accent) {
-        val fallback = MediaPlayer().apply {
-            setOnPreparedListener { start() }
-            setOnCompletionListener { release() }
-            setOnErrorListener { _, _, _ -> release(); speak(word, accent); true }
-            try {
-                setDataSource("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
-            } catch (e: Exception) {
-                speak(word, accent)
-            }
-            prepareAsync()
-        }
-        player = fallback
     }
 
     private fun speak(word: String, accent: Accent) {
