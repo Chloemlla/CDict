@@ -85,7 +85,8 @@ fun CdictApp(
     studyViewModel: StudyViewModel,
     recommendationViewModel: RecommendationViewModel,
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // 默认落在词典页（主要入口），用户可从底部 / 侧边导航切到其他标签。
+    var selectedTab by rememberSaveable { mutableIntStateOf(CdictDestination.Dictionary.ordinal) }
     val studyState by studyViewModel.state.collectAsStateWithLifecycle()
     val masteredIds by studyViewModel.masteredIds.collectAsStateWithLifecycle()
     val recommendationState by recommendationViewModel.state.collectAsStateWithLifecycle()
