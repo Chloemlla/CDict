@@ -814,7 +814,12 @@ private fun WordDetail(
             if (wordHasAnnotations(word)) {
                 item(key = "annotations") {
                     DetailSectionCard(title = "AI 语感标注") {
-                        WordAnnotationSection(word = word)
+                        WordAnnotationSection(
+                            word = word,
+                            phraseStates = phraseStates,
+                            onTranslate = onPhraseTranslate,
+                            onSpeak = onPhraseSpeak,
+                        )
                     }
                 }
             }

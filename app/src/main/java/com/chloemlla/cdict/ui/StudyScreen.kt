@@ -528,6 +528,7 @@ private fun LearnFlow(
                 ) {
                     LearnCard(
                         word = card,
+                        phraseStates = phraseStates,
                         phraseUi = card.definition?.takeIf(String::isNotBlank)?.let(phraseStates::get),
                         onTranslate = onTranslate,
                         onSpeak = onSpeak,
@@ -580,6 +581,7 @@ private fun LearnFlow(
 @Composable
 private fun LearnCard(
     word: WordEntity,
+    phraseStates: Map<String, PhraseUiState>,
     phraseUi: PhraseUiState?,
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
@@ -645,7 +647,13 @@ private fun LearnCard(
             }
             if (wordHasAnnotations(word)) {
                 HorizontalDivider(modifier = Modifier.padding(top = 14.dp))
-                WordAnnotationSection(word = word, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+                WordAnnotationSection(
+                    word = word,
+                    phraseStates = phraseStates,
+                    onTranslate = onTranslate,
+                    onSpeak = onSpeak,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                )
             }
             Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { onPlayPronunciation(word, Accent.UK) }, contentPadding = ButtonDefaults.ContentPadding) {

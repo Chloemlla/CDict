@@ -109,12 +109,20 @@ fun WordAnnotationBadges(word: WordEntity, modifier: Modifier = Modifier) {
 }
 
 /**
- * The full AI annotation block: badges, nuance description, collocation chips and the
+ * The full AI annotation block: badges, nuance description, collocations and the
  * highlighted usage-warning box. Shared by the word detail page and the study card.
+ * When [onTranslate]/[onSpeak] are supplied, each collocation renders as a speakable,
+ * auto-translated row; otherwise it renders as a static chip.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun WordAnnotationSection(word: WordEntity, modifier: Modifier = Modifier) {
+fun WordAnnotationSection(
+    word: WordEntity,
+    modifier: Modifier = Modifier,
+    phraseStates: Map<String, PhraseUiState> = emptyMap(),
+    onTranslate: ((String) -> Unit)? = null,
+    onSpeak: ((String) -> Unit)? = null,
+) {
     val nuance = word.nuanceDescription?.takeIf { it.isNotBlank() }
     val warning = word.usageWarning?.takeIf { it.isNotBlank() }
     val collocations = parseCollocations(word.collocations)
@@ -127,13 +135,28 @@ fun WordAnnotationSection(word: WordEntity, modifier: Modifier = Modifier) {
         }
         if (collocations.isNotEmpty()) {
             SectionLabel("常见搭配")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                collocations.forEach { collocation ->
-                    AnnotationPill(
-                        text = collocation,
-                        bg = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        fg = MaterialTheme.colorScheme.onSurface,
-                    )
+            if (onTranslate != null && onSpeak != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    collocations.forEach { collocation ->
+                        SpeakableEnglishText(
+                            en = collocation,
+                            pinnedZh = null,
+                            ui = phraseStates[collocation],
+                            onTranslate = onTranslate,
+                            onSpeak = onSpeak,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    collocations.forEach { collocation ->
+                        AnnotationPill(
+                            text = collocation,
+                            bg = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            fg = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
