@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.core.data
 
 import android.content.Context
+import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,7 +40,7 @@ object DictionaryUpdateManager {
         val version = runCatching {
             @Suppress("DEPRECATION")
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
+            PackageInfoCompat.getLongVersionCode(info)
         }.getOrNull() ?: return false
 
         val checked = prefs.getLong(KEY_CHECKED_VERSION, -1L)

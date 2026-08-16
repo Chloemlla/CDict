@@ -51,7 +51,7 @@ abstract class DictionaryDatabase : RoomDatabase() {
             Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
                 .createFromAsset("dict.db")
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }
 }

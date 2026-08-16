@@ -2,7 +2,7 @@ package com.chloemlla.cdict.ui.about
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Construction
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -30,7 +30,7 @@ object WhatsNewData {
             tip = "可左右滑动浏览；同一构建确认后不会再次自动弹出。",
         ),
         WhatsNewSlide(
-            icon = Icons.Filled.MenuBook,
+            icon = Icons.AutoMirrored.Filled.MenuBook,
             title = "词详情页派生词「前往」跳转",
             subtitle = "词详情页的派生词条目新增「前往」入口，可跳转到对应词条的完整详情。",
             bullets = listOf(
@@ -42,9 +42,10 @@ object WhatsNewData {
         WhatsNewSlide(
             icon = Icons.Filled.Construction,
             title = "构建工具链升级",
-            subtitle = "构建工具链由 Java 17 升级到 Java 21，并修正 Room 元数据实体与词典库 schema 对齐。",
+            subtitle = "构建工具链由 Java 17 升级到 Java 21，并迁移到 AGP built-in Kotlin + KSP。",
             bullets = listOf(
-                "Java 17 → Java 21（JVM toolchain 21）。",
+                "Java 17 → Java 21。",
+                "独立 Kotlin 插件 + kapt 迁移到 AGP built-in Kotlin + KSP（Room），构建告警清零。",
                 "MetadataEntity 与词典库 schema 对齐，DAO 元数据查询可编译。",
             ),
             tip = "对日常使用无感；属于工程加固。",

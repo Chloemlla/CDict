@@ -20,7 +20,7 @@ abstract class StudyDatabase : RoomDatabase() {
                 // study_words. Installed v1 databases cannot be read under the new schema and
                 // carry no irreversible data worth hand-migrating, so drop & recreate them
                 // rather than crashing on Room's identity-hash validation.
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }
 }

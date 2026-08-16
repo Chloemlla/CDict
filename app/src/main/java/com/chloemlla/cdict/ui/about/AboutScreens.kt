@@ -36,7 +36,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -321,7 +321,7 @@ fun LegalInfoScreen(onBack: () -> Unit) {
                         modifier = Modifier.weight(1f),
                     )
                     Icon(
-                        imageVector = Icons.Filled.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = "打开",
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(18.dp),
@@ -397,7 +397,7 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
                 }
                 if (credit.url != null) {
                     Icon(
-                        imageVector = Icons.Filled.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = "打开链接",
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.outline,
