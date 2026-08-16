@@ -16,6 +16,7 @@ import com.chloemlla.cdict.ui.DictionaryViewModel
 import com.chloemlla.cdict.ui.DictionaryViewModelFactory
 import com.chloemlla.cdict.ui.TranslationViewModel
 import com.chloemlla.cdict.ui.TranslationViewModelFactory
+import com.chloemlla.lumen.crash.ui.LumenCrashGate
 
 class MainActivity : ComponentActivity() {
     private val dictionaryViewModel: DictionaryViewModel by viewModels {
@@ -29,17 +30,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val state by dictionaryViewModel.state.collectAsStateWithLifecycle()
-            CdictTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    CdictApp(
-                        dictionaryState = state,
-                        onDictionaryQueryChanged = dictionaryViewModel::search,
-                        onDictionarySelect = dictionaryViewModel::select,
-                        onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
-                        onDictionaryLoadMore = dictionaryViewModel::loadMore,
-                        translationViewModel = translationViewModel,
-                    )
+            LumenCrashGate {
+                val state by dictionaryViewModel.state.collectAsStateWithLifecycle()
+                CdictTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        CdictApp(
+                            dictionaryState = state,
+                            onDictionaryQueryChanged = dictionaryViewModel::search,
+                            onDictionarySelect = dictionaryViewModel::select,
+                            onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
+                            onDictionaryLoadMore = dictionaryViewModel::loadMore,
+                            translationViewModel = translationViewModel,
+                        )
+                    }
                 }
             }
         }

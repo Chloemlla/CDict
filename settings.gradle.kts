@@ -11,6 +11,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            name = "LumenCrashLocal"
+            url = uri("${rootDir}/local-maven")
+        }
     }
 }
 

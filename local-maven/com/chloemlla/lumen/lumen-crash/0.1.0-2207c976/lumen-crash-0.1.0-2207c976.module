@@ -1,0 +1,175 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.chloemlla.lumen",
+    "module": "lumen-crash",
+    "version": "0.1.0-2207c976",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.5.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "com.chloemlla.lumen",
+          "module": "lumen-crash-core",
+          "version": {
+            "requires": "0.1.0-2207c976"
+          }
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui"
+        },
+        {
+          "group": "androidx.compose.material3",
+          "module": "material3"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-extended"
+        },
+        {
+          "group": "androidx.compose.material3",
+          "module": "material3-window-size-class"
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "lumen-crash-0.1.0-2207c976.aar",
+          "url": "lumen-crash-0.1.0-2207c976.aar",
+          "size": 86589,
+          "sha512": "1c6ad75bbfb778a94dd9f741178801109e80db2db4f180969e7040447c1adee22ed091e93163cf2a1d418a60cd17ab297d64dda56184306d961d75368b341f9e",
+          "sha256": "a07cd6ba61ca7b68ac581c52bc80ffe87e43f05d9fd560c9a2b51c3b8f9193d5",
+          "sha1": "c69863040ae8f7b60abdf902bc85df189e331b54",
+          "md5": "4290fdf6ce835fe21ed8ede085819164"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.compose",
+          "module": "compose-bom",
+          "version": {
+            "requires": "2024.12.01"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "androidx.compose.foundation",
+          "module": "foundation"
+        },
+        {
+          "group": "androidx.compose.animation",
+          "module": "animation"
+        },
+        {
+          "group": "androidx.activity",
+          "module": "activity-compose",
+          "version": {
+            "requires": "1.13.0"
+          }
+        },
+        {
+          "group": "androidx.core",
+          "module": "core-ktx",
+          "version": {
+            "requires": "1.17.0"
+          }
+        },
+        {
+          "group": "com.chloemlla.lumen",
+          "module": "lumen-crash-core",
+          "version": {
+            "requires": "0.1.0-2207c976"
+          }
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui"
+        },
+        {
+          "group": "androidx.compose.material3",
+          "module": "material3"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-extended"
+        },
+        {
+          "group": "androidx.compose.material3",
+          "module": "material3-window-size-class"
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "lumen-crash-0.1.0-2207c976.aar",
+          "url": "lumen-crash-0.1.0-2207c976.aar",
+          "size": 86589,
+          "sha512": "1c6ad75bbfb778a94dd9f741178801109e80db2db4f180969e7040447c1adee22ed091e93163cf2a1d418a60cd17ab297d64dda56184306d961d75368b341f9e",
+          "sha256": "a07cd6ba61ca7b68ac581c52bc80ffe87e43f05d9fd560c9a2b51c3b8f9193d5",
+          "sha1": "c69863040ae8f7b60abdf902bc85df189e331b54",
+          "md5": "4290fdf6ce835fe21ed8ede085819164"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseSourcePublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "lumen-crash-0.1.0-2207c976-sources.jar",
+          "url": "lumen-crash-0.1.0-2207c976-sources.jar",
+          "size": 11081,
+          "sha512": "24decea613508f2e437a5966e6afd9a078a40ce1bdb4c28dba8fa62cb3a4c0318b86fb6572cceeaaaa6e3a327531f08a65fcf8811f5ed002ea1cb9f66a96e404",
+          "sha256": "5f78c32ffaf8675218b447b38b46786d2dc3459696717fde58037a25575a0507",
+          "sha1": "bf2fb88902a25d9a29042591a7e478d747be5fcb",
+          "md5": "ad9054354876da3740f125ae5fb3b56c"
+        }
+      ]
+    }
+  ]
+}

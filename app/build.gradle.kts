@@ -150,6 +150,7 @@ dependencies {
     kapt("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("com.chloemlla.lumen:lumen-crash:${propertyOrEnvironment("lumenCrashVersion") ?: error("lumenCrashVersion must be set in gradle.properties")}")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep Lumen Crash SDK shared-UI labels across resource shrinking.
+     Required because this app builds with isShrinkResources = true, and the SDK's
+     Compose crash UI references its @string / @plurals at runtime. Treated by AGP
+     as a shrink directive (not packaged into the app). Mirrors Project-Lumen's
+     host-keep-resources.xml. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/lumen_crash_*,@plurals/lumen_crash_*" />
