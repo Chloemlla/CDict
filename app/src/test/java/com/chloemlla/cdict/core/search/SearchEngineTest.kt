@@ -63,6 +63,6 @@ class SearchEngineTest {
     fun `levenshtein distance basics`() {
         assertEquals(0, SearchEngine.levenshtein("cat", "cat"))
         assertEquals(1, SearchEngine.levenshtein("cat", "cut"))
-        assertEquals(2, SearchEngine.levenshtein("cat", "cats"))
+        assertEquals(1, SearchEngine.levenshtein("cat", "cats"))
     }
 }
