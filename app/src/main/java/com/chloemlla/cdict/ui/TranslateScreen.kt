@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -49,8 +50,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -61,9 +64,12 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chloemlla.cdict.core.audio.Accent
+import com.chloemlla.cdict.core.audio.PronunciationPlayer
 import com.chloemlla.cdict.core.translate.TranslationDirection
 import com.chloemlla.cdict.core.translate.TranslationResult
 
@@ -76,6 +82,10 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
     val supportedLanguages by viewModel.supportedLanguages.collectAsStateWithLifecycle()
     val keyboardController = LocalSoftwareKeyboardController.current
     val canTranslate = query.isNotBlank() && state !is TranslationUiState.Translating
+
+    val context = LocalContext.current
+    val pronunciationPlayer = remember { PronunciationPlayer(context) }
+    DisposableEffect(Unit) { onDispose { pronunciationPlayer.release() } }
 
     LaunchedEffect(Unit) { viewModel.loadSupportedLanguages() }
 
@@ -290,7 +300,10 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                 when (currentState) {
                     TranslationUiState.Idle -> EmptyTranslationState()
                     TranslationUiState.Translating -> TranslatingState()
-                    is TranslationUiState.Success -> TranslationResultBlock(currentState.result)
+                    is TranslationUiState.Success -> TranslationResultBlock(
+                        result = currentState.result,
+                        onSpeak = { translation -> pronunciationPlayer.play(translation, Accent.US) },
+                    )
                     is TranslationUiState.Failure -> FailureState(
                         message = currentState.message,
                         onRetry = viewModel::translate,
@@ -457,7 +470,10 @@ private fun StateCard(
 }
 
 @Composable
-private fun TranslationResultBlock(result: TranslationResult) {
+private fun TranslationResultBlock(
+    result: TranslationResult,
+    onSpeak: (String) -> Unit,
+) {
     val metadata = buildList {
         if (result.from.isNotEmpty()) add("来源语言" to result.from)
         if (result.to.isNotEmpty()) add("目标语言" to result.to)
@@ -513,13 +529,34 @@ private fun TranslationResultBlock(result: TranslationResult) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             } else {
+                val speakable = result.to.equals("en", ignoreCase = true)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     result.translations.forEach { translation ->
-                        Text(
-                            translation,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                translation,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (speakable) {
+                                IconButton(
+                                    onClick = { onSpeak(translation) },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = "朗读 $translation"
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
