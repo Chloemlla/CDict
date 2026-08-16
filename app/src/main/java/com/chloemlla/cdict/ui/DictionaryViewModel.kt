@@ -201,12 +201,17 @@ class DictionaryViewModel(
         if (db == null) return
         val dao = db.dictionaryDao()
         viewModelScope.launch {
+            // Pre-fetch (PRD §3.4): warm the audio LRU cache for the word and its speakable
+            // fragments while the detail page loads, so the first tap plays instantly.
+            pronunciationPlayer.prefetch(word.word, Accent.US)
+            pronunciationPlayer.prefetch(word.word, Accent.UK)
             val detail = WordDetailData(
                 derivedTerms = dao.derivedTerms(word.id),
                 roots = dao.roots(word.id),
                 sentences = dao.sentences(word.id, limit = 10, offset = 0),
                 heatmap = dao.heatmap(word.id),
             )
+            detail.sentences.forEach { s -> s.english.takeIf(String::isNotBlank)?.let { pronunciationPlayer.prefetch(it, Accent.US) } }
             val latest = _state.value
             if (latest is DictionaryScreenState.Ready && latest.selected?.id == word.id) {
                 _state.value = latest.copy(detail = detail)

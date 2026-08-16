@@ -4,12 +4,15 @@ import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** 文本朗读能力抽象，便于注入与测试；[PronunciationPlayer] 为其默认实现。 */
 interface PronunciationSpeaker {
@@ -27,6 +30,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private var player: MediaPlayer? = null
     private var tts: TextToSpeech? = null
     private val vivoClient = VivoTtsClient()
+    private val cache = SpeechAudioCache(context)
 
     override fun speak(text: String) = play(text, Accent.US)
 
@@ -35,28 +39,74 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         scope.launch { playYoudao(word, accent) }
     }
 
+    /**
+     * Pre-fetch (PRD §3.4): pull a word's Youdao audio into the disk LRU cache in the
+     * background so an imminent play hits the cached file instead of the network. The
+     * origin tier is the Youdao accent (UK/US) so cache keys align with real playback.
+     */
+    fun prefetch(word: String, accent: Accent) {
+        scope.launch {
+            if (cache.find(word, accent) == null) {
+                val bytes = downloadYoudao(word, accent)
+                if (bytes != null && bytes.isNotEmpty()) cache.put(word, accent, bytes)
+            }
+        }
+    }
+
     private fun releasePlayer() {
         player?.release()
         player = null
     }
 
-    /** 第一级：有道。整句试一次；失败时整句交给后备 TTS（vivo → 系统），不逐词拆读。 */
+    /** 第一级：有道。命中磁盘 LRU 缓存则直接播放缓存文件；未命中下载字节并写缓存。 */
     private suspend fun playYoudao(word: String, accent: Accent) {
+        val cached = cache.find(word, accent)
+        if (cached != null) {
+            playFile(cached, word, accent)
+            return
+        }
+        val bytes = downloadYoudao(word, accent)
+        if (bytes == null || bytes.isEmpty()) {
+            playYoudaoSentenceFallback(word, accent)
+            return
+        }
+        val file = cache.put(word, accent, bytes)
+        playFile(file, word, accent)
+    }
+
+    private suspend fun downloadYoudao(word: String, accent: Accent): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            val conn = URL("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
+                .openConnection() as HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            try {
+                if (conn.responseCode != 200) return@runCatching null
+                conn.inputStream.use { it.readBytes() }
+            } finally {
+                conn.disconnect()
+            }
+        }.getOrNull()
+    }
+
+    private fun playFile(file: File, word: String, accent: Accent) {
         val media = MediaPlayer().apply {
             setOnPreparedListener { start() }
             setOnCompletionListener { releasePlayer() }
             setOnErrorListener { _, _, _ ->
                 releasePlayer()
+                file.delete()
                 playYoudaoSentenceFallback(word, accent)
                 true
             }
         }
         player = media
         try {
-            media.setDataSource("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
+            media.setDataSource(file.path)
             media.prepareAsync()
         } catch (e: Exception) {
             releasePlayer()
+            file.delete()
             playYoudaoSentenceFallback(word, accent)
         }
     }
