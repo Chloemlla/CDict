@@ -66,8 +66,8 @@ def decode_container(path: Path) -> bytes:
     return b"".join(chunks)
 
 
-def parse_binary(data: bytes) -> dict[str, Any]:
-    """Parse the custom binary format into the converter's {g: [...], p: {...}} shape."""
+def parse_binary(data: bytes) -> list[dict[str, Any]]:
+    """Parse the custom binary format into a flat record list for convert_dictionary.py."""
     offset = 4  # skip 4-byte header
     _total_words, offset = _read_varint(data, offset)
     pool_count, offset = _read_varint(data, offset)
@@ -79,8 +79,6 @@ def parse_binary(data: bytes) -> dict[str, Any]:
         text, offset, prev = _read_str(data, offset, pool, prev)
         pool.append(text)
 
-    ri = lambda: _read_varint(data, offset)[0]
-    # Helper that reads a varint and updates offset
     def read_int() -> int:
         nonlocal offset
         v, offset = _read_varint(data, offset)
@@ -91,69 +89,87 @@ def parse_binary(data: bytes) -> dict[str, Any]:
         idx, offset = _read_varint(data, offset)
         return pool[idx]
 
+    records: list[dict[str, Any]] = []
+    group_index = 0
     # 7 frequency groups
-    groups: list[dict[str, Any]] = []
     for _ in range(7):
-        name = read_str()
+        group_index += 1
+        _name = read_str()
         cnt = read_int()
-        words: list[dict[str, Any]] = []
         for _ in range(cnt):
-            w: dict[str, Any] = {
-                "w": read_str(),
-                "t": read_str(),
-                "p": read_str(),
-                "e": read_str(),
-                "ec": read_str(),
-                "ay": read_str(),
-                "am": read_str(),
+            record: dict[str, Any] = {
+                "word": read_str(),
+                "translation": read_str(),
+                "phonetic": read_str(),
+                "example": read_str(),
+                "exampleChinese": read_str(),
+                "audioUk": read_str(),
+                "audioUs": read_str(),
+                "frequencyGroup": group_index,
             }
-            # Derivatives
+            # Derivatives: extract just the word string
             dvn = read_int()
-            dv: list[dict[str, str]] = []
-            for _ in range(dvn):
-                dv.append({
-                    "word": read_str(),
-                    "definition": read_str(),
-                    "pos": read_str(),
-                    "form": read_str(),
-                })
-            w["dv"] = dv
-            # English definition & mnemonic
-            w["ed"] = read_str()
-            w["ax"] = read_str()
+            if dvn:
+                terms: list[str] = []
+                for _ in range(dvn):
+                    dw = read_str()
+                    _ = read_str()  # definition
+                    _ = read_str()  # pos
+                    _ = read_str()  # form
+                    if dw:
+                        terms.append(dw)
+                if terms:
+                    record["derivedTerms"] = terms
+
+            # English definition
+            record["definition"] = read_str()
+            # Mnemonic
+            record["mnemonic"] = read_str()
             # Root info
             rtr = read_str()
             rtp = read_str()
             rts = read_str()
             rtm = read_str()
             if rtr or rtp or rts or rtm:
-                w["rt"] = {"root": rtr, "prefix": rtp, "suffix": rts, "mnemonic": rtm}
+                roots: list[dict[str, str]] = [{"root": rtr, "meaning": rtm}]
+                if rtp:
+                    roots.append({"root": rtp, "meaning": "prefix"})
+                if rts:
+                    roots.append({"root": rts, "meaning": "suffix"})
+                record["roots"] = roots
             # Occurrence count
-            w["oc"] = read_int()
-            # Heatmap
+            record["frequency"] = read_int()
+            # Heatmap: sum exam type counts per period
             cln = read_int()
             if cln:
-                cl: dict[str, dict[str, int]] = {}
+                heatmap: dict[str, int] = {}
                 for _ in range(cln):
                     bk = read_str()
                     tn = read_int()
-                    ts: dict[str, int] = {}
+                    total = 0
                     for _ in range(tn):
-                        tk = read_str()
-                        ts[tk] = read_int()
-                    cl[bk] = ts
-                w["cl"] = cl
-            # Exam sentences
+                        _ = read_str()  # exam type name
+                        total += read_int()
+                    if total:
+                        heatmap[bk] = total
+                if heatmap:
+                    record["heatmap"] = heatmap
+            # Exam sentences: convert to dict format
             dtn = read_int()
             if dtn:
-                dt: list[list[str]] = []
+                sentences: list[dict[str, str]] = []
                 for _ in range(dtn):
-                    dt.append([read_str(), read_str(), read_str(), read_str(), read_str()])
-                w["dt"] = dt
-            words.append(w)
-        groups.append({"n": name, "ws": words})
-
-    return {"g": groups, "p": {"v": [], "r": [], "s": []}}
+                    en = read_str()
+                    zh = read_str()
+                    _ = read_str()  # source
+                    _ = read_str()  # source2
+                    _ = read_str()  # type
+                    if en:
+                        sentences.append({"english": en, "chinese": zh})
+                if sentences:
+                    record["sentences"] = sentences
+            records.append(record)
+    return records
 
 
 def main() -> int:
@@ -189,20 +205,17 @@ def main() -> int:
     sha256 = hashlib.sha256(decompressed).hexdigest()
     print(f"Decompressed payload: {len(decompressed)} bytes, SHA-256: {sha256}", file=sys.stderr)
 
-    # Parse binary
-    payload = parse_binary(decompressed)
-    groups = payload["g"]
-    words = sum(len(group.get("ws", [])) for group in groups)
+    # Parse binary into flat records
+    records = parse_binary(decompressed)
 
     # Write output
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    args.output.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
     print(json.dumps({
         "source": SITE,
         "output": str(args.output),
         "sha256": sha256,
-        "groups": len(groups),
-        "words": words,
+        "words": len(records),
     }, ensure_ascii=False))
     return 0
 

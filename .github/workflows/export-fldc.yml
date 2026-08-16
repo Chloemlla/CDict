@@ -40,22 +40,10 @@ jobs:
         run: |
           set -euo pipefail
           test -s "$RUNNER_TEMP/FLDC-dict.db"
-          python3 -c "
-import sqlite3, sys
-db = sqlite3.connect('$RUNNER_TEMP/FLDC-dict.db')
-tables = {row[0] for row in db.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")}
-print('Tables:', sorted(tables))
-for t in ('words', 'groups', 'metadata', 'word_search'):
-    assert t in tables, f'Missing table: {t}'
-cnt = db.execute('SELECT COUNT(*) FROM words').fetchone()[0]
-print(f'Words: {cnt}')
-assert cnt == 107143, f'Expected 107143 words, got {cnt}'
-grp = db.execute('SELECT COUNT(*) FROM groups').fetchone()[0]
-print(f'Groups: {grp}')
-assert grp == 7, f'Expected 7 groups, got {grp}'
-db.close()
-print('All checks passed')
-"
+          python scripts/validate_dictionary_asset.py \
+            "$RUNNER_TEMP/FLDC-dict.db" \
+            --expected-word-count 107143 \
+            --expected-groups 7
 
       - name: Upload FLDC dictionary asset
         uses: actions/upload-artifact@v4
