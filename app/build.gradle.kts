@@ -11,6 +11,17 @@ fun propertyOrEnvironment(name: String): String? =
     providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
 
+// CI materializes the lumen-crash SDK via scripts/fetch-lumen-crash-sdk.py and writes the
+// resolved version to lumen-crash.resolved.version; gradle.properties is a local fallback.
+val lumenCrashSdkVersion: String =
+    rootProject.file("lumen-crash.resolved.version").takeIf { it.isFile }?.readText()
+        ?.trim()?.takeIf { it.isNotEmpty() }
+        ?: propertyOrEnvironment("lumenCrashVersion")
+        ?: error(
+            "lumen-crash SDK version is unresolved: run scripts/fetch-lumen-crash-sdk.py " +
+                "or set lumenCrashVersion in gradle.properties"
+        )
+
 val releaseKeystoreFile = propertyOrEnvironment("KEYSTORE_FILE")
 val releaseKeystorePassword = propertyOrEnvironment("KEYSTORE_PASSWORD")
 val releaseKeyAlias = propertyOrEnvironment("KEY_ALIAS")
@@ -150,7 +161,7 @@ dependencies {
     kapt("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("com.chloemlla.lumen:lumen-crash:${propertyOrEnvironment("lumenCrashVersion") ?: error("lumenCrashVersion must be set in gradle.properties")}")
+    implementation("com.chloemlla.lumen:lumen-crash:$lumenCrashSdkVersion")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

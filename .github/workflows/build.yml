@@ -36,6 +36,10 @@ jobs:
           python-version: "3.12"
       - name: Install Brotli decoder
         run: python -m pip install --disable-pip-version-check brotli==1.1.0
+      - name: Resolve lumen-crash SDK version
+        run: python scripts/fetch-lumen-crash-sdk.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate and validate authorized dictionary asset
         run: |
           set -euo pipefail
@@ -109,6 +113,10 @@ jobs:
           python-version: "3.12"
       - name: Install Brotli decoder
         run: python -m pip install --disable-pip-version-check brotli==1.1.0
+      - name: Resolve lumen-crash SDK version
+        run: python scripts/fetch-lumen-crash-sdk.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate and validate authorized dictionary asset
         run: |
           set -euo pipefail
