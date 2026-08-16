@@ -1,6 +1,8 @@
 package com.chloemlla.cdict.core.data
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object DictionaryUpdateManager {
 
@@ -22,7 +24,7 @@ object DictionaryUpdateManager {
     /**
      * Read the installed dictionary DB's [assetSignature] metadata row.
      */
-    fun installedSignature(database: DictionaryDatabase): String? =
+    private suspend fun installedSignature(database: DictionaryDatabase): String? =
         runCatching { database.dictionaryDao().metadataValue(ASSET_SIGNATURE_KEY) }.getOrNull()
 
     /**
@@ -32,7 +34,7 @@ object DictionaryUpdateManager {
      *
      * @return true when the installed dictionary is stale and should be rebuilt.
      */
-    fun check(context: Context, database: DictionaryDatabase): Boolean {
+    suspend fun check(context: Context, database: DictionaryDatabase): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val version = runCatching {
             @Suppress("DEPRECATION")
