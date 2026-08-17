@@ -101,6 +101,27 @@ private fun AnnotationPill(text: String, bg: Color, fg: Color) {
     }
 }
 
+/** curriculumTags column is a delimiter-joined list of labels written by dictionary workflows. */
+fun parseCurriculumTags(value: String?): List<String> =
+    value?.split("；", ";", ",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+
+@Composable
+fun CurriculumTagPill(text: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+        )
+    }
+}
+
 /**
  * Small "AI 补充" badge marking content that was enriched by the AI distribution merge
  * (phonetics, mnemonic, derived terms, sentences). Rendered next to the section that

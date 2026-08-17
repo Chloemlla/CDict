@@ -44,6 +44,8 @@ def main() -> int:
             parser.error("words table missing required aiSupplemented column")
         if "headwordSummary" not in words_columns:
             parser.error("words table missing required headwordSummary column")
+        if "curriculumTags" not in words_columns:
+            parser.error("words table missing required curriculumTags column")
         fts = db.execute("SELECT COUNT(*) FROM word_search").fetchone()[0]
         if fts != words:
             parser.error(f"FTS row count {fts} does not match words {words}")

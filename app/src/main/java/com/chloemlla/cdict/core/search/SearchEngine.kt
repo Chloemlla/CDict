@@ -30,6 +30,30 @@ object SearchEngine {
     }
 
     /**
+     * Builds a safe FTS4 MATCH expression from raw user input.
+     *
+     * FTS4 treats `"`, `(`, `)`, `:`, `^` and `*` as query operators; a malformed expression
+     * (unbalanced quote, stray parenthesis, unknown `column:` filter) throws SQLiteException
+     * instead of returning empty results, and a leading `-` is parsed as the NOT operator,
+     * silently inverting the search. The common single-word prefix case stays byte-for-byte
+     * (`apple` -> `apple*`); any input containing an operator character or a token starting
+     * with `-` is quoted token-by-token (embedded quotes doubled) and joined with AND, so
+     * arbitrary punctuation cannot crash or hijack the query — at the cost of exact-phrase
+     * (non-prefix) matching on that input.
+     */
+    fun ftsPrefixQuery(query: String): String {
+        val q = query.trim()
+        if (q.isEmpty()) return q
+        val tokens = q.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val hasOperatorChar = q.any { it in FTS_OPERATOR_CHARS }
+        val hasLeadingNegation = tokens.any { it.startsWith("-") }
+        if (!hasOperatorChar && !hasLeadingNegation) return "$q*"
+        return tokens.joinToString(" AND ") { token ->
+            "\"${token.replace("\"", "\"\"")}\""
+        }
+    }
+
+    /**
      * Returns the closest dictionary word to [query] within [maxDistance] (inclusive)
      * edit distance, or null when nothing is close enough. Confidence quirk: trim before
      * comparing so whitespace never counts as an edit.
@@ -77,4 +101,6 @@ object SearchEngine {
         }
         return prev[b.length]
     }
+
+    private const val FTS_OPERATOR_CHARS = "\"():^*"
 }

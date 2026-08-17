@@ -193,4 +193,45 @@ class TranslationViewModelTest {
             storedKey,
         )
     }
+
+    @Test
+    fun `changing input while a request is in flight resets to idle and cancels stale job`() = runTest {
+        var calls = 0
+        val client = VivoTranslationClient(transport = { _, _, _ ->
+            calls++
+            delay(1000)
+            HttpResponse(200, """{"retcode":0,"code":0,"data":{"translation":"ok"}}""")
+        })
+        val vm = TranslationViewModel(client)
+        vm.onQueryChange("hello")
+        vm.translate()
+        runCurrent()
+        assertEquals(TranslationUiState.Translating, vm.state.value)
+        vm.onQueryChange("world")
+        assertEquals(TranslationUiState.Idle, vm.state.value)
+        advanceUntilIdle()
+        assertEquals(1, calls)
+        assertEquals(TranslationUiState.Idle, vm.state.value)
+    }
+
+    @Test
+    fun `late response from a superseded request cannot overwrite newer result`() = runTest {
+        val client = VivoTranslationClient(transport = { _, _, body ->
+            val slow = body.contains("text=hello")
+            if (slow) delay(1000)
+            HttpResponse(
+                200,
+                """{"retcode":0,"code":0,"data":{"translation":"${if (slow) "旧结果" else "新结果"}"}}""",
+            )
+        })
+        val vm = TranslationViewModel(client)
+        vm.onQueryChange("hello")
+        vm.translate()
+        runCurrent()
+        vm.onQueryChange("hi")
+        vm.translate()
+        advanceUntilIdle()
+        val success = vm.state.value as TranslationUiState.Success
+        assertEquals(listOf("新结果"), success.result.translations)
+    }
 }

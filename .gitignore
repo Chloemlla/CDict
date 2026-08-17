@@ -55,3 +55,5 @@ __pycache__/
 # Lumen Crash SDK — materialized at build time by scripts/fetch-lumen-crash-sdk.py
 /local-maven/
 /lumen-crash.resolved.version
+scripts/distribution.sqlite
+scripts/FLDC-dict.db

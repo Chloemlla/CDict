@@ -7,6 +7,14 @@ on:
         description: "URL of the distribution.sqlite source (plain or .gz)"
         required: false
         default: "https://github.com/ahpxex/open-dictionary/releases/download/v2.0/distribution.sqlite.gz"
+      curriculum_url:
+        description: "URL of the curriculum word list (3500.txt)"
+        required: false
+        default: "https://raw.githubusercontent.com/pluto0x0/word3500/refs/heads/master/3500.txt"
+      curriculum_tag:
+        description: "Label applied to headwords present in the curriculum list"
+        required: false
+        default: "高中 3500 词"
 
 permissions:
   contents: write
@@ -56,6 +64,17 @@ jobs:
             "$RUNNER_TEMP/CDict-dict-merged.db" \
             --expected-word-count 49213 \
             --expected-groups 7
+
+      - name: Apply curriculum tags to merged asset
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o "$RUNNER_TEMP/curriculum.txt" "${{ inputs.curriculum_url }}"
+          test -s "$RUNNER_TEMP/curriculum.txt"
+          python scripts/apply_curriculum_tags.py \
+            "$RUNNER_TEMP/CDict-dict-merged.db" \
+            "$RUNNER_TEMP/curriculum.txt" \
+            --tag "${{ inputs.curriculum_tag }}" \
+            --source "${{ inputs.curriculum_url }}"
 
       - name: Verify merged dictionary asset integrity
         run: |

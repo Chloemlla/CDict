@@ -27,7 +27,8 @@ Room's createFromAsset schema validation.
 
 Each enriched word also gets an `aiSupplemented` column (added when missing) storing
 a comma-separated list of the fields that came from the distribution source, so the
-app can flag AI-supplemented content in the UI.
+app can flag AI-supplemented content in the UI. The `curriculumTags` column is also
+created when missing for workflow-applied curriculum labels.
 
 Words present in only one dataset are left untouched, so the base word count,
 the 7 frequency groups and the FTS index (word/translation/definition) all remain
@@ -170,6 +171,8 @@ def main() -> int:
             db.execute("ALTER TABLE words ADD COLUMN aiSupplemented TEXT")
         if "headwordSummary" not in words_columns:
             db.execute("ALTER TABLE words ADD COLUMN headwordSummary TEXT")
+        if "curriculumTags" not in words_columns:
+            db.execute("ALTER TABLE words ADD COLUMN curriculumTags TEXT")
 
         # Distribution tables created on the output so the published asset matches
         # the Room entity schema (columns, PKs, FKs, index names) exactly.
@@ -418,7 +421,7 @@ def main() -> int:
         for row in db.execute(
             "SELECT id, word, phoneticUk, phoneticUs, translation, definition, mnemonic, "
             "frequencyGroup, frequency, emotionColor, register, nuanceDescription, "
-            "usageWarning, collocations, aiSupplemented, headwordSummary FROM words ORDER BY id"
+            "usageWarning, collocations, aiSupplemented, headwordSummary, curriculumTags FROM words ORDER BY id"
         ):
             h.update("|".join(str(v or "") for v in row).encode("utf-8"))
             h.update(b"\n")

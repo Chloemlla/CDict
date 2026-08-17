@@ -145,18 +145,26 @@ fun RecommendationScreen(
                             modifier = Modifier.fillMaxSize().padding(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            RecommendationCurrentCard(
-                                state = state,
-                                phraseStates = phraseStates,
-                                onTranslate = onTranslate,
-                                onSpeak = onSpeak,
-                                onMarkLearned = onMarkLearned,
-                                onMarkMastered = onMarkMastered,
-                                onDefer = onDefer,
-                                onOpenWord = onOpenWord,
-                                onPlayPronunciation = onPlayPronunciation,
-                                modifier = Modifier.weight(3f),
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .weight(3f)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                // 宽屏同样显示目标 / 进度 / 图例，并让当前卡在低高度窗口下可滚动。
+                                RecommendationHeader(state, onSetGoal)
+                                RecommendationCurrentCard(
+                                    state = state,
+                                    phraseStates = phraseStates,
+                                    onTranslate = onTranslate,
+                                    onSpeak = onSpeak,
+                                    onMarkLearned = onMarkLearned,
+                                    onMarkMastered = onMarkMastered,
+                                    onDefer = onDefer,
+                                    onOpenWord = onOpenWord,
+                                    onPlayPronunciation = onPlayPronunciation,
+                                )
+                            }
                             RecommendationUpcomingList(
                                 state = state,
                                 onOpenWord = onOpenWord,

@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WordSearchEntity::class,
         MetadataEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class DictionaryDatabase : RoomDatabase() {
@@ -89,10 +89,16 @@ abstract class DictionaryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE words ADD COLUMN curriculumTags TEXT")
+            }
+        }
+
         fun open(context: Context): DictionaryDatabase =
             Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
                 .createFromAsset("dict.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }

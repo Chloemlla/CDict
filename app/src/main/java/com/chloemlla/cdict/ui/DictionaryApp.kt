@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -163,7 +165,9 @@ fun DictionaryApp(
                         WordDetail(
                             word = sel,
                             detail = state.detail,
+                            detailError = state.detailError,
                             onBack = onBackFromDetail,
+                            onRetryDetail = { onSelect(sel) },
                             onOpenWord = onOpenDerivedWord,
                             onPlayPronunciation = onPlayPronunciation,
                             phraseStates = phraseStates,
@@ -651,12 +655,17 @@ private fun WordResultCard(
     }
 }
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    ExperimentalLayoutApi::class,
+)
 @Composable
 private fun WordDetail(
     word: WordEntity,
     detail: WordDetailData?,
+    detailError: String?,
     onBack: () -> Unit,
+    onRetryDetail: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     phraseStates: Map<String, PhraseUiState>,
@@ -684,6 +693,7 @@ private fun WordDetail(
     val studyNotes = detail?.studyNotes.orEmpty()
     val headwordSummary = word.headwordSummary?.takeIf { it.isNotBlank() }
     val supplements = supplementedFields(word)
+    val curriculumTags = parseCurriculumTags(word.curriculumTags)
 
     Scaffold(
         topBar = {
@@ -773,6 +783,15 @@ private fun WordDetail(
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(top = 14.dp),
                             )
+                        }
+                        if (curriculumTags.isNotEmpty()) {
+                            FlowRow(
+                                modifier = Modifier.padding(top = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                curriculumTags.forEach { tag -> CurriculumTagPill(tag) }
+                            }
                         }
                         definition?.let {
                             Column(modifier = Modifier.padding(top = 12.dp)) {
@@ -934,19 +953,40 @@ private fun WordDetail(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         ),
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            Text(
-                                text = "正在加载更多词条信息…",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                        if (detailError != null) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Text(
+                                    text = "词条详情加载失败",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = detailError,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TextButton(onClick = onRetryDetail) {
+                                    Text("重试")
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Text(
+                                    text = "正在加载更多词条信息…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                         }
                     }
                 }

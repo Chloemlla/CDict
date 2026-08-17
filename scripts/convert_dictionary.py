@@ -41,6 +41,7 @@ CREATE TABLE words (
   usageWarning TEXT,
   collocations TEXT,
   aiSupplemented TEXT,
+  curriculumTags TEXT,
   frequencyGroup INTEGER NOT NULL DEFAULT 0,
   frequency INTEGER NOT NULL DEFAULT 0
 );

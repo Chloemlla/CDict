@@ -46,4 +46,18 @@ class WordAnnotationsTest {
         assertEquals(emptySet<String>(), supplementedFields(WordEntity(id = 1, word = "cat")))
         assertEquals(false, wordHasAiSupplement(WordEntity(id = 2, word = "dog", aiSupplemented = "  , , ")))
     }
+
+    @Test
+    fun `curriculum tags parse from delimiter separated column`() {
+        assertEquals(listOf("雅思核心", "学术写作"), parseCurriculumTags("雅思核心；学术写作"))
+        assertEquals(listOf("雅思核心", "学术写作"), parseCurriculumTags("雅思核心, 学术写作"))
+        assertEquals(listOf("雅思核心", "学术写作"), parseCurriculumTags("雅思核心;学术写作"))
+    }
+
+    @Test
+    fun `blank or null curriculum tags yield empty list`() {
+        assertEquals(emptyList<String>(), parseCurriculumTags(null))
+        assertEquals(emptyList<String>(), parseCurriculumTags(""))
+        assertEquals(emptyList<String>(), parseCurriculumTags(" , ;"))
+    }
 }

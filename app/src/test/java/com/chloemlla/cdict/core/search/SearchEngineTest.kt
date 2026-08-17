@@ -60,6 +60,34 @@ class SearchEngineTest {
     }
 
     @Test
+    fun `fts prefix keeps normal single and multi token queries`() {
+        assertEquals("apple*", SearchEngine.ftsPrefixQuery("apple"))
+        assertEquals("apple*", SearchEngine.ftsPrefixQuery("  apple  "))
+        assertEquals("apple pie*", SearchEngine.ftsPrefixQuery("apple pie"))
+        assertEquals("", SearchEngine.ftsPrefixQuery(""))
+        assertEquals("", SearchEngine.ftsPrefixQuery("   "))
+    }
+
+    @Test
+    fun `fts prefix quotes operator characters so they cannot break the query`() {
+        assertEquals("\"a(b\"", SearchEngine.ftsPrefixQuery("a(b"))
+        assertEquals("\"a:b\"", SearchEngine.ftsPrefixQuery("a:b"))
+        assertEquals("\"a\"\"b\"", SearchEngine.ftsPrefixQuery("a\"b"))
+        assertEquals("\"a^*\"", SearchEngine.ftsPrefixQuery("a^*"))
+    }
+
+    @Test
+    fun `fts prefix keeps mid word hyphens but quotes leading negation`() {
+        assertEquals("re-enter*", SearchEngine.ftsPrefixQuery("re-enter"))
+        assertEquals("\"-ing\"", SearchEngine.ftsPrefixQuery("-ing"))
+    }
+
+    @Test
+    fun `fts prefix ands together quoted tokens for operator input`() {
+        assertEquals("\"a(b\" AND \"pie\"", SearchEngine.ftsPrefixQuery("a(b pie"))
+    }
+
+    @Test
     fun `levenshtein distance basics`() {
         assertEquals(0, SearchEngine.levenshtein("cat", "cat"))
         assertEquals(1, SearchEngine.levenshtein("cat", "cut"))

@@ -19,6 +19,7 @@
 | 4 | **直接修改代码，不做 diff 预览** | 用户明确纠正过：要真实编辑，不是贴改动预览 |
 | 5 | **修完自动生成 commit message 并 commit + push** | 仓库 CLAUDE.md 硬性要求；GPG 签名可省略 |
 | 6 | **静态命令检查为主，最终正确性以 CI 为准** | 静态检查抓不到运行时/编译问题，GitHub Actions 才是唯一裁决者 |
+| 7 | **每次提交必须同步更新 whats-new 记录** | 应用内「本次更新说明」靠显式条目展示本次构建的有意变更；不更新则用户看不到本次改动，或与已展示内容脱节。记录文件：`app/src/main/java/com/chloemlla/cdict/ui/about/WhatsNewData.kt` |
 
 ---
 
@@ -51,6 +52,7 @@
 
 ### 阶段 3：CI 验证迭代（核心循环）
 ```bash
+# 0. 每次提交前先更新 whats-new 记录（WhatsNewData.kt），见核心原则 7
 # 1. 提交并推送（凭证见 §三）
 git add <file...>   # 显式列文件，不用 git add -A
 git commit --no-gpg-sign -m "<conventional message>"

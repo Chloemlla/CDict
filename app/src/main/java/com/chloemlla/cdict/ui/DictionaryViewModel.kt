@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.ui
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -19,6 +20,7 @@ import com.chloemlla.cdict.core.data.WordEntity
 import com.chloemlla.cdict.core.data.WordFormEntity
 import com.chloemlla.cdict.core.data.WordRelationEntity
 import com.chloemlla.cdict.core.search.SearchEngine
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +58,7 @@ sealed interface DictionaryScreenState {
         val query: String = "",
         val suggestion: WordEntity? = null,
         val detail: WordDetailData? = null,
+        val detailError: String? = null,
         val sortMode: SortMode = SortMode.Frequency,
         val hasMore: Boolean = false,
         val isLoadingMore: Boolean = false,
@@ -152,14 +155,21 @@ class DictionaryViewModel(
                 DictionaryScreenState.Ready(
                     words = db.dictionaryDao().searchChinese(query).first(),
                     query = query,
+                    suggestion = null,
                 )
             } else {
                 val trimmed = query.trim()
                 val dao = db.dictionaryDao()
-                val words = SearchEngine.reorderForSearch(
-                    trimmed,
-                    dao.searchEnglish("$trimmed*").first(),
-                )
+                val words = try {
+                    SearchEngine.reorderForSearch(
+                        trimmed,
+                        dao.searchEnglish(SearchEngine.ftsPrefixQuery(trimmed)).first(),
+                    )
+                } catch (e: SQLiteException) {
+                    // FTS4 rejects operator sequences the sanitizer cannot fully anticipate;
+                    // degrade to a plain LIKE substring scan instead of crashing the search.
+                    SearchEngine.reorderForSearch(trimmed, dao.searchChinese(query).first())
+                }
                 // Typo tolerance (PRD §3.1): nothing matched on the headword prefix, so look
                 // for a close neighbour (edit distance <= 2) within a length-bounded pool and
                 // offer it as a "did you mean?" suggestion. Skipped once a real match exists.
@@ -231,37 +241,48 @@ class DictionaryViewModel(
     private fun openWord(word: WordEntity) {
         val current = _state.value
         if (current !is DictionaryScreenState.Ready) return
-        _state.value = current.copy(selected = word, detail = null)
+        _state.value = current.copy(selected = word, detail = null, detailError = null)
         val db = database
         if (db == null) return
         val dao = db.dictionaryDao()
         viewModelScope.launch {
-            // Pre-fetch (PRD §3.4): warm the audio LRU cache for the word and its speakable
-            // fragments while the detail page loads, so the first tap plays instantly.
-            pronunciationPlayer.prefetch(word.word, Accent.US)
-            pronunciationPlayer.prefetch(word.word, Accent.UK)
-            val derivedTerms = dao.derivedTerms(word.id)
-            val derivedTermWords = dao.wordsByText(derivedTerms.map { it.lowercase() })
-                .associateBy { it.word.lowercase() }
-            val relations = dao.relations(word.id)
-            val relationWords = dao.wordsByText(relations.map { it.targetWord.lowercase() })
-                .associateBy { it.word.lowercase() }
-            val detail = WordDetailData(
-                derivedTerms = derivedTerms,
-                derivedTermWords = derivedTermWords,
-                roots = dao.roots(word.id),
-                sentences = dao.sentences(word.id, limit = 10, offset = 0),
-                heatmap = dao.heatmap(word.id),
-                relations = relations,
-                relationWords = relationWords,
-                forms = dao.forms(word.id),
-                etymologies = dao.etymologies(word.id),
-                studyNotes = dao.studyNotes(word.id),
-            )
-            detail.sentences.forEach { s -> s.english.takeIf(String::isNotBlank)?.let { pronunciationPlayer.prefetch(it, Accent.US) } }
-            val latest = _state.value
-            if (latest is DictionaryScreenState.Ready && latest.selected?.id == word.id) {
-                _state.value = latest.copy(detail = detail)
+            try {
+                // Pre-fetch (PRD §3.4): warm the audio LRU cache for the word and its speakable
+                // fragments while the detail page loads, so the first tap plays instantly.
+                pronunciationPlayer.prefetch(word.word, Accent.US)
+                pronunciationPlayer.prefetch(word.word, Accent.UK)
+                val derivedTerms = dao.derivedTerms(word.id)
+                val derivedTermWords = dao.wordsByText(derivedTerms.map { it.lowercase() })
+                    .associateBy { it.word.lowercase() }
+                val relations = dao.relations(word.id)
+                val relationWords = dao.wordsByText(relations.map { it.targetWord.lowercase() })
+                    .associateBy { it.word.lowercase() }
+                val detail = WordDetailData(
+                    derivedTerms = derivedTerms,
+                    derivedTermWords = derivedTermWords,
+                    roots = dao.roots(word.id),
+                    sentences = dao.sentences(word.id, limit = 10, offset = 0),
+                    heatmap = dao.heatmap(word.id),
+                    relations = relations,
+                    relationWords = relationWords,
+                    forms = dao.forms(word.id),
+                    etymologies = dao.etymologies(word.id),
+                    studyNotes = dao.studyNotes(word.id),
+                )
+                detail.sentences.forEach { s -> s.english.takeIf(String::isNotBlank)?.let { pronunciationPlayer.prefetch(it, Accent.US) } }
+                val latest = _state.value
+                if (latest is DictionaryScreenState.Ready && latest.selected?.id == word.id) {
+                    _state.value = latest.copy(detail = detail)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A failed detail load must not leave the page stuck on "loading": surface an
+                // explicit error with a retry entry point instead of a perpetual spinner.
+                val latest = _state.value
+                if (latest is DictionaryScreenState.Ready && latest.selected?.id == word.id) {
+                    _state.value = latest.copy(detail = null, detailError = "词条详情加载失败，请重试")
+                }
             }
         }
     }

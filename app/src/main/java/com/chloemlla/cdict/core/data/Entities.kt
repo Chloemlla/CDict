@@ -38,6 +38,8 @@ data class WordEntity(
     val headwordSummary: String? = null,
     /** Comma-separated fields (phoneticUk/phoneticUs/mnemonic/derived/sentences/headwordSummary/relations/forms/etymology/studyNotes) enriched from the AI distribution merge. */
     val aiSupplemented: String? = null,
+    /** Comma-separated curriculum labels applied by dictionary workflows. */
+    val curriculumTags: String? = null,
     @ColumnInfo(defaultValue = "0") val frequencyGroup: Int = 0,
     @ColumnInfo(defaultValue = "0") val frequency: Int = 0,
 )
