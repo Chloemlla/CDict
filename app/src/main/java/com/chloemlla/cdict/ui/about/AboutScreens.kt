@@ -53,6 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.chloemlla.cdict.R
+import com.chloemlla.cdict.core.audio.PronunciationDiagnostics
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -212,6 +214,15 @@ fun AboutScreen(onBack: () -> Unit) {
                     title = "本次更新说明",
                     subtitle = "基于 Commit Hash / Build Time 的本构建有意变更",
                     onClick = { controller.push(AboutScreenRoute.WhatsNew) },
+                )
+                HorizontalDivider()
+                val pronunciationDiag by PronunciationDiagnostics.lastFallback.collectAsState()
+                AboutRow(
+                    title = "朗读诊断",
+                    subtitle = when (val d = pronunciationDiag) {
+                        null -> "暂无回退记录：先在词详情页点喇叭朗读一次"
+                        else -> "vivo: ${d.vivoReason ?: "—"} · 有道: ${d.youdaoReason}"
+                    },
                 )
             }
             Spacer(Modifier.height(24.dp))

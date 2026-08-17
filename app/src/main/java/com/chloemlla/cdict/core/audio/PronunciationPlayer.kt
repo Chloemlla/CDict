@@ -3,6 +3,7 @@ package com.chloemlla.cdict.core.audio
 import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -42,7 +43,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val cache = SpeechAudioCache(context)
 
     /** 同 <音色>:<文本> 的进行中下载共享；只由 Main 线程访问。 */
-    private val inFlight = mutableMapOf<String, Deferred<ByteArray?>>()
+    private val inFlight = mutableMapOf<String, Deferred<YoudaoFetch>>()
 
     override fun speak(text: String) = play(text, Accent.US)
 
@@ -78,53 +79,66 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         val cached = cache.find(word, accent, SOURCE_VIVO)
         if (cached != null) {
             playFile(generation, cached) {
-                scope.launch { playYoudaoFallback(generation, word, accent) }
+                scope.launch { playYoudaoFallback(generation, word, accent, "vivo 缓存音频播放失败") }
             }
             return
         }
         val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
         if (generation != playGeneration) return
+        val vivoReason: String? = when (result) {
+            is VivoTtsResult.Audio -> if (result.bytes.isEmpty()) "vivo 返回空音频" else null
+            is VivoTtsResult.Error -> result.message
+        }
         val audio = (result as? VivoTtsResult.Audio)?.bytes
         if (audio == null || audio.isEmpty()) {
-            if (generation == playGeneration) playYoudaoFallback(generation, word, accent)
+            if (generation == playGeneration) playYoudaoFallback(generation, word, accent, vivoReason)
             return
         }
         val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
         if (generation == playGeneration) {
             playFile(generation, file) {
-                scope.launch { playYoudaoFallback(generation, word, accent) }
+                scope.launch { playYoudaoFallback(generation, word, accent, "vivo 合成音频播放失败") }
             }
         }
     }
 
     /** 第二级：有道。命中缓存直接播；未命中下载并写缓存；失败落到系统 TTS。 */
-    private suspend fun playYoudaoFallback(generation: Int, word: String, accent: Accent) {
+    private suspend fun playYoudaoFallback(
+        generation: Int,
+        word: String,
+        accent: Accent,
+        vivoReason: String?,
+    ) {
         if (generation != playGeneration) return
         val cached = cache.find(word, accent, SOURCE_YOUDAO)
         if (cached != null) {
             playFile(generation, cached) {
-                scope.launch { speak(generation, word, accent) }
+                scope.launch { speak(generation, word, accent, vivoReason, "有道（缓存）播放失败") }
             }
             return
         }
-        val bytes = downloadYoudao(word, accent)
-        if (bytes == null || bytes.isEmpty()) {
-            if (generation == playGeneration) speak(generation, word, accent)
+        val fetched = downloadYoudaoDetailed(word, accent)
+        if (fetched.bytes == null || fetched.bytes.isEmpty()) {
+            if (generation == playGeneration) speak(generation, word, accent, vivoReason, fetched.reason ?: "有道无返回值")
             return
         }
-        val file = cache.put(word, accent, SOURCE_YOUDAO, bytes)
+        val file = cache.put(word, accent, SOURCE_YOUDAO, fetched.bytes)
         if (generation == playGeneration) {
             playFile(generation, file) {
-                scope.launch { speak(generation, word, accent) }
+                scope.launch { speak(generation, word, accent, vivoReason, "有道音频播放失败") }
             }
         }
     }
 
-    /** 单飞下载：并发请求同一 <音色>:<文本> 只发一次 HTTP，其余复用结果。 */
-    private suspend fun downloadYoudao(word: String, accent: Accent): ByteArray? {
+    /** 单飞下载，prefetch 用：只关心是否取到字节。 */
+    private suspend fun downloadYoudao(word: String, accent: Accent): ByteArray? =
+        downloadYoudaoDetailed(word, accent).bytes
+
+    /** 单飞下载：并发请求同一 <音色>:<文本> 只发一次 HTTP，其余复用结果；带失败原因。 */
+    private suspend fun downloadYoudaoDetailed(word: String, accent: Accent): YoudaoFetch {
         val key = "${accent.name}:$word"
         inFlight[key]?.let { return it.await() }
-        val deferred = scope.async(Dispatchers.IO) { fetchYoudao(word, accent) }
+        val deferred = scope.async(Dispatchers.IO) { fetchYoudaoDetailed(word, accent) }
         inFlight[key] = deferred
         try {
             return deferred.await()
@@ -134,28 +148,28 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     }
 
     /** 有道下载。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
-    private fun fetchYoudao(word: String, accent: Accent): ByteArray? = try {
+    private fun fetchYoudaoDetailed(word: String, accent: Accent): YoudaoFetch = try {
         val conn = URL("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
             .openConnection() as HttpURLConnection
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
         conn.setRequestProperty("User-Agent", USER_AGENT)
         try {
-            if (conn.responseCode != 200) return null
+            if (conn.responseCode != 200) return YoudaoFetch(null, "HTTP ${conn.responseCode}")
             val type = conn.contentType
             val audioType = type != null && type.startsWith("audio/", ignoreCase = true)
-            if (type != null && type.isNotBlank() && !audioType) return null
+            if (type != null && type.isNotBlank() && !audioType) return YoudaoFetch(null, "content-type=$type 非音频")
             val bytes = conn.inputStream.use { it.readBytes() }
-            if (bytes.isEmpty()) return null
-            if (!audioType && !looksLikeAudio(bytes)) return null
-            bytes
+            if (bytes.isEmpty()) return YoudaoFetch(null, "空响应体")
+            if (!audioType && !looksLikeAudio(bytes)) return YoudaoFetch(null, "响应非音频格式")
+            YoudaoFetch(bytes, null)
         } finally {
             conn.disconnect()
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        null
+        YoudaoFetch(null, "网络异常: ${e.message ?: e.javaClass.simpleName}")
     }
 
     private fun playFile(generation: Int, file: File, onFailure: () -> Unit) {
@@ -235,7 +249,20 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     }
 
     /** 系统 TextToSpeech 兜底。语言必须在引擎初始化成功后设置，否则初始化前 setLanguage 无效、UK/US 音色不生效。 */
-    private fun speak(generation: Int, word: String, accent: Accent) {
+    private fun speak(
+        generation: Int,
+        word: String,
+        accent: Accent,
+        vivoReason: String?,
+        youdaoReason: String,
+    ) {
+        if (generation != playGeneration) return
+        PronunciationDiagnostics.record(FallbackDiagnostics(word, accent, vivoReason, youdaoReason))
+        // 可通过 adb 拉取：adb logcat -s CDictAudio:I
+        Log.w(
+            TAG,
+            "朗读回退系统TTS text=$word accent=$accent vivo=${vivoReason ?: "-"} youdao=$youdaoReason",
+        )
         val locale = if (accent == Accent.UK) Locale.UK else Locale.US
         tts?.shutdown()
         var newTts: TextToSpeech? = null
@@ -260,6 +287,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private fun String.encodeUrl() = java.net.URLEncoder.encode(this, Charsets.UTF_8.name())
 
     companion object {
+        private const val TAG = "CDictAudio"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
         private const val SOURCE_VIVO = "vivo"
@@ -271,3 +299,6 @@ enum class Accent(val path: String, val youdaoType: Int, val ttsLangType: String
     UK("uk", 1, "en-GBR"),
     US("us", 2, "en-USA"),
 }
+
+/** 有道静态音频拉取结果；[bytes] 为空表示失败，[reason] 说明失败原因以便诊断。 */
+private data class YoudaoFetch(val bytes: ByteArray?, val reason: String?)

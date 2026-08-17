@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class WhatsNewSlide(
@@ -74,6 +75,17 @@ object WhatsNewData {
                 "无需签名密钥，可侧载安装，便于对照验证。",
             ),
             tip = "入口：GitHub Actions 工件 cdict-debug / com.chloemlla.cdict.debug。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.Info,
+            title = "朗读回退原因可查",
+            subtitle = "当朗读落到系统 TTS 时，可查明 vivo / 有道两级为何失败：应用内显示，也能经 adb 拉日志。",
+            bullets = listOf(
+                "「关于 → 朗读诊断」直接显示最近一次回退原因，如 vivo 拒绝 errorCode、HTTP 状态、网络异常、空响应等。",
+                "adb 日志：adb logcat -s CDictAudio:I 可见同一原因。",
+                "只记录最终落到系统 TTS 的那一次；日志带文本与音色。",
+            ),
+            tip = "入口：关于 → 朗读诊断，或 adb logcat -s CDictAudio:I。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.RocketLaunch,
