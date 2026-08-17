@@ -7,6 +7,7 @@ import java.util.Base64
 import java.util.UUID
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -49,6 +50,8 @@ class VivoTranslationClient(
         }
         val response = try {
             transport(serverUrl + PATH, headers, body)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return TranslationOutcome.Failure("网络请求失败: ${e.message ?: e.javaClass.simpleName}")
         }
@@ -61,6 +64,8 @@ class VivoTranslationClient(
         val url = serverUrl + LANG_LIST_PATH + "?" + query
         val response = try {
             getTransport(url)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return LanguageListOutcome.Failure("网络请求失败: ${e.message ?: e.javaClass.simpleName}")
         }
