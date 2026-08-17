@@ -66,6 +66,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Distinct applicationId so a debug build can be sideloaded alongside
+            // the installed official app without conflicting package names.
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

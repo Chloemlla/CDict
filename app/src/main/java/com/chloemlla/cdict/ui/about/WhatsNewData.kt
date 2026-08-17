@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Construction
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class WhatsNewSlide(
@@ -62,6 +63,17 @@ object WhatsNewData {
                 "MetadataEntity 与词典库 schema 对齐，DAO 元数据查询可编译。",
             ),
             tip = "对日常使用无感；属于工程加固。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.BugReport,
+            title = "提供 .debug 包名调试构建",
+            subtitle = "工作流新增 debug 任务，并行产出并上传调试版 APK：包名带 .debug 后缀，可与正式应用同时安装。",
+            bullets = listOf(
+                "调试版 applicationId 为 com.chloemlla.cdict.debug。",
+                "CI 的 debug 任务与 verify 并行构建，产物作为 cdict-debug 工件上传。",
+                "无需签名密钥，可侧载安装，便于对照验证。",
+            ),
+            tip = "入口：GitHub Actions 工件 cdict-debug / com.chloemlla.cdict.debug。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.RocketLaunch,

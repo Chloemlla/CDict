@@ -71,6 +71,52 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  debug:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x ./gradlew
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve lumen-crash SDK version
+        run: python scripts/fetch-lumen-crash-sdk.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Stage annotated dictionary asset
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
+          (cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
+          cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
+          cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
+          test -s app/src/main/assets/dict.db
+          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdict-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
   release:
     name: Build signed release
     permissions:
