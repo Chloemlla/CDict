@@ -2,9 +2,13 @@ package com.chloemlla.cdict.core.data
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.database.sqlite.SQLiteDatabase
 import android.os.StatFs
+import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.brotli.dec.BrotliInputStream
 import java.io.BufferedOutputStream
@@ -37,12 +41,15 @@ import java.io.InputStream
  */
 object DatabaseExtractor {
 
+    private const val TAG = "DatabaseExtractor"
     private const val COMPRESSED_ASSET = "dict.db.br"
     private const val BUFFER_SIZE = 256 * 1024 // 256 KB
     private const val MIN_STORAGE_THRESHOLD = 100L * 1024 * 1024 // 100 MB
 
     private const val PREFS_NAME = "db_extract"
     private const val KEY_EXTRACTED_VERSION = "extracted_version_code"
+
+    private val extractionMutex = Mutex()
 
     /**
      * Returns the database file that Room will open. It may or may not exist
@@ -89,6 +96,21 @@ object DatabaseExtractor {
         }
     }
 
+    private fun hasValidDictionaryDatabase(dbFile: File): Boolean =
+        try {
+            SQLiteDatabase.openDatabase(
+                dbFile.path,
+                null,
+                SQLiteDatabase.OPEN_READONLY,
+            ).use { database ->
+                database.rawQuery("SELECT 1 FROM words LIMIT 1", null).use { cursor ->
+                    cursor.moveToFirst()
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
+
     /**
      * Creates a Brotli decoder for [input].
      *
@@ -111,61 +133,75 @@ object DatabaseExtractor {
      *         already present), false on failure.
      */
     suspend fun ensureDatabaseExists(context: Context): Boolean =
-        withContext(Dispatchers.IO) {
-            val dbFile = databaseFile(context)
+        extractionMutex.withLock {
+            withContext(Dispatchers.IO) {
+                val dbFile = databaseFile(context)
 
-            // Version-aware auto-rebuild: when the app versionCode changed
-            // (app update), delete the old database so the next extraction
-            // picks up the new bundled asset.
-            val currentVersion = appVersionCode(context)
-            val extractedVersion = storedExtractedVersion(context)
-            if (dbFile.exists() && extractedVersion != -1L && extractedVersion != currentVersion) {
-                dbFile.delete()
-            }
+                // Version-aware auto-rebuild: when the app versionCode changed
+                // (app update), delete the old database so the next extraction
+                // picks up the new bundled asset.
+                val currentVersion = appVersionCode(context)
+                val extractedVersion = storedExtractedVersion(context)
+                if (dbFile.exists() && extractedVersion != -1L && extractedVersion != currentVersion) {
+                    context.deleteDatabase("dict.db")
+                }
 
-            // Fast path: database already present and up-to-date.
-            if (dbFile.exists()) {
-                if (extractedVersion != currentVersion) markExtracted(context)
-                return@withContext true
-            }
+                // A previous interrupted or concurrent extraction may have left
+                // a database-shaped file without the dictionary table.
+                if (dbFile.exists() && !hasValidDictionaryDatabase(dbFile)) {
+                    context.deleteDatabase("dict.db")
+                }
 
-            // Storage guard: ensure enough free space for the 94 MB database.
-            if (!hasSufficientStorage(context)) {
-                return@withContext false
-            }
+                // Fast path: database already present and up-to-date.
+                if (dbFile.exists()) {
+                    if (extractedVersion != currentVersion) markExtracted(context)
+                    return@withContext true
+                }
 
-            // Ensure parent directory exists.
-            dbFile.parentFile?.mkdirs()
+                // Storage guard: ensure enough free space for the 94 MB database.
+                if (!hasSufficientStorage(context)) {
+                    return@withContext false
+                }
 
-            // Write to a temporary file so an interrupted extraction never
-            // leaves a half-written dict.db that Room would open as corrupt.
-            val tmpFile = File(dbFile.parentFile, "dict.db.tmp")
-            try {
-                context.assets.open(COMPRESSED_ASSET, AssetManager.ACCESS_BUFFER).use { assetInput ->
-                    brotliDecoder(assetInput).use { brotli ->
-                        tmpFile.outputStream().use { rawOut ->
-                            BufferedOutputStream(rawOut, BUFFER_SIZE).use { output ->
-                                brotli.copyTo(output, bufferSize = BUFFER_SIZE)
+                // Ensure parent directory exists.
+                dbFile.parentFile?.mkdirs()
+
+                // Write to a temporary file so an interrupted extraction never
+                // leaves a half-written dict.db that Room would open as corrupt.
+                val tmpFile = File(dbFile.parentFile, "dict.db.tmp")
+                try {
+                    tmpFile.delete()
+                    context.assets.open(COMPRESSED_ASSET, AssetManager.ACCESS_BUFFER).use { assetInput ->
+                        brotliDecoder(assetInput).use { brotli ->
+                            tmpFile.outputStream().use { rawOut ->
+                                BufferedOutputStream(rawOut, BUFFER_SIZE).use { output ->
+                                    brotli.copyTo(output, bufferSize = BUFFER_SIZE)
+                                }
                             }
                         }
                     }
-                }
-                // Atomic rename — on the same filesystem, this is instant.
-                if (!tmpFile.renameTo(dbFile)) {
-                    // Fallback: copy and delete (e.g. across mount points).
-                    dbFile.outputStream().use { out ->
-                        tmpFile.inputStream().use { tmpInput ->
-                            tmpInput.copyTo(out)
+                    // Atomic rename — on the same filesystem, this is instant.
+                    if (!tmpFile.renameTo(dbFile)) {
+                        // Fallback: copy and delete (e.g. across mount points).
+                        dbFile.outputStream().use { out ->
+                            tmpFile.inputStream().use { tmpInput ->
+                                tmpInput.copyTo(out)
+                            }
                         }
                     }
+                    if (!hasValidDictionaryDatabase(dbFile)) {
+                        context.deleteDatabase("dict.db")
+                        return@withContext false
+                    }
+                    markExtracted(context)
+                    true
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to extract $COMPRESSED_ASSET", e)
+                    context.deleteDatabase("dict.db")
+                    false
+                } finally {
                     tmpFile.delete()
                 }
-                markExtracted(context)
-                true
-            } catch (e: Exception) {
-                // Clean up partial output on failure.
-                tmpFile.delete()
-                false
             }
         }
 }
