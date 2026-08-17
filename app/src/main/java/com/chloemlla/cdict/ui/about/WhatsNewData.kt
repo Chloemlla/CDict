@@ -18,6 +18,17 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.BugReport,
+            title = "修复首次启动词典解压",
+            subtitle = "首次启动时先准备数据库目录，再检查可用空间，避免测试环境误判空间不足而跳过词典解压。",
+            bullets = listOf(
+                "修复：数据库目录尚不存在时，空间检查不再错误返回无可用空间。",
+                "稳定：首次启动的并发解压仍由互斥锁串行执行，并继续校验数据库有效性。",
+                "验证：预打包词典 schema 回归测试会确认解压成功且词条数量大于零。",
+            ),
+            tip = "本次修复不改变已有安装的数据库内容。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "构建直接使用预压缩词典",
             subtitle = "词典合并工作流预先生成 Brotli 资产，Android 构建不再每次重复压缩 90 MB 以上的数据库。",
@@ -63,64 +74,6 @@ object WhatsNewData {
                 "后续启动：解压后的文件会缓存到本地，不会重复解压。",
             ),
             tip = "首次启动会看到「正在加载离线词典…」提示，等待片刻即可进入主界面。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "本次构建更新说明",
-            subtitle = "本构建包含以下有意变更，基于 Commit Hash / Build Time 标识。",
-            bullets = listOf(
-                "版本：${BuildInfo.versionLabel}",
-                "Build Time：${BuildInfo.formatBuildTime()}",
-                "Commit Hash：${BuildInfo.commitHash.take(12)}",
-                "与「应用声明」等静态页面不同：这里讲的是这次新构建相对上一构建的变化。",
-            ),
-            tip = "可左右滑动浏览；同一构建确认后不会再次自动弹出。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.Bookmark,
-            title = "词详情页标记「高中 3500 词」",
-            subtitle = "词典发布流水线会把高中 3500 词表中与词库同时存在的词条打上课程标签，词详情页在词条卡片中直接展示。",
-            bullets = listOf(
-                "数据：merge 工作流的最后一步下载 3500.txt，按词头解析并归一化匹配，幂等写入 curriculumTags 列，可重复运行不重复打标。",
-                "展示：词详情页「词条」卡片在翻译下方显示「高中 3500 词」标签，多个标签自动换行、长标签不裁剪。",
-                "签名：标签写入后重新计算 assetSignature，发布库与校验、checksum 保持一致。",
-            ),
-            tip = "入口：任意词详情页 → 词条卡片。若该词在 3500 词表中即可看到标签。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.FilterAlt,
-            title = "主页词典筛选改版：下拉菜单",
-            subtitle = "词典列表的筛选不再是一排并排的按钮，改为两个独立下拉菜单：排序与课程标签。",
-            bullets = listOf(
-                "排序：按频率、按字母、字母倒序，在下拉菜单中切换。",
-                "课程标签：选择「高中 3500 词」后列表只显示带该标签的词条；标签选项由发布词库自动列出，未来新增课程列表无需改版即可出现。",
-                "筛选只在浏览列表时生效；输入搜索词后自动收起，清空搜索后恢复上次筛选。",
-            ),
-            tip = "入口：词典标签页 → 顶部搜索框下方两个下拉菜单。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.BugReport,
-            title = "词典搜索与翻译的稳定性修复",
-            subtitle = "本次构建修复了搜索崩溃与翻译结果错配，并补齐了词详情与宽屏推荐页的可用性。",
-            bullets = listOf(
-                "搜索：输入 ( ) \" : ^ 等字符不再导致搜索崩溃或结果错乱，异常时自动回退为子串匹配。",
-                "翻译：修改原文或方向会立即清空旧结果，且旧请求不再覆盖新请求的翻译。",
-                "词详情：加载失败不再停留在无限加载，而是显示错误并可一键重试。",
-                "推荐页（平板 / 大屏）：宽屏布局补回每日目标、进度与 5:3:2 图例，当前卡片可滚动。",
-                "词详情：课程标签支持自动换行，长标签不再被裁剪。",
-            ),
-            tip = "主要涉及词典、翻译、推荐三个标签页，可直接对照验证。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "「AI 补充」英文内容支持朗读与翻译",
-            subtitle = "词详情页的「AI 补充」分区中，英文内容（词间关系、词形变化、词源）均可点按朗读并自动附中文翻译。",
-            bullets = listOf(
-                "词间关系：近义词 / 反义词 / 相关词逐条朗读与翻译；目标词在词库中时仍可点「前往」跳转。",
-                "词形变化：每个变形词均可朗读与翻译，变形标签（如 participle、present）保留在行尾。",
-                "词源：每条词源段落均可朗读并附中文翻译。",
-            ),
-            tip = "入口：词详情页 → 对应分区 → 点喇叭朗读，译文自动显示在下方。",
         ),
     )
 }

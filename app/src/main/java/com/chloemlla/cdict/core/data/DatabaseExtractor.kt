@@ -158,13 +158,13 @@ object DatabaseExtractor {
                     return@withContext true
                 }
 
+                // Ensure parent directory exists before checking its filesystem space.
+                dbFile.parentFile?.mkdirs()
+
                 // Storage guard: ensure enough free space for the 94 MB database.
                 if (!hasSufficientStorage(context)) {
                     return@withContext false
                 }
-
-                // Ensure parent directory exists.
-                dbFile.parentFile?.mkdirs()
 
                 // Write to a temporary file so an interrupted extraction never
                 // leaves a half-written dict.db that Room would open as corrupt.
