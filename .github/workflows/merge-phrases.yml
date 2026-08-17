@@ -88,7 +88,6 @@ jobs:
       - name: Rename and checksum release assets
         run: |
           set -euo pipefail
-          cp "$RUNNER_TEMP/CDict-dict.db" "$RUNNER_TEMP/CDict-dict.db"
           (cd "$RUNNER_TEMP" && sha256sum CDict-dict.db dict.signature > checksums.txt && cat checksums.txt)
 
       - name: Publish dictionary release

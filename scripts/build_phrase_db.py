@@ -234,14 +234,10 @@ def merge_phrase_db(
         # Detect target columns and add missing ones
         target_cols = [row[1] for row in target.execute("PRAGMA table_info(words)")]
         target_col_set = set(target_cols)
-        extra_cols = []
         for col in ("aiSupplemented", "headwordSummary", "curriculumTags"):
             if col not in target_col_set:
                 target.execute(f"ALTER TABLE words ADD COLUMN {col} TEXT")
                 target_cols.append(col)
-                extra_cols.append(col)
-            elif col == "curriculumTags":
-                extra_cols.append(col)  # already present, still track for value
 
         # Build INSERT dynamically
         target_placeholders = ",".join("?" for _ in target_cols)
@@ -360,8 +356,8 @@ def main() -> int:
         help="curriculum tag to apply to all phrase entries",
     )
     parser.add_argument(
-        "--expected-word-count", type=int, default=None,
-        help="fail if the phrase count does not match",
+        "--expected-entries", type=int, default=None,
+        help="fail if the number of parsed entries does not match",
     )
     args = parser.parse_args()
 
@@ -375,9 +371,9 @@ def main() -> int:
     total_entries = sum(len(s["entries"]) for s in sections)
     print(f"Parsed {len(sections)} sections, {total_entries} entries", file=sys.stderr)
 
-    if args.expected_word_count is not None and total_entries != args.expected_word_count:
+    if args.expected_entries is not None and total_entries != args.expected_entries:
         parser.error(
-            f"entry count {total_entries} does not match expected {args.expected_word_count}"
+            f"entry count {total_entries} does not match expected {args.expected_entries}"
         )
 
     if args.merge_into:
