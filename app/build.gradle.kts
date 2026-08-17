@@ -70,6 +70,12 @@ android {
             // Distinct applicationId so a debug build can be sideloaded alongside
             // the installed official app without conflicting package names.
             applicationIdSuffix = ".debug"
+            // Sign the debug build with the release keystore in CI so the emitted
+            // debug APK carries a trusted, reproducible signature (not the random
+            // default debug key). Locally (no secrets) it falls back to the debug key.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         release {
             isMinifyEnabled = true

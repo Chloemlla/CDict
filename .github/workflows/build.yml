@@ -74,6 +74,11 @@ jobs:
   debug:
     name: Build debug APK
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -107,7 +112,28 @@ jobs:
           java-version: "21"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+      - name: Validate signing secrets and keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then echo "::error::Missing required repository secret: $name"; exit 1; fi
+          done
+          keytool_path="$RUNNER_TEMP/cdict-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$keytool_path"
+          test -s "$keytool_path" || { echo "::error::Decoded keystore is empty"; exit 1; }
+          chmod 600 "$keytool_path"
+          keytool -list -keystore "$keytool_path" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keytool-error" || { echo "::error::Keystore alias/password validation failed"; rm -f "$RUNNER_TEMP/keytool-error"; exit 1; }
+          rm -f "$RUNNER_TEMP/keytool-error"
+      - name: Set build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CDICT_COMMIT_HASH=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "CDICT_BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
       - name: Build debug APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
       - name: Upload debug APKs
         uses: actions/upload-artifact@v4

@@ -73,7 +73,7 @@ object WhatsNewData {
             bullets = listOf(
                 "调试版 applicationId 为 com.chloemlla.cdict.debug。",
                 "CI 的 debug 任务与 verify 并行构建，产物作为 cdict-debug 工件上传。",
-                "无需签名密钥，可侧载安装，便于对照验证。",
+                "调试版用正式签名密钥签名，可侧载安装/覆盖，便于对照验证。",
             ),
             tip = "入口：GitHub Actions 工件 cdict-debug / com.chloemlla.cdict.debug。",
         ),
