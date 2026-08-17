@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.ui.about
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Construction
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.NewReleases
@@ -31,6 +32,17 @@ object WhatsNewData {
                 "与「应用声明」等静态页面不同：这里讲的是这次新构建相对上一构建的变化。",
             ),
             tip = "可左右滑动浏览；同一构建确认后不会再次自动弹出。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.Bookmark,
+            title = "词详情页标记「高中 3500 词」",
+            subtitle = "词典发布流水线会把高中 3500 词表中与词库同时存在的词条打上课程标签，词详情页在词条卡片中直接展示。",
+            bullets = listOf(
+                "数据：merge 工作流的最后一步下载 3500.txt，按词头解析并归一化匹配，幂等写入 curriculumTags 列，可重复运行不重复打标。",
+                "展示：词详情页「词条」卡片在翻译下方显示「高中 3500 词」标签，多个标签自动换行、长标签不裁剪。",
+                "签名：标签写入后重新计算 assetSignature，发布库与校验、checksum 保持一致。",
+            ),
+            tip = "入口：任意词详情页 → 词条卡片。若该词在 3500 词表中即可看到标签。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.BugReport,
