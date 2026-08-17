@@ -30,6 +30,7 @@ class DictionaryDatabaseSchemaTest {
 
         val db = DictionaryDatabase.open(context)
         db.openHelper.writableDatabase
-        assertTrue(db.dictionaryDao().count() > 0)
+        val wordCount = runBlocking { db.dictionaryDao().count() }
+        assertTrue(wordCount > 0)
     }
 }
