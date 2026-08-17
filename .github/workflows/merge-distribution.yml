@@ -94,11 +94,18 @@ jobs:
           open(sys.argv[2], "w").write(sig[0] + "\n")
           PY
 
+      - name: Compress dictionary asset with Brotli
+        run: |
+          set -euo pipefail
+          pip install brotli
+          python -c "import brotli; open('$RUNNER_TEMP/dict.db.br','wb').write(brotli.compress(open('$RUNNER_TEMP/CDict-dict-merged.db','rb').read(), quality=11))"
+          test -s "$RUNNER_TEMP/dict.db.br"
+
       - name: Rename and checksum release assets
         run: |
           set -euo pipefail
           cp "$RUNNER_TEMP/CDict-dict-merged.db" "$RUNNER_TEMP/CDict-dict.db"
-          (cd "$RUNNER_TEMP" && sha256sum CDict-dict.db dict.signature > checksums.txt && cat checksums.txt)
+          (cd "$RUNNER_TEMP" && sha256sum CDict-dict.db dict.db.br dict.signature > checksums.txt && cat checksums.txt)
 
       - name: Publish dictionary release
         env:
@@ -111,6 +118,7 @@ jobs:
               --notes "Merged dictionary database (distribution enrichment). Published automatically by merge-distribution workflow."
           gh release upload dictionary-asset \
             "$RUNNER_TEMP/CDict-dict.db" \
+            "$RUNNER_TEMP/dict.db.br" \
             "$RUNNER_TEMP/dict.signature" \
             "$RUNNER_TEMP/checksums.txt" \
             --clobber \

@@ -40,25 +40,19 @@ jobs:
         run: python scripts/fetch-lumen-crash-sdk.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Stage annotated dictionary asset
+      - name: Stage compressed dictionary asset
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
           base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$base_url/dict.db.br"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
           curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
-          (cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
-          cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
+          (cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+          cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-          test -s app/src/main/assets/dict.db
-          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db
-      - name: Compress dictionary asset with Brotli
-        run: |
-          set -euo pipefail
-          pip install brotli
-          python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
-          rm app/src/main/assets/dict.db
+          test -s app/src/main/assets/dict.db.br
+          test -s app/src/main/assets/dict.signature
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -102,25 +96,19 @@ jobs:
         run: python scripts/fetch-lumen-crash-sdk.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Stage annotated dictionary asset
+      - name: Stage compressed dictionary asset
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
           base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$base_url/dict.db.br"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
           curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
-          (cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
-          cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
+          (cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+          cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-          test -s app/src/main/assets/dict.db
-          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db
-      - name: Compress dictionary asset with Brotli
-        run: |
-          set -euo pipefail
-          pip install brotli
-          python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
-          rm app/src/main/assets/dict.db
+          test -s app/src/main/assets/dict.db.br
+          test -s app/src/main/assets/dict.signature
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -200,25 +188,19 @@ jobs:
         run: python scripts/fetch-lumen-crash-sdk.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Stage annotated dictionary asset
+      - name: Stage compressed dictionary asset
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
           base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$base_url/dict.db.br"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
           curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
-          (cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
-          cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
+          (cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+          cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-          test -s app/src/main/assets/dict.db
-          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db
-      - name: Compress dictionary asset with Brotli
-        run: |
-          set -euo pipefail
-          pip install brotli
-          python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
-          rm app/src/main/assets/dict.db
+          test -s app/src/main/assets/dict.db.br
+          test -s app/src/main/assets/dict.signature
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

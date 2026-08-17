@@ -19,6 +19,17 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "构建直接使用预压缩词典",
+            subtitle = "词典合并工作流预先生成 Brotli 资产，Android 构建不再每次重复压缩 90 MB 以上的数据库。",
+            bullets = listOf(
+                "合并：merge-phrases 和 merge-distribution 在发布词典时生成 dict.db.br，并同步更新 SHA-256 校验文件。",
+                "构建：verify、debug、release 三个任务直接下载并校验 dict.db.br，省去重复压缩步骤。",
+                "兼容：未压缩的 CDict-dict.db 仍保留在 Release 中，供后续增量合并使用。",
+            ),
+            tip = "本次优化不改变 App 首次启动时的解压逻辑。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "修复词典解压的 Brotli 编译错误",
             subtitle = "数据库解压改用纯 Java 库实现，避免编译环境缺失原生 Brotli 类导致的构建失败。",
             bullets = listOf(

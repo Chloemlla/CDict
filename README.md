@@ -208,7 +208,7 @@ com.chloemlla.cdict
 - **Android Studio:** open the repo root — the IDE uses the Gradle wrapper automatically.
 - **Command line:** `./gradlew :app:assembleDebug` (requires generating the dictionary asset first, below).
 
-> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. CI downloads the merged dictionary from a **GitHub Release** asset during the build stage and compresses it with Brotli. For a local `./gradlew :app:assembleDebug`, compress the committed asset manually: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`
+> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. The data-merge workflows create the Brotli-compressed asset before publishing it to the **GitHub Release**; CI downloads `dict.db.br` directly during builds instead of recompressing it. For a local `./gradlew :app:assembleDebug`, compress the committed asset manually: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`
 
 ---
 
@@ -217,32 +217,27 @@ com.chloemlla.cdict
 The dictionary is built from three sources:
 
 1. **Annotated base** — `scripts/CDict-dict.db` (49,213 words, 7 groups), committed in the repo, with AI annotation fields (`emotionColor`, `register`, `nuanceDescription`, `usageWarning`, `collocations`) produced by `scripts/annotate_dictionary.js` (node:sqlite, no Python). The annotator batches 10 words per OpenAI-compatible request (~10× fewer round-trips), checkpoint-resumes so interrupted runs keep progress, and retries / degrades failed words to protect annotation quality.
-2. **Rich-content merge** — `.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated base: `scripts/merge_distribution.py` matches ~17,925 headwords and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences. The result is validated and **published as a GitHub Release asset** (`dictionary-asset` tag) plus a `dict.signature` content checksum.
+2. **Rich-content merge** — `.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated base: `scripts/merge_distribution.py` matches ~17,925 headwords and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences. The result is validated and **published as a GitHub Release asset** (`dictionary-asset` tag) with the merged database, a pre-compressed `dict.db.br`, a `dict.signature` content checksum, and a SHA-256 checksums file.
 3. **FLDC reference source** — `scripts/fetch_fldc_export.py` decodes the custom binary payload served by fldc.pages.dev (two gzip chunk containers + a shared-prefix string pool) into the converter's JSON shape. `.github/workflows/export-fldc.yml` (manual `workflow_dispatch`) runs `convert_dictionary.py` end-to-end in CI and uploads the resulting ~107,143-word / 7-group reference asset as a workflow artifact.
 
-CI stages the merged dictionary at build time by downloading from the hardcoded release URL, verifying the SHA-256 checksum, and compressing with Brotli before packaging:
+CI stages the pre-compressed dictionary at build time by downloading `dict.db.br` and `dict.signature` from the hardcoded release URL and verifying their SHA-256 checksums:
 
 ```bash
-curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db" "$BASE/CDict-dict.db"
+curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$BASE/dict.db.br"
 curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$BASE/dict.signature"
 curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$BASE/checksums.txt"
-(cd "$RUNNER_TEMP" && sha256sum -c checksums.txt)
-cp "$RUNNER_TEMP/dict.db" app/src/main/assets/dict.db
+(cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
 cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
-  --expected-word-count 49213 --expected-groups 7
-pip install brotli
-python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
-rm app/src/main/assets/dict.db
 ```
 
-`app/src/main/assets/dict.db.br` and `dict.signature` are git-ignored build copies. The app decompresses `dict.db.br` on first launch using the `org.brotli:dec` library, then opens the database with Room. The `dict.signature` file lets the app detect when the dictionary content has changed between builds, prompting the user to rebuild the local database.
+`app/src/main/assets/dict.db.br` and `dict.signature` are git-ignored build copies. The data-merge workflows create `dict.db.br` when publishing the dictionary, and the build workflow downloads it directly instead of recompressing the database. The app decompresses `dict.db.br` on first launch using the `org.brotli:dec` library, then opens the database with Room. The `dict.signature` file lets the app detect when the dictionary content has changed between builds, prompting the user to rebuild the local database.
 
 `scripts/convert_dictionary.py` remains available for rebuilding an unannotated base from an authorized export if the source data ever needs regenerating.
 
 ### Rich-content merge (distribution)
 
-`.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated asset: `scripts/merge_distribution.py` matches the headwords common to both word lists (~17,925) and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences carrying Chinese translations into `sentences` (existing sentences only get their chinese filled, never duplicated). The result is validated by `validate_dictionary_asset.py` and **published as a GitHub Release** (tag `dictionary-asset`) with the merged database, a `dict.signature` content checksum, and a SHA-256 checksums file. The build pipeline then downloads the merged database from the release at build time instead of committing it to the repository (the merged database exceeds GitHub's 100 MB per-file limit).
+`.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated asset: `scripts/merge_distribution.py` matches the headwords common to both word lists (~17,925) and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences carrying Chinese translations into `sentences` (existing sentences only get their chinese filled, never duplicated). The result is validated by `validate_dictionary_asset.py` and **published to a GitHub Release** (tag `dictionary-asset`) with the merged database, a pre-compressed `dict.db.br`, a `dict.signature` content checksum, and a SHA-256 checksums file. The build pipeline downloads the pre-compressed asset directly instead of recompressing the database on every build.
 
 ---
 
