@@ -20,7 +20,7 @@ class CDictApplication : Application() {
             appDisplayName = "CDict"
             versionName = BuildConfig.VERSION_NAME
             versionCode = BuildConfig.VERSION_CODE
-            crashReportBackendEnabled = false
+            crashReportBackendEnabled = true
             onCrashSaved = { /* host-side report upload hook */ }
         }
     }
