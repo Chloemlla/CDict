@@ -12,6 +12,10 @@ on:
         required: false
         default: false
         type: boolean
+  workflow_run:
+    workflows: ["Merge phrase dictionary"]
+    types:
+      - completed
 
 permissions:
   contents: read
