@@ -1,7 +1,6 @@
 package com.chloemlla.cdict.core.audio
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -61,9 +60,10 @@ class VivoTtsClientTest {
     }
 
     @Test
-    fun `default device id has no leading zeros`() {
-        // vivo 把 deviceid 当数值字段解析，带前导零会被拒(HTTP 400 Leading zeroes not allowed)。
+    fun `default device id is a canonical decimal without leading zeros`() {
+        // vivo 把 deviceid 当数值解析，冗余前导零会被拒(HTTP 400 "Leading zeroes not allowed")。
+        // "0" 合法，但 "0000"、"0123" 这类非法。规范十进制往返需等于自身。
         val id = VivoTtsClient.DEFAULT_DEVICE_ID
-        assertFalse(id.startsWith("0"))
+        assertEquals(id, id.toLongOrNull()?.toString())
     }
 }
