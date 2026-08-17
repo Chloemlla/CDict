@@ -52,6 +52,7 @@ android {
         buildConfigField("long", "BUILD_TIME", "${cdictBuildTimeSeconds}L")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        resourceConfigurations += listOf("zh", "en")
     }
 
     signingConfigs {

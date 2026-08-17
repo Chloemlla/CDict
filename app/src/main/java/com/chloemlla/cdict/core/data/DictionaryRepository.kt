@@ -16,7 +16,9 @@ class DictionaryRepository(private val context: Context) {
         runCatching {
             val extracted = DatabaseExtractor.ensureDatabaseExists(context)
             if (!extracted) {
-                return@withContext DatabaseState.Failed("离线词典解压失败，请确认安装包包含 dict.db.br。")
+                return@withContext DatabaseState.Failed(
+                    "离线词典解压失败，请检查手机存储空间是否充足（需至少 100 MB 可用空间）。",
+                )
             }
             DatabaseState.Ready(DictionaryDatabase.open(context))
         }.getOrElse { DatabaseState.Failed("离线词典加载失败，请确认安装包包含 dict.db。") }
