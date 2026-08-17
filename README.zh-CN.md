@@ -44,7 +44,7 @@
 |---|---|
 | 🗂 **离线优先** | 内置 49,213 词条,分属 7 个 IELTS 频率组;首次启动复制到 Room 数据库,完全离线。 |
 | 🔍 **智能搜索** | 英文全文搜索(SQLite FTS5,覆盖单词 / 翻译 / 释义)、中文子串搜索,以及 **Levenshtein 拼写纠错**(“你是不是想找……”)。 |
-| 🔊 **发音** | 三级回退(vivo 合成 → 有道 → 系统 TTS),配合磁盘音频缓存,无需打包任何音频文件。 |
+| 🔊 **发音** | 三级回退(默认有道 → vivo 合成 → 系统 TTS,可在「关于」中切换在线来源优先级),配合磁盘音频缓存,无需打包任何音频文件。 |
 | 🌐 **在线翻译** | 内置 vivo 网关注入的翻译引擎,带**三层缓存**。 |
 | 🧠 **背词模式** | 按 IELTS 频率加权的自适应间隔重复,含干扰项引擎与次日四选一复习。 |
 | 🤖 **AI 语感标注** | AI 逐词生成的语感标注——感情色彩、语体、精细语意、避坑提示,以及可朗读、自动译文的常见搭配。 |
@@ -99,15 +99,15 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 
 ### 🔊 发音
 
-词详情页提供 **英音 / 美音** 发音按钮。发音由内置的 **vivo 语音合成**客户端默认生成,按三级顺序回退,无需打包任何音频文件:
+词详情页提供 **英音 / 美音** 发音按钮。默认使用 **有道静态发音**，按三级顺序回退,无需打包任何音频文件；可在「关于 → 朗读优先来源」中切换有道与 vivo 的优先级:
 
 ```
-vivo 语音合成 (POST https://vivotrans.vivo.com.cn/fy/tts)
-  → Youdao 静态发音 (dict.youdao.com/dictvoice;整句/词)
+有道静态发音 (dict.youdao.com/dictvoice;整句/词)
+  → vivo 语音合成 (POST https://vivotrans.vivo.com.cn/fy/tts)
   → Android 系统 TextToSpeech
 ```
 
-任一级失败(超时 / 非 2xx / 音频损坏 / 网络不可用)自动降级到下一级;发音不可用时词典浏览与离线搜索完全不受影响。**vivo 语音合成为第一朗读源**,词与整句都直接交给 vivo 整句朗读(绝不逐词拆读,以免按词打断句子);vivo 不可用时回退到有道 `dictvoice` 静态音频,再落到系统 TTS。播放按"单飞"合并同词并发下载,同词快速连点只保留最新一次发音。
+任一级失败(超时 / 非 2xx / 音频损坏 / 网络不可用)自动降级到下一级;发音不可用时词典浏览与离线搜索完全不受影响。切换为 vivo 优先后,两级在线来源的顺序反转;词与整句都直接交给所选的在线来源整句朗读(绝不逐词拆读,以免按词打断句子)。播放按"单飞"合并同词并发下载,同词快速连点只保留最新一次发音。
 
 `VivoTtsClient`(逆向 `com.vivo.translator` 的语音合成链路):
 
@@ -191,7 +191,7 @@ vivo 语音合成 (POST https://vivotrans.vivo.com.cn/fy/tts)
 com.chloemlla.cdict
 ├── core
 │   ├── data        # Room: Entities / DAO / Database / Repository
-│   ├── audio        # PronunciationPlayer + VivoTtsClient (vivo → 有道 → 系统 TTS 回退)
+│   ├── audio        # PronunciationPlayer + VivoTtsClient (可配置：有道 / vivo → 另一在线来源 → 系统 TTS 回退)
 │   ├── search       # SearchEngine: 相关性排序 + Levenshtein 拼写纠错
 │   └── translate    # vivo 翻译网关客户端 + 模型(内嵌翻译引擎)
 └── ui             # Compose: CdictApp(四标签导航)/ Study* / Dictionary* / Translate* / Recommendation*

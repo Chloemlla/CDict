@@ -79,6 +79,17 @@ object WhatsNewData {
         ),
         WhatsNewSlide(
             icon = Icons.Filled.Info,
+            title = "朗读来源优先级可切换",
+            subtitle = "默认先使用有道静态发音；也可以在关于页面切换为 vivo TTS 优先。",
+            bullets = listOf(
+                "入口：关于 → 朗读优先来源。",
+                "开关打开时为有道 → vivo → 系统 TTS；关闭时为 vivo → 有道 → 系统 TTS。",
+                "选择会保存在本机，并同时作用于单词与整句朗读。",
+            ),
+            tip = "默认使用有道；如果更偏好 vivo 音色，可关闭开关。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.Info,
             title = "朗读回退原因可查",
             subtitle = "当朗读落到系统 TTS 时，可查明 vivo / 有道两级为何失败：应用内显示，也能经 adb 拉日志。",
             bullets = listOf(

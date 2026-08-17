@@ -48,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -55,8 +56,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,6 +132,8 @@ private fun AboutRow(
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val aboutStore = remember { AboutStore(context) }
+    var youdaoFirst by remember { mutableStateOf(aboutStore.youdaoFirst) }
     val controller = LocalAboutController.current
     val commitUrl = "${AboutData.sourceUrl}/commit/${BuildInfo.commitHash}"
     Scaffold(
@@ -202,6 +207,24 @@ fun AboutScreen(onBack: () -> Unit) {
                     title = "Source Code",
                     subtitle = AboutData.sourceUrl,
                     onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
+                )
+                HorizontalDivider()
+                AboutRow(
+                    title = "朗读优先来源",
+                    subtitle = if (youdaoFirst) {
+                        "有道优先，失败时使用 vivo TTS"
+                    } else {
+                        "vivo TTS 优先，失败时使用有道"
+                    },
+                    trailing = {
+                        Switch(
+                            checked = youdaoFirst,
+                            onCheckedChange = { checked ->
+                                youdaoFirst = checked
+                                aboutStore.youdaoFirst = checked
+                            },
+                        )
+                    },
                 )
                 HorizontalDivider()
                 AboutRow(

@@ -24,4 +24,11 @@ class AboutStore(context: Context) {
         set(value) {
             prefs.edit { putLong("ack_build_time", value) }
         }
+
+    /** 朗读来源优先级：true=有道优先，false=vivo 优先。默认有道优先。 */
+    var youdaoFirst: Boolean
+        get() = prefs.getBoolean("youdao_first", true)
+        set(value) {
+            prefs.edit { putBoolean("youdao_first", value) }
+        }
 }

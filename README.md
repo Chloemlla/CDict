@@ -44,7 +44,7 @@
 |---|---|
 | 🗂 **Offline-first** | 49,213 words across 7 IELTS frequency groups, bundled into the APK and copied into a Room database on first launch. |
 | 🔍 **Smart search** | English full-text search (SQLite FTS5) over word / translation / definition, Chinese substring search, plus **Levenshtein typo suggestions** ("Did you mean …"). |
-| 🔊 **Pronunciation** | Three-tier fallback (vivo TTS → Youdao → system TTS) with on-disk audio caching — no audio files shipped. |
+| 🔊 **Pronunciation** | Three-tier fallback (Youdao → vivo TTS → system TTS by default; selectable in About) with on-disk audio caching — no audio files shipped. |
 | 🌐 **Online translation** | Built-in translation engine backed by the vivo gateway, with a **three-layer cache**. |
 | 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
 | 🤖 **AI word annotations** | AI-generated 语感 annotations — emotion color, register, nuance, usage warnings, and speakable / auto-translated collocations. |
@@ -99,15 +99,15 @@ Tapping an entry opens a detail page showing:
 
 ### 🔊 Pronunciation
 
-The detail page provides **UK / US** pronunciation buttons. Speech is produced by a default **vivo TTS** client and falls back through three tiers — no audio files are packaged:
+The detail page provides **UK / US** pronunciation buttons. Speech uses **Youdao static pronunciation** by default and falls back through three tiers — no audio files are packaged. The preferred online source can be changed in **About → Pronunciation priority**:
 
 ```
-vivo TTS synthesis (POST https://vivotrans.vivo.com.cn/fy/tts)
-  → Youdao static pronunciation (dict.youdao.com/dictvoice; word / sentence)
+Youdao static pronunciation (dict.youdao.com/dictvoice; word / sentence)
+  → vivo TTS synthesis (POST https://vivotrans.vivo.com.cn/fy/tts)
   → Android system TextToSpeech
 ```
 
-Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. **vivo TTS is the primary reader** for both words and whole sentences (never word-by-word splitting, which would break the sentence); when vivo is unavailable it falls back to the Youdao `dictvoice` static audio, then to Android system TTS. Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
+Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The About-page switch can reverse the two online tiers when vivo TTS is preferred. Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
 
 `VivoTtsClient` (reverse-engineered from `com.vivo.translator`):
 

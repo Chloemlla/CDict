@@ -25,7 +25,7 @@ interface PronunciationSpeaker {
 }
 
 /**
- * 发音播放器，三级回退：vivo TTS（默认，优先）→ 有道静态音频 → 系统 TextToSpeech。
+ * 发音播放器，三级回退：按设置以有道或 vivo TTS 为首选 → 另一在线来源 → 系统 TextToSpeech。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  *
  * 并发安全：每次 [play] 都会让之前的播放流水线失效（generation 递增 + 取消旧 job），
@@ -41,6 +41,11 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private var playGeneration = 0
     private val vivoClient = VivoTtsClient()
     private val cache = SpeechAudioCache(context)
+    private val preferenceStore = context.applicationContext
+        .getSharedPreferences("cdict_about", Context.MODE_PRIVATE)
+
+    private val youdaoFirst: Boolean
+        get() = preferenceStore.getBoolean("youdao_first", true)
 
     /** 同 <音色>:<文本> 的进行中下载共享；只由 Main 线程访问。 */
     private val inFlight = mutableMapOf<String, Deferred<YoudaoFetch>>()
@@ -51,7 +56,13 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         playGeneration++
         playJob?.cancel()
         releasePlayer()
-        playJob = scope.launch { playVivoFirst(playGeneration, word, accent) }
+        playJob = scope.launch {
+            if (youdaoFirst) {
+                playYoudaoFirst(playGeneration, word, accent)
+            } else {
+                playVivoFirst(playGeneration, word, accent)
+            }
+        }
     }
 
     /**
@@ -73,7 +84,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         player = null
     }
 
-    /** 第一级：vivo TTS。命中 vivo 缓存直接播；未命中合成并写缓存；失败落到有道。 */
+    /** vivo 优先时的第一级：命中缓存直接播；未命中合成并写缓存；失败落到有道。 */
     private suspend fun playVivoFirst(generation: Int, word: String, accent: Accent) {
         if (generation != playGeneration) return
         val cached = cache.find(word, accent, SOURCE_VIVO)
@@ -91,41 +102,108 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
         val audio = (result as? VivoTtsResult.Audio)?.bytes
         if (audio == null || audio.isEmpty()) {
-            if (generation == playGeneration) playYoudaoFallback(generation, word, accent, vivoReason)
+            if (generation == playGeneration) {
+                playYoudaoFallback(generation, word, accent, vivoReason ?: "vivo 无返回值")
+            }
             return
         }
         val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
         if (generation == playGeneration) {
             playFile(generation, file) {
-                scope.launch { playYoudaoFallback(generation, word, accent, "vivo 合成音频播放失败") }
+                scope.launch {
+                    playYoudaoFallback(generation, word, accent, "vivo 合成音频播放失败")
+                }
             }
         }
     }
 
-    /** 第二级：有道。命中缓存直接播；未命中下载并写缓存；失败落到系统 TTS。 */
+    /** vivo 优先时的第二级：有道。失败后落到系统 TTS。 */
     private suspend fun playYoudaoFallback(
         generation: Int,
         word: String,
         accent: Accent,
-        vivoReason: String?,
+        vivoReason: String,
     ) {
         if (generation != playGeneration) return
         val cached = cache.find(word, accent, SOURCE_YOUDAO)
         if (cached != null) {
             playFile(generation, cached) {
-                scope.launch { speak(generation, word, accent, vivoReason, "有道（缓存）播放失败") }
+                scope.launch {
+                    speak(generation, word, accent, vivoReason, "有道（缓存）播放失败")
+                }
             }
             return
         }
         val fetched = downloadYoudaoDetailed(word, accent)
         if (fetched.bytes == null || fetched.bytes.isEmpty()) {
-            if (generation == playGeneration) speak(generation, word, accent, vivoReason, fetched.reason ?: "有道无返回值")
+            if (generation == playGeneration) {
+                speak(generation, word, accent, vivoReason, fetched.reason ?: "有道无返回值")
+            }
             return
         }
         val file = cache.put(word, accent, SOURCE_YOUDAO, fetched.bytes)
         if (generation == playGeneration) {
             playFile(generation, file) {
-                scope.launch { speak(generation, word, accent, vivoReason, "有道音频播放失败") }
+                scope.launch {
+                    speak(generation, word, accent, vivoReason, "有道音频播放失败")
+                }
+            }
+        }
+    }
+
+    /** 第一级：有道。命中缓存直接播；未命中下载并写缓存；失败落到 vivo。 */
+    private suspend fun playYoudaoFirst(generation: Int, word: String, accent: Accent) {
+        if (generation != playGeneration) return
+        val cached = cache.find(word, accent, SOURCE_YOUDAO)
+        if (cached != null) {
+            playFile(generation, cached) {
+                scope.launch { playVivoFallback(generation, word, accent, "有道（缓存）播放失败") }
+            }
+            return
+        }
+        val fetched = downloadYoudaoDetailed(word, accent)
+        if (fetched.bytes == null || fetched.bytes.isEmpty()) {
+            if (generation == playGeneration) playVivoFallback(generation, word, accent, fetched.reason ?: "有道无返回值")
+            return
+        }
+        val file = cache.put(word, accent, SOURCE_YOUDAO, fetched.bytes)
+        if (generation == playGeneration) {
+            playFile(generation, file) {
+                scope.launch { playVivoFallback(generation, word, accent, "有道音频播放失败") }
+            }
+        }
+    }
+
+    /** 第二级：vivo TTS。命中 vivo 缓存直接播；未命中合成并写缓存；失败落到系统 TTS。 */
+    private suspend fun playVivoFallback(
+        generation: Int,
+        word: String,
+        accent: Accent,
+        youdaoReason: String,
+    ) {
+        if (generation != playGeneration) return
+        val cached = cache.find(word, accent, SOURCE_VIVO)
+        if (cached != null) {
+            playFile(generation, cached) {
+                scope.launch { speak(generation, word, accent, "vivo 缓存音频播放失败", youdaoReason) }
+            }
+            return
+        }
+        val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
+        if (generation != playGeneration) return
+        val vivoReason: String? = when (result) {
+            is VivoTtsResult.Audio -> if (result.bytes.isEmpty()) "vivo 返回空音频" else null
+            is VivoTtsResult.Error -> result.message
+        }
+        val audio = (result as? VivoTtsResult.Audio)?.bytes
+        if (audio == null || audio.isEmpty()) {
+            if (generation == playGeneration) speak(generation, word, accent, vivoReason, youdaoReason)
+            return
+        }
+        val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
+        if (generation == playGeneration) {
+            playFile(generation, file) {
+                scope.launch { speak(generation, word, accent, "vivo 合成音频播放失败", youdaoReason) }
             }
         }
     }
