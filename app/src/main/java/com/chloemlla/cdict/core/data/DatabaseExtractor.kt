@@ -3,7 +3,6 @@ package com.chloemlla.cdict.core.data
 import android.content.Context
 import android.content.res.AssetManager
 import android.database.sqlite.SQLiteDatabase
-import android.os.StatFs
 import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +30,7 @@ import java.io.InputStream
  *
  * ### Storage guard
  * Decompression requires ~100 MB free space. [ensureDatabaseExists] checks
- * [StatFs] before starting and returns false if insufficient.
+ * [File.usableSpace] before starting and returns false if insufficient.
  *
  * ### Performance
  * - The compressed asset is loaded with [AssetManager.ACCESS_BUFFER] so all
@@ -84,12 +83,9 @@ object DatabaseExtractor {
      * on the filesystem that will hold the decompressed database.
      */
     private fun hasSufficientStorage(context: Context): Boolean {
-        val path = databaseFile(context).parentFile?.absolutePath
-            ?: context.filesDir.absolutePath
+        val directory = databaseFile(context).parentFile ?: context.filesDir
         return try {
-            val stats = StatFs(path)
-            val available = stats.availableBlocksLong * stats.blockSizeLong
-            available >= MIN_STORAGE_THRESHOLD
+            directory.usableSpace >= MIN_STORAGE_THRESHOLD
         } catch (_: Exception) {
             // If we can't determine available space, proceed anyway.
             true
