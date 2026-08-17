@@ -33,7 +33,7 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Resolve lumen-crash SDK version
@@ -89,7 +89,7 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Resolve lumen-crash SDK version
@@ -181,7 +181,7 @@ jobs:
           echo "CDICT_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
           echo "CDICT_SHORT_HASH=$short_hash" >> "$GITHUB_ENV"
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Resolve lumen-crash SDK version

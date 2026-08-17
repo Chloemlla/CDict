@@ -35,7 +35,7 @@ jobs:
       # project dependencies so the autobuild can compile the code.
       - name: Set up Python
         if: matrix.language == 'java-kotlin'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
