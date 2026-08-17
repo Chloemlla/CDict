@@ -49,6 +49,12 @@ jobs:
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+      - name: Compress dictionary asset with Brotli
+        run: |
+          set -euo pipefail
+          pip install brotli
+          python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
+          rm app/src/main/assets/dict.db
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -105,6 +111,12 @@ jobs:
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+      - name: Compress dictionary asset with Brotli
+        run: |
+          set -euo pipefail
+          pip install brotli
+          python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
+          rm app/src/main/assets/dict.db
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -197,6 +209,12 @@ jobs:
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
           python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+      - name: Compress dictionary asset with Brotli
+        run: |
+          set -euo pipefail
+          pip install brotli
+          python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
+          rm app/src/main/assets/dict.db
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -276,8 +294,9 @@ jobs:
           cp app/build/outputs/apk/release/app-x86-release.apk release-assets/CDict-x86.apk
           cp app/build/outputs/apk/release/app-x86_64-release.apk release-assets/CDict-x86_64.apk
           cp app/build/outputs/apk/release/app-universal-release.apk release-assets/CDict.apk
-          cp app/src/main/assets/dict.db release-assets/CDict-dict.db
-          (cd release-assets && sha256sum CDict.apk CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk CDict-dict.db > checksums.txt)
+          cp app/src/main/assets/dict.db.br release-assets/CDict-dict.db.br
+          cp app/src/main/assets/dict.signature release-assets/dict.signature
+          (cd release-assets && sha256sum CDict.apk CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk CDict-dict.db.br dict.signature > checksums.txt)
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:

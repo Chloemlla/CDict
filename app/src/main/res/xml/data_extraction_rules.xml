@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Android 12+ (API 31+) backup/transfer rules. -->
-<!-- dict.db is reconstructed from the bundled asset (createFromAsset) on first
+<!-- dict.db is decompressed from the bundled Brotli asset (dict.db.br) on first
      launch, so excluding it keeps cloud backups / device transfers small and fast. -->
 <data-extraction-rules>
     <cloud-backup>

@@ -80,7 +80,7 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 | 拼写纠错 | 无结果时给出 **Levenshtein** 编辑距离(≤ 2)内的“你是不是想找……”建议 |
 | 排序方式 | 词表支持切换排序(按频率 / 按字母 / 字母倒序) |
 | 无限滚动 | 词表分页加载,浏览流畅 |
-| 离线存储 | Room 首次启动将内置 `dict.db` 复制到应用数据库 |
+| 离线存储 | Brotli 压缩的 `dict.db.br` 首次启动解压到本地，然后用 Room 打开数据库 |
 
 ### 🧩 词详情页
 
@@ -197,7 +197,7 @@ com.chloemlla.cdict
 └── ui             # Compose: CdictApp(四标签导航)/ Study* / Dictionary* / Translate* / Recommendation*
 ```
 
-- 数据层通过 Room 的 `createFromAsset("dict.db")` 加载内置词典,首次打开复制到应用数据库,并暴露用户可见的加载 / 错误状态——缺少资源时绝不会静默降级为示例或伪造数据。
+- 数据层通过 Brotli 压缩的离线词典资源（`dict.db.br`）加载内置词典，首次启动时解压到本地，然后用 Room 打开数据库，并暴露用户可见的加载 / 错误状态——缺少资源时绝不会静默降级为示例或伪造数据。
 - 翻译引擎 `core/translate` 完整复刻 `translate.js` 的表单编码、批量拆分与(可选的)X-AI-GATEWAY 签名,并配有单元测试。
 - 搜索层 `core/search` 对 FTS 结果重排,并提供 Levenshtein“你是不是想找……”建议。
 
@@ -208,7 +208,7 @@ com.chloemlla.cdict
 - **Android Studio**:直接打开仓库根目录即可,IDE 会自动使用 Gradle Wrapper。
 - **命令行**:`./gradlew :app:assembleDebug`(需先生成词典资产,见下)。
 
-> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。CI 在构建阶段从 **GitHub Release** 下载合并后的词典。本地执行 `./gradlew :app:assembleDebug` 前需手动复制: `cp scripts/CDict-dict.db app/src/main/assets/dict.db`(签名文件 `dict.signature` 为可选,本地开发可忽略)。
+> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。CI 在构建阶段从 **GitHub Release** 下载合并后的词典并用 Brotli 压缩。本地执行 `./gradlew :app:assembleDebug` 前需先压缩: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`
 
 ---
 
@@ -220,7 +220,7 @@ com.chloemlla.cdict
 2. **富内容合并** — `.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权导出的 `distribution.sqlite` 富内容并入已标注底库:`scripts/merge_distribution.py` 匹配约 17,925 个共有词,补充 US/UK 音标、空位助记(含词源)、派生词,以及带中文译文的例句。产物经校验后**发布到 GitHub Release**(tag `dictionary-asset`),包含合并数据库、`dict.signature` 内容校验和、以及 SHA-256 校验文件。
 3. **FLDC 参考数据源** — `scripts/fetch_fldc_export.py` 解码 fldc.pages.dev 分发的自定义二进制载荷(两个 gzip 分块容器 + 共享前缀字符串池)为转换器 JSON。`.github/workflows/export-fldc.yml`(手动 `workflow_dispatch`)在 CI 中端到端运行 `convert_dictionary.py`,并把产出的约 107,143 词 / 7 组参考资产上传为工作流构件。
 
-CI 在构建时从硬编码的 Release 地址下载合并后的词典,校验 SHA-256 后复制到 `app/src/main/assets/dict.db`:
+CI 在构建时从硬编码的 Release 地址下载合并后的词典,校验 SHA-256 后用 Brotli 压缩再打包:
 
 ```bash
 curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db" "$BASE/CDict-dict.db"
@@ -231,9 +231,12 @@ cp "$RUNNER_TEMP/dict.db" app/src/main/assets/dict.db
 cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
   --expected-word-count 49213 --expected-groups 7
+pip install brotli
+python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
+rm app/src/main/assets/dict.db
 ```
 
-`app/src/main/assets/dict.db` 和 `dict.signature` 是 Git 忽略的构建副本;它们保持**压缩**存储(不设 `noCompress` 覆盖),并交给 AAB 按设备分发。随附的 `dict.signature` 文件让 App 能检测到词典内容在两次构建之间是否发生变化,从而提示用户删除并重建本地数据库。
+`app/src/main/assets/dict.db.br` 和 `dict.signature` 是 Git 忽略的构建副本。App 首次启动时使用 `org.brotli:dec` 库将 `dict.db.br` 解压到本地，然后用 Room 打开数据库。随附的 `dict.signature` 文件让 App 能检测到词典内容在两次构建之间是否发生变化,从而提示用户重建本地数据库。
 
 `scripts/convert_dictionary.py` 仍可用于从授权导出重建无标注的底库。
 

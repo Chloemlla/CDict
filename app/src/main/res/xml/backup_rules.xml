@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Auto Backup rules for Android 11 and lower (API 26-30). -->
-<!-- Same rationale as data_extraction_rules.xml: dict.db is regenerated from
-     the bundled asset, so it is excluded to keep backups small and fast. -->
+<!-- Same rationale as data_extraction_rules.xml: dict.db is decompressed from
+     the bundled Brotli asset (dict.db.br), so it is excluded to keep backups
+     small and fast. -->
 <full-backup-content>
     <exclude
         domain="database"

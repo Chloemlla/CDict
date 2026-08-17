@@ -80,7 +80,7 @@ The app opens on the **Dictionary** tab by default. Navigation is responsive: th
 | Typo tolerance | When a query finds nothing, a "Did you mean: …" suggestion is offered within a bounded **Levenshtein** edit distance (≤ 2) |
 | Sorting | Word list supports multiple sort modes (by frequency / alphabetical / reverse-alphabetical) |
 | Infinite scroll | Word list loads in pages for smooth, incremental browsing |
-| Offline storage | Room copies the bundled asset `dict.db` into the app database on first launch |
+| Offline storage | A Brotli-compressed `dict.db.br` is decompressed on first launch; the decompressed DB is opened with Room |
 
 ### 🧩 Word Detail
 
@@ -197,7 +197,7 @@ com.chloemlla.cdict
 └── ui             # Compose: CdictApp (4-tab nav) / Study* / Dictionary* / Translate* / Recommendation*
 ```
 
-- The data layer loads the bundled dictionary via Room's `createFromAsset("dict.db")`, copies it into the app database on first open, and exposes user-visible loading/error states so a missing asset never silently degrades to fake data.
+- The data layer loads the bundled dictionary from a Brotli-compressed asset (`dict.db.br`), decompresses it on first launch, and opens it with Room. A loading/error state is exposed so a missing asset never silently degrades to fake data.
 - The translation engine `core/translate` faithfully reproduces `translate.js`'s form encoding, batch splitting, and (optional) X-AI-GATEWAY signature, with unit tests.
 - The search layer `core/search` re-ranks FTS results and provides Levenshtein "did you mean" suggestions.
 
@@ -208,7 +208,7 @@ com.chloemlla.cdict
 - **Android Studio:** open the repo root — the IDE uses the Gradle wrapper automatically.
 - **Command line:** `./gradlew :app:assembleDebug` (requires generating the dictionary asset first, below).
 
-> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. CI downloads the merged dictionary from a **GitHub Release** asset during the build stage. For a local `./gradlew :app:assembleDebug`, copy the committed asset manually: `cp scripts/CDict-dict.db app/src/main/assets/dict.db && cp scripts/CDict-dict.db app/src/main/assets/dict.signature` (the signature file is optional for local development).
+> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. CI downloads the merged dictionary from a **GitHub Release** asset during the build stage and compresses it with Brotli. For a local `./gradlew :app:assembleDebug`, compress the committed asset manually: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`
 
 ---
 
@@ -220,7 +220,7 @@ The dictionary is built from three sources:
 2. **Rich-content merge** — `.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated base: `scripts/merge_distribution.py` matches ~17,925 headwords and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences. The result is validated and **published as a GitHub Release asset** (`dictionary-asset` tag) plus a `dict.signature` content checksum.
 3. **FLDC reference source** — `scripts/fetch_fldc_export.py` decodes the custom binary payload served by fldc.pages.dev (two gzip chunk containers + a shared-prefix string pool) into the converter's JSON shape. `.github/workflows/export-fldc.yml` (manual `workflow_dispatch`) runs `convert_dictionary.py` end-to-end in CI and uploads the resulting ~107,143-word / 7-group reference asset as a workflow artifact.
 
-CI stages the merged dictionary at build time by downloading from the hardcoded release URL, verifying the SHA-256 checksum, and copying it into `app/src/main/assets/dict.db`:
+CI stages the merged dictionary at build time by downloading from the hardcoded release URL, verifying the SHA-256 checksum, and compressing with Brotli before packaging:
 
 ```bash
 curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db" "$BASE/CDict-dict.db"
@@ -231,9 +231,12 @@ cp "$RUNNER_TEMP/dict.db" app/src/main/assets/dict.db
 cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db \
   --expected-word-count 49213 --expected-groups 7
+pip install brotli
+python -c "import brotli; open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(open('app/src/main/assets/dict.db','rb').read(), quality=11))"
+rm app/src/main/assets/dict.db
 ```
 
-`app/src/main/assets/dict.db` and `dict.signature` are git-ignored build copies; they stay **compressed** (no `noCompress` override) and ship via AAB per-device delivery. The linked `dict.signature` file lets the app detect when the dictionary content has changed between builds, prompting the user to delete and rebuild the local database.
+`app/src/main/assets/dict.db.br` and `dict.signature` are git-ignored build copies. The app decompresses `dict.db.br` on first launch using the `org.brotli:dec` library, then opens the database with Room. The `dict.signature` file lets the app detect when the dictionary content has changed between builds, prompting the user to rebuild the local database.
 
 `scripts/convert_dictionary.py` remains available for rebuilding an unannotated base from an authorized export if the source data ever needs regenerating.
 

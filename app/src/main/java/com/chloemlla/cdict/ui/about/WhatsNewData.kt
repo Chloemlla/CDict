@@ -19,6 +19,18 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "APK 瘦身：词典离线数据首次启动解压",
+            subtitle = "词典离线数据库在构建时使用 Brotli 极限压缩（从 90+ MB 降至约 8–10 MB），APK 安装包体积显著减小。",
+            bullets = listOf(
+                "影响：APK 安装包体积显著减小，下载和安装更快。",
+                "首次启动：App 会在后台自动解压词典数据，解压完成后自动进入主界面，整个过程约需 0.5–2 秒。",
+                "后续启动：解压后的文件会缓存到本地，不会重复解压。",
+                "重建：如果词典数据需要更新，重建流程也会自动重新解压。",
+            ),
+            tip = "首次启动会看到「正在加载离线词典…」提示，等待片刻即可进入主界面。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "本次构建更新说明",
             subtitle = "本构建包含以下有意变更，基于 Commit Hash / Build Time 标识。",
             bullets = listOf(

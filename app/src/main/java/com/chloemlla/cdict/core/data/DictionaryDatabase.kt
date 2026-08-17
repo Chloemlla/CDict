@@ -97,7 +97,6 @@ abstract class DictionaryDatabase : RoomDatabase() {
 
         fun open(context: Context): DictionaryDatabase =
             Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
-                .createFromAsset("dict.db")
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()

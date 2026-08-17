@@ -42,6 +42,7 @@ cdict-release.jks
 *.jks
 *.keystore
 app/src/main/assets/dict.db
+app/src/main/assets/dict.db.br
 app/src/main/assets/dict.signature
 app/schemas/
 
