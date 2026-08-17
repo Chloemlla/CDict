@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class WhatsNewSlide(
@@ -86,6 +87,17 @@ object WhatsNewData {
                 "只记录最终落到系统 TTS 的那一次；日志带文本与音色。",
             ),
             tip = "入口：关于 → 朗读诊断，或 adb logcat -s CDictAudio:I。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.CheckCircle,
+            title = "修复 vivo TTS 被拒，朗读不再落到系统 TTS",
+            subtitle = "vivo TTS 曾因 deviceid 值带前导零被服务端以 HTTP 400 拒绝，朗读被迫退回系统 TTS；现去除前导零，恢复 vivo 高音质发音。",
+            bullets = listOf(
+                "根因：deviceid=00000000000000 被 vivo 当作数值字段反序列化，Spring/Jackson 拒绝前导零，报 400 „Leading zeroes not allowed“。",
+                "修复：默认 deviceid 改为无前导零的 0，sign 签名同步保持一致。",
+                "若仍被拒，「朗读诊断 / adb logcat -s CDictAudio:I」会显示下一步的具体原因。",
+            ),
+            tip = "验证：词详情页点喇叭，发音不再退回系统 TTS。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.RocketLaunch,

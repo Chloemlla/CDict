@@ -134,7 +134,9 @@ class VivoTtsClient(
 
     companion object {
         private const val ALPHANUMERIC = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        const val DEFAULT_DEVICE_ID = "00000000000000"
+        // 不能带前导零：vivo 服务端把 deviceid 按数值字段反序列化（Spring/Jackson 默认拒绝
+        // numeric 类型带前导零，会报 HTTP 400 "Leading zeroes not allowed"）。旧值 00000000000000 触发。
+        const val DEFAULT_DEVICE_ID = "0"
 
         fun hmacSha256Hex(key: String, data: String): String {
             val mac = Mac.getInstance("HmacSHA256")

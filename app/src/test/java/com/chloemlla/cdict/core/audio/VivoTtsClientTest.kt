@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.core.audio
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -57,5 +58,12 @@ class VivoTtsClientTest {
         assertEquals("en-USA", Accent.US.ttsLangType)
         assertEquals(1, Accent.UK.youdaoType)
         assertEquals(2, Accent.US.youdaoType)
+    }
+
+    @Test
+    fun `default device id has no leading zeros`() {
+        // vivo 把 deviceid 当数值字段解析，带前导零会被拒(HTTP 400 Leading zeroes not allowed)。
+        val id = VivoTtsClient.DEFAULT_DEVICE_ID
+        assertFalse(id.startsWith("0"))
     }
 }
