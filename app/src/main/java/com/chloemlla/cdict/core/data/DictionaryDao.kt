@@ -11,14 +11,25 @@ interface DictionaryDao {
     @Query("SELECT COUNT(*) FROM words")
     suspend fun count(): Long
 
-    @Query("SELECT * FROM words ORDER BY frequencyGroup, frequency, word LIMIT :limit OFFSET :offset")
-    fun browse(limit: Int, offset: Int): Flow<List<WordEntity>>
+    // A curriculum tag is one label inside the comma-separated curriculumTags column;
+    // INSTR with wrapped commas matches whole labels only, never substrings. A null tag
+    // means "no curriculum filter" and the IS NULL arm returns every row.
+    @Query("SELECT COUNT(*) FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0)")
+    suspend fun countFiltered(tag: String?): Long
 
-    @Query("SELECT * FROM words ORDER BY word COLLATE NOCASE LIMIT :limit OFFSET :offset")
-    fun browseAlphabetical(limit: Int, offset: Int): Flow<List<WordEntity>>
+    @Query("SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) ORDER BY frequencyGroup, frequency, word LIMIT :limit OFFSET :offset")
+    fun browse(limit: Int, offset: Int, tag: String?): Flow<List<WordEntity>>
 
-    @Query("SELECT * FROM words ORDER BY word COLLATE NOCASE DESC LIMIT :limit OFFSET :offset")
-    fun browseAlphabeticalDesc(limit: Int, offset: Int): Flow<List<WordEntity>>
+    @Query("SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) ORDER BY word COLLATE NOCASE LIMIT :limit OFFSET :offset")
+    fun browseAlphabetical(limit: Int, offset: Int, tag: String?): Flow<List<WordEntity>>
+
+    @Query("SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) ORDER BY word COLLATE NOCASE DESC LIMIT :limit OFFSET :offset")
+    fun browseAlphabeticalDesc(limit: Int, offset: Int, tag: String?): Flow<List<WordEntity>>
+
+    // Distinct curriculum label sets present in the asset, so the filter menu stays in sync
+    // with whatever tags the publishing pipeline applies (高中 3500 词, future lists, ...).
+    @Query("SELECT DISTINCT curriculumTags FROM words WHERE curriculumTags IS NOT NULL AND length(curriculumTags) > 0")
+    suspend fun distinctCurriculumTags(): List<String>
 
     @Query("SELECT * FROM words WHERE id = :id")
     fun observeWord(id: Long): Flow<WordEntity?>

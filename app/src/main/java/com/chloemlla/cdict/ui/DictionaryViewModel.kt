@@ -60,6 +60,8 @@ sealed interface DictionaryScreenState {
         val detail: WordDetailData? = null,
         val detailError: String? = null,
         val sortMode: SortMode = SortMode.Frequency,
+        val curriculumTag: String? = null,
+        val availableCurriculumTags: List<String> = emptyList(),
         val hasMore: Boolean = false,
         val isLoadingMore: Boolean = false,
         val updateNeeded: Boolean = false,
@@ -79,6 +81,9 @@ class DictionaryViewModel(
     private var totalCount = 0L
     private var loadMoreInFlight = false
     private var searchJob: Job? = null
+    // Distinct curriculum labels present in the asset, loaded once per database open so the
+    // filter menu reflects whatever tags the publishing pipeline applied (高中 3500 词, ...).
+    private var availableTags: List<String> = emptyList()
     // Words whose detail is still open underneath the current one (派生词「前往」跳转等),
     // so back walks back through details instead of dumping straight onto the browse list.
     private val detailStack = ArrayDeque<WordEntity>()
@@ -90,11 +95,13 @@ class DictionaryViewModel(
                     val db = result.database
                     database = db
                     totalCount = db.dictionaryDao().count()
+                    availableTags = loadAvailableTags(db)
                     val updateNeeded = DictionaryUpdateManager.check(appContext, db)
-                    val words = browsePage(db, SortMode.Frequency, 0)
+                    val words = browsePage(db, SortMode.Frequency, null, 0)
                     _state.value = DictionaryScreenState.Ready(
                         words = words,
                         sortMode = SortMode.Frequency,
+                        availableCurriculumTags = availableTags,
                         hasMore = words.size.toLong() < totalCount,
                         updateNeeded = updateNeeded,
                     )
@@ -108,27 +115,65 @@ class DictionaryViewModel(
     private suspend fun browsePage(
         db: DictionaryDatabase,
         mode: SortMode,
+        tag: String?,
         offset: Int,
     ): List<WordEntity> =
         when (mode) {
-            SortMode.Frequency -> db.dictionaryDao().browse(pageSize, offset)
-            SortMode.Alphabetical -> db.dictionaryDao().browseAlphabetical(pageSize, offset)
-            SortMode.AlphabeticalDesc -> db.dictionaryDao().browseAlphabeticalDesc(pageSize, offset)
+            SortMode.Frequency -> db.dictionaryDao().browse(pageSize, offset, tag)
+            SortMode.Alphabetical -> db.dictionaryDao().browseAlphabetical(pageSize, offset, tag)
+            SortMode.AlphabeticalDesc -> db.dictionaryDao().browseAlphabeticalDesc(pageSize, offset, tag)
         }.first()
 
+    private suspend fun browseCount(db: DictionaryDatabase, tag: String?): Long =
+        if (tag == null) db.dictionaryDao().count() else db.dictionaryDao().countFiltered(tag)
+
+    private suspend fun loadAvailableTags(db: DictionaryDatabase): List<String> =
+        db.dictionaryDao().distinctCurriculumTags()
+            .flatMap { raw -> raw.split(',', '，').map(String::trim) }
+            .filter(String::isNotEmpty)
+            .distinct()
+            .sorted()
+
+    private fun currentReady(): DictionaryScreenState.Ready? =
+        _state.value as? DictionaryScreenState.Ready
+
     private fun currentSortMode(): SortMode =
-        (_state.value as? DictionaryScreenState.Ready)?.sortMode ?: SortMode.Frequency
+        currentReady()?.sortMode ?: SortMode.Frequency
+
+    private fun currentCurriculumTag(): String? = currentReady()?.curriculumTag
 
     fun setSortMode(mode: SortMode) {
         val db = database ?: return
         if (currentSortMode() == mode) return
         viewModelScope.launch {
-            totalCount = db.dictionaryDao().count()
-            val words = browsePage(db, mode, 0)
+            val tag = currentCurriculumTag()
+            totalCount = browseCount(db, tag)
+            val words = browsePage(db, mode, tag, 0)
             _state.value = DictionaryScreenState.Ready(
                 words = words,
                 query = "",
                 sortMode = mode,
+                curriculumTag = tag,
+                availableCurriculumTags = availableTags,
+                hasMore = words.size.toLong() < totalCount,
+            )
+        }
+    }
+
+    /** Restricts the browse list to one curriculum label (e.g. 高中 3500 词); null clears the filter. */
+    fun setCurriculumTag(tag: String?) {
+        val db = database ?: return
+        if (currentCurriculumTag() == tag) return
+        viewModelScope.launch {
+            val mode = currentSortMode()
+            totalCount = browseCount(db, tag)
+            val words = browsePage(db, mode, tag, 0)
+            _state.value = DictionaryScreenState.Ready(
+                words = words,
+                query = "",
+                sortMode = mode,
+                curriculumTag = tag,
+                availableCurriculumTags = availableTags,
                 hasMore = words.size.toLong() < totalCount,
             )
         }
@@ -141,14 +186,17 @@ class DictionaryViewModel(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
+            val tag = currentCurriculumTag()
             val newState = if (query.isBlank()) {
-                totalCount = db.dictionaryDao().count()
+                totalCount = browseCount(db, tag)
                 val mode = currentSortMode()
-                val words = browsePage(db, mode, 0)
+                val words = browsePage(db, mode, tag, 0)
                 DictionaryScreenState.Ready(
                     words = words,
                     query = "",
                     sortMode = mode,
+                    curriculumTag = tag,
+                    availableCurriculumTags = availableTags,
                     hasMore = words.size.toLong() < totalCount,
                 )
             } else if (query.any { it.code > 127 }) {
@@ -156,6 +204,8 @@ class DictionaryViewModel(
                     words = db.dictionaryDao().searchChinese(query).first(),
                     query = query,
                     suggestion = null,
+                    curriculumTag = tag,
+                    availableCurriculumTags = availableTags,
                 )
             } else {
                 val trimmed = query.trim()
@@ -184,6 +234,8 @@ class DictionaryViewModel(
                     words = words,
                     query = query,
                     suggestion = suggestion,
+                    curriculumTag = tag,
+                    availableCurriculumTags = availableTags,
                 )
             }
             _state.value = newState
@@ -196,15 +248,16 @@ class DictionaryViewModel(
         val db = database ?: return
         val offset = state.words.size
         val sortMode = state.sortMode
+        val tag = state.curriculumTag
         // Flip the loading footer synchronously (no suspension in between) so the UI never re-requests.
         _state.value = state.copy(isLoadingMore = true)
         loadMoreInFlight = true
         viewModelScope.launch {
             try {
-                val more = browsePage(db, sortMode, offset)
+                val more = browsePage(db, sortMode, tag, offset)
                 val latest = _state.value as? DictionaryScreenState.Ready ?: return@launch
-                // Discard stale results when a newer search or sort change superseded this page.
-                if (latest.query.isNotBlank() || latest.sortMode != sortMode || latest.words.size != offset) return@launch
+                // Discard stale results when a newer search, sort or filter change superseded this page.
+                if (latest.query.isNotBlank() || latest.sortMode != sortMode || latest.curriculumTag != tag || latest.words.size != offset) return@launch
                 val merged = latest.words + more
                 _state.value = latest.copy(
                     words = merged,
@@ -315,10 +368,12 @@ class DictionaryViewModel(
                     val db = result.database
                     database = db
                     totalCount = db.dictionaryDao().count()
-                    val words = browsePage(db, SortMode.Frequency, 0)
+                    availableTags = loadAvailableTags(db)
+                    val words = browsePage(db, SortMode.Frequency, null, 0)
                     _state.value = DictionaryScreenState.Ready(
                         words = words,
                         sortMode = SortMode.Frequency,
+                        availableCurriculumTags = availableTags,
                         hasMore = words.size.toLong() < totalCount,
                         updateNeeded = false,
                     )

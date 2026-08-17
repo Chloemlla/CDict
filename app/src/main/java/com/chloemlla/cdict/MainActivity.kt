@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
                                 onDictionaryPlayPronunciation = dictionaryViewModel::playPronunciation,
                                 onDictionaryLoadMore = dictionaryViewModel::loadMore,
                                 onDictionarySortModeChanged = dictionaryViewModel::setSortMode,
+                                onDictionaryCurriculumTagChanged = dictionaryViewModel::setCurriculumTag,
                                 onDictionaryRebuild = dictionaryViewModel::rebuildDictionary,
                                 onDictionaryDismissUpdate = dictionaryViewModel::dismissUpdate,
                                 translationViewModel = translationViewModel,

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -49,8 +50,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -116,6 +118,7 @@ fun DictionaryApp(
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     onLoadMore: () -> Unit,
     onSortModeChanged: (SortMode) -> Unit,
+    onCurriculumTagChanged: (String?) -> Unit,
     masteredIds: Set<Long> = emptySet(),
     onToggleMastered: (WordEntity) -> Unit = {},
 ) {
@@ -177,7 +180,14 @@ fun DictionaryApp(
                             onToggleMastered = onToggleMastered,
                         )
                     } else {
-                        WordList(state, onQueryChanged, onSelect, onLoadMore, onSortModeChanged)
+                        WordList(
+                            state,
+                            onQueryChanged,
+                            onSelect,
+                            onLoadMore,
+                            onSortModeChanged,
+                            onCurriculumTagChanged,
+                        )
                     }
                 }
             }
@@ -256,6 +266,7 @@ private fun WordList(
     onSelect: (WordEntity) -> Unit,
     onLoadMore: () -> Unit,
     onSortModeChanged: (SortMode) -> Unit,
+    onCurriculumTagChanged: (String?) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf(state.query) }
     val focusManager = LocalFocusManager.current
@@ -273,10 +284,10 @@ private fun WordList(
         onQueryChanged("")
     }
 
-    // Jump back to the top whenever a fresh search or sort change replaces the browse list.
+    // Jump back to the top whenever a fresh search, sort or filter change replaces the browse list.
     var lastListKey by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(state.query, state.sortMode) {
-        val key = "${state.sortMode.name}:${state.query}"
+    LaunchedEffect(state.query, state.sortMode, state.curriculumTag) {
+        val key = "${state.sortMode.name}:${state.curriculumTag}:${state.query}"
         if (key != lastListKey) {
             lastListKey = key
             listState.scrollToItem(0)
@@ -402,19 +413,24 @@ private fun WordList(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    SortMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = state.sortMode == mode,
-                            onClick = { onSortModeChanged(mode) },
-                            label = {
-                                Text(
-                                    text = mode.label,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                        )
-                    }
+                    FilterDropdownMenu(
+                        label = state.sortMode.label,
+                        options = SortMode.entries.map { mode -> mode.label to mode },
+                        selected = state.sortMode,
+                        onSelect = onSortModeChanged,
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterDropdownMenu(
+                        label = state.curriculumTag ?: "全部词条",
+                        options = buildList {
+                            add("全部词条" to null)
+                            state.availableCurriculumTags.forEach { add(it to it) }
+                        },
+                        selected = state.curriculumTag,
+                        onSelect = onCurriculumTagChanged,
+                        active = state.curriculumTag != null,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
 
@@ -494,6 +510,71 @@ private fun WordList(
                 }
             }
         }
+        }
+    }
+}
+
+/** A labelled dropdown that selects one option from a menu, with the current choice on the trigger. */
+@Composable
+private fun <T> FilterDropdownMenu(
+    label: String,
+    options: List<Pair<String, T>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        val trigger: @Composable () -> Unit = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        if (active) {
+            FilledTonalButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) { trigger() }
+        } else {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+            ) { trigger() }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEach { (optionLabel, option) ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel) },
+                    onClick = {
+                        expanded = false
+                        onSelect(option)
+                    },
+                    trailingIcon = if (option == selected) {
+                        { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                    } else null,
+                )
+            }
         }
     }
 }
