@@ -1,0 +1,116 @@
+name: Merge phrase dictionary
+
+on:
+  workflow_dispatch:
+    inputs:
+      docx_url:
+        description: "URL of the phrase docx source file"
+        required: false
+        default: ""
+      curriculum_tag:
+        description: "Curriculum tag to apply to phrase entries"
+        required: false
+        default: "高中短语"
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  merge:
+    name: Merge phrase entries into CDict-dict.db
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pandoc
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pandoc
+
+      - name: Download current dictionary asset
+        run: |
+          set -euo pipefail
+          base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict.db" "$base_url/CDict-dict.db"
+          test -s "$RUNNER_TEMP/CDict-dict.db"
+
+      - name: Download phrase docx source
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.docx_url }}" ]; then
+            curl -fL --retry 3 -o "$RUNNER_TEMP/phrases.docx" "${{ inputs.docx_url }}"
+          else
+            # Use the committed docx if available, otherwise skip
+            if [ -f "scripts/phrases.docx" ]; then
+              cp "scripts/phrases.docx" "$RUNNER_TEMP/phrases.docx"
+            else
+              echo "::error::No docx source provided; set docx_url input or commit scripts/phrases.docx"
+              exit 1
+            fi
+          fi
+          test -s "$RUNNER_TEMP/phrases.docx"
+
+      - name: Merge phrase entries into dictionary asset
+        run: |
+          set -euo pipefail
+          python scripts/build_phrase_db.py \
+            "$RUNNER_TEMP/phrases.docx" \
+            "$RUNNER_TEMP/phrase-tmp.db" \
+            --merge-into "$RUNNER_TEMP/CDict-dict.db" \
+            --curriculum-tag "${{ inputs.curriculum_tag }}"
+
+      - name: Verify merged dictionary asset integrity
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/CDict-dict.db"
+          python scripts/validate_dictionary_asset.py "$RUNNER_TEMP/CDict-dict.db"
+
+      - name: Extract dictionary signature
+        run: |
+          python - "$RUNNER_TEMP/CDict-dict.db" "$RUNNER_TEMP/dict.signature" <<'PY'
+          import sqlite3, sys
+          con = sqlite3.connect(sys.argv[1])
+          sig = con.execute("SELECT value FROM metadata WHERE key='assetSignature'").fetchone()
+          if not sig:
+              raise SystemExit("error: missing assetSignature in merged db")
+          open(sys.argv[2], "w").write(sig[0] + "\n")
+          PY
+
+      - name: Rename and checksum release assets
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/CDict-dict.db" "$RUNNER_TEMP/CDict-dict.db"
+          (cd "$RUNNER_TEMP" && sha256sum CDict-dict.db dict.signature > checksums.txt && cat checksums.txt)
+
+      - name: Publish dictionary release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release view dictionary-asset --json id >/dev/null 2>&1 || \
+            gh release create dictionary-asset \
+              --title "CDict dictionary asset" \
+              --notes "Merged dictionary database (phrase enrichment). Published automatically by merge-phrases workflow."
+          gh release upload dictionary-asset \
+            "$RUNNER_TEMP/CDict-dict.db" \
+            "$RUNNER_TEMP/dict.signature" \
+            "$RUNNER_TEMP/checksums.txt" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload merged dictionary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CDict-dict-merged-phrases
+          path: ${{ runner.temp }}/CDict-dict.db
+          if-no-files-found: error
+          retention-days: 30

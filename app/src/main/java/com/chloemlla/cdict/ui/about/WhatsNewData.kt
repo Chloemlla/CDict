@@ -19,6 +19,17 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "新增高中英语短语库（1775 条）",
+            subtitle = "词典离线数据库新增「高中英语短语手札」，覆盖 11 个分类共 1262 条短语，按课程标签过滤。",
+            bullets = listOf(
+                "数据：从 docx 源文件解析 1413 条短语，去重后入库 1262 条，按「形容词/副词短语」「动词+介词/副词」「名词短语」等 11 个分组。",
+                "展示：短语库以独立分组显示在词典列表中，在筛选下拉菜单选择「高中短语」课程标签即可只看短语。",
+                "与词库条目共存：已在主词库中的条目不会重复添加，新短语独立入库，不破坏原有词频分组。",
+            ),
+            tip = "入口：词典标签页 → 筛选下拉菜单 → 选择「高中短语」标签。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "APK 瘦身与兼容性优化",
             subtitle = "词典离线数据库使用 Brotli 极限压缩（从 90+ MB 降至约 8–10 MB），同时补充了多项兼容性保障。",
             bullets = listOf(

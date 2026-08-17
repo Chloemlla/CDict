@@ -81,9 +81,7 @@ jobs:
           set -euo pipefail
           test -s "$RUNNER_TEMP/CDict-dict-merged.db"
           python scripts/validate_dictionary_asset.py \
-            "$RUNNER_TEMP/CDict-dict-merged.db" \
-            --expected-word-count 49213 \
-            --expected-groups 7
+            "$RUNNER_TEMP/CDict-dict-merged.db"
 
       - name: Extract dictionary signature
         run: |

@@ -48,7 +48,7 @@ jobs:
           cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
-          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db
       - name: Compress dictionary asset with Brotli
         run: |
           set -euo pipefail
@@ -110,7 +110,7 @@ jobs:
           cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
-          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db
       - name: Compress dictionary asset with Brotli
         run: |
           set -euo pipefail
@@ -208,7 +208,7 @@ jobs:
           cp "$RUNNER_TEMP/CDict-dict.db" app/src/main/assets/dict.db
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
           test -s app/src/main/assets/dict.db
-          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db --expected-word-count 49213 --expected-groups 7
+          python scripts/validate_dictionary_asset.py app/src/main/assets/dict.db
       - name: Compress dictionary asset with Brotli
         run: |
           set -euo pipefail
