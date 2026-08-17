@@ -9,6 +9,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 /**
  * vivo 语音合成（/fy/tts）客户端，逆向对应 speechsdk ttsonline（Protocol.java 字段布局）与
@@ -46,23 +47,29 @@ class VivoTtsClient(
         val params = "appId=$appId&deviceid=$deviceId&nonce_str=$nonce&taskid=$taskId&text=$textB64"
         val hmacHex = hmacSha256Hex(appKey, params)
         val sign = md5Hex("$hmacHex&key=$appKey")
-        val body = buildString {
-            append("""{"appId":""").append(jsonEscape(appId))
-            append(""","deviceid":""").append(jsonEscape(deviceId))
-            append(""","taskid":""").append(jsonEscape(taskId))
-            append(""","nonce_str":""").append(jsonEscape(nonce))
-            append(""","aue":""").append(aue)
-            append(""","auf":"audio/L16;rate=16000"""")
-            append(""","vcn":""").append(jsonEscape(vcn))
-            append(""","speed":""").append(speed)
-            append(""","volume":""").append(volume)
-            append(""","pitch":""").append(pitch)
-            append(""","langType":""").append(jsonEscape(langType))
-            append(""","text":""").append(jsonEscape(textB64))
-            append(""","encoding":"utf-8"","sign":""").append(jsonEscape(sign))
-            append(""","sysVer":"14","product":"PD2243","model":"V2309A",""")
-            append(""","appVer":"4.5.9.0","app":"com.vivo.translator"}""")
-        }
+        // 用 org.json 统一构建：手工拼接易漏引号，曾致字段未加引号被服务端 JSON parse 400
+        // （先前 deviceid 前导零掩盖了它；去掉后服务器继续解析就撞上未引号的 taskid 等）。
+        val body = JSONObject()
+            .put("appId", appId)
+            .put("deviceid", deviceId)
+            .put("taskid", taskId)
+            .put("nonce_str", nonce)
+            .put("aue", aue)
+            .put("auf", "audio/L16;rate=16000")
+            .put("vcn", vcn)
+            .put("speed", speed)
+            .put("volume", volume)
+            .put("pitch", pitch)
+            .put("langType", langType)
+            .put("text", textB64)
+            .put("encoding", "utf-8")
+            .put("sign", sign)
+            .put("sysVer", "14")
+            .put("product", "PD2243")
+            .put("model", "V2309A")
+            .put("appVer", "4.5.9.0")
+            .put("app", "com.vivo.translator")
+            .toString()
         try {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -88,23 +95,6 @@ class VivoTtsClient(
             }
         } catch (e: Exception) {
             VivoTtsResult.Error("网络请求失败: ${e.message ?: e.javaClass.simpleName}")
-        }
-    }
-
-    private fun jsonEscape(s: String): String = buildString {
-        s.forEach { c ->
-            when (c) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> if (c.code < 0x20) {
-                    append("\\u%04x".format(c.code))
-                } else {
-                    append(c)
-                }
-            }
         }
     }
 

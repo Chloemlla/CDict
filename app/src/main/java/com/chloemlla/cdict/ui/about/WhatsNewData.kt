@@ -90,11 +90,11 @@ object WhatsNewData {
         ),
         WhatsNewSlide(
             icon = Icons.Filled.CheckCircle,
-            title = "修复 vivo TTS 被拒，朗读不再落到系统 TTS",
-            subtitle = "vivo TTS 曾因 deviceid 值带前导零被服务端以 HTTP 400 拒绝，朗读被迫退回系统 TTS；现去除前导零，恢复 vivo 高音质发音。",
+            title = "修复 vivo TTS 请求被拒，朗读不再落到系统 TTS",
+            subtitle = "vivo TTS 请求体此前手工拼接既漏引号又带前导零，被服务端连续以 JSON parse HTTP 400 拒绝，朗读被迫退回系统 TTS；现改用 org.json 统一构建合法 JSON 并去除前导零，恢复 vivo 音色。",
             bullets = listOf(
-                "根因：deviceid=00000000000000 被 vivo 当作数值字段反序列化，Spring/Jackson 拒绝前导零，报 400 „Leading zeroes not allowed“。",
-                "修复：默认 deviceid 改为无前导零的 0，sign 签名同步保持一致。",
+                "前导零：deviceid=00000000000000 被 vivo 当数值反序列化，Jackson 拒前导零（400 Leading zeroes not allowed）；改为无前导零的 0。",
+                "拼接漏引号：多个字段未加引号，去掉前导零后服务器继续解析即撞上未引号字段再次 400；改用 org.json 构建，保证 JSON 合法。",
                 "若仍被拒，「朗读诊断 / adb logcat -s CDictAudio:I」会显示下一步的具体原因。",
             ),
             tip = "验证：词详情页点喇叭，发音不再退回系统 TTS。",
