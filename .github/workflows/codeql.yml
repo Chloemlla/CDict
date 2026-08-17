@@ -23,13 +23,34 @@ jobs:
       matrix:
         include:
           - language: java-kotlin
-            build-mode: none
+            build-mode: autobuild
           - language: python
             build-mode: none
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Java/Kotlin analysis needs a full Gradle build. Set up the
+      # project dependencies so the autobuild can compile the code.
+      - name: Set up Python
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve lumen-crash SDK version
+        if: matrix.language == 'java-kotlin'
+        run: python scripts/fetch-lumen-crash-sdk.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
