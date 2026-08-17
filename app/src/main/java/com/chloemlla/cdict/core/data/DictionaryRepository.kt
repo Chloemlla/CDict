@@ -26,7 +26,9 @@ class DictionaryRepository(private val context: Context) {
     suspend fun rebuild(): DatabaseState = withContext(Dispatchers.IO) {
         runCatching {
             context.deleteDatabase("dict.db")
-            DatabaseExtractor.ensureDatabaseExists(context)
+            if (!DatabaseExtractor.ensureDatabaseExists(context)) {
+                return@withContext DatabaseState.Failed("词典重建失败：无法解压离线词典。")
+            }
             DatabaseState.Ready(DictionaryDatabase.open(context))
         }.getOrElse { DatabaseState.Failed("词典重建失败：${it.message}") }
     }
