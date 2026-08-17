@@ -19,6 +19,17 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "修复词典解压的 Brotli 编译错误",
+            subtitle = "数据库解压改用纯 Java 库实现，避免编译环境缺失原生 Brotli 类导致的构建失败。",
+            bullets = listOf(
+                "修复：CodeQL / 构建 / 单元测试均因 android.util.BrotliInputStream 在编译环境中不可用而失败，现已改用纯 Java 的 org.brotli:dec 库。",
+                "影响：解压为一次性操作（约 0.5–2 秒），纯 Java 实现的性能差异可忽略。",
+                "后续：编译环境就绪后可恢复原生 Brotli 解码器以获得 2-3 倍加速。",
+            ),
+            tip = "本次修复仅影响构建流程，不影响 App 使用体验。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "新增高中英语短语库（1775 条）",
             subtitle = "词典离线数据库新增「高中英语短语手札」，覆盖 11 个分类共 1262 条短语，按课程标签过滤。",
             bullets = listOf(

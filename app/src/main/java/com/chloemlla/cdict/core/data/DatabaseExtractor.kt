@@ -2,7 +2,6 @@ package com.chloemlla.cdict.core.data
 
 import android.content.Context
 import android.content.res.AssetManager
-import android.os.Build
 import android.os.StatFs
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
@@ -31,8 +30,6 @@ import java.io.InputStream
  * [StatFs] before starting and returns false if insufficient.
  *
  * ### Performance
- * - On API 30+ the system's native Brotli decoder is used (2-3× faster than
- *   the pure-Java fallback).
  * - The compressed asset is loaded with [AssetManager.ACCESS_BUFFER] so all
  *   subsequent reads hit an in-memory buffer instead of JNI streaming.
  * - Output is wrapped in a [BufferedOutputStream] to coalesce writes.
@@ -95,18 +92,14 @@ object DatabaseExtractor {
     /**
      * Creates a Brotli decoder for [input].
      *
-     * On API 30+ (Android 11+) the system's native [android.util.BrotliInputStream]
-     * is used, which is significantly faster than the pure-Java fallback. On older
-     * API levels the pure-Java [BrotliInputStream] from the `org.brotli:dec` library
-     * is used instead.
+     * Uses the pure-Java [BrotliInputStream] from the `org.brotli:dec` library.
+     * The native [android.util.BrotliInputStream] (API 30+) would be 2-3× faster
+     * but is not available under the current compile SDK, so the library fallback
+     * is used for all API levels. Decompression is a one-time operation on first
+     * launch, so the small performance difference is negligible.
      */
-    @Suppress("NewApi")
     private fun brotliDecoder(input: InputStream): InputStream =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            android.util.BrotliInputStream(input)
-        } else {
-            BrotliInputStream(input)
-        }
+        BrotliInputStream(input)
 
     /**
      * Decompresses [dict.db.br] from [assets] on first install.
