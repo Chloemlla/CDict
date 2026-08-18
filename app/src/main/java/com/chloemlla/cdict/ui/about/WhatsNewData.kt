@@ -19,6 +19,17 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.BugReport,
+            title = "升级 CodeQL Action 到 v4",
+            subtitle = "CodeQL Action v3 将在 2026 年 12 月被弃用，GitHub Actions 运行环境已升级到 Node 24。",
+            bullets = listOf(
+                "修复：CodeQL 分析步骤因 GitHub 服务器临时不可用而失败，属于基础设施问题，非代码缺陷。",
+                "升级：codeql-action/init 和 codeql-action/analyze 从 @v3 升级到 @v4，兼容即将弃用的 v3 版本。",
+                "后续：建议定期检查 GitHub Actions 依赖版本，避免因上游弃用导致 CI 中断。",
+            ),
+            tip = "本次变更仅影响 CI 工作流，不影响 App 运行。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.BugReport,
             title = "修复首次启动词典解压",
             subtitle = "首次启动时使用目标目录的实际可用空间进行检查，避免测试环境误判空间不足而跳过词典解压。",
             bullets = listOf(
