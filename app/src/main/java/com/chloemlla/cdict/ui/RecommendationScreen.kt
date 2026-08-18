@@ -335,7 +335,7 @@ private fun RecommendationCurrentCard(
                         )
                 },
                 label = "recommendation-card",
-            ) { _ ->
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
