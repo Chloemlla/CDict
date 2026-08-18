@@ -168,9 +168,14 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
 
     /** 从队列移除并在本会话排除，推进今日已处理计数后刷新 UI。 */
     private fun consume(id: Long) {
+        // The db upsert before this call is a suspend point, so the queue head may
+        // have shifted (e.g. a concurrent defer); remove the exact item rather than
+        // the current head to avoid dropping the wrong card.
+        val idx = queue.indexOfFirst { it.word.id == id }
+        if (idx < 0) return
         consumedToday.add(id)
         handledToday++
-        queue.removeFirst()
+        queue.removeAt(idx)
         emit()
     }
 
@@ -216,7 +221,10 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
                     totalCount += feed.items.size
                 }
                 delta < 0 -> {
-                    val remove = (queue.size - goal).coerceAtLeast(0)
+                    // Goal is the day's total target; already-handled words still count
+                    // toward it, so trim the queue to what remains to be shown.
+                    val remaining = (goal - handledToday).coerceAtLeast(0)
+                    val remove = (queue.size - remaining).coerceAtLeast(0)
                     repeat(remove) { queue.removeLast() }
                     totalCount = (totalCount - remove).coerceAtLeast(0)
                 }

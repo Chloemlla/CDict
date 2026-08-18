@@ -447,11 +447,15 @@ class StudyViewModel(context: Context) : ViewModel() {
                     addedAt = System.currentTimeMillis(),
                 ),
             )
-            if (!isFree) {
+            // dao.upsert is a suspend point; a double-tap can reach here after an
+            // earlier invocation already removed and bookkept the card. Only count
+            // progress on a successful removal to avoid double-counting todayDone
+            // and duplicating the learnedToday entry.
+            val removed = learnQueue.remove(card)
+            if (removed && !isFree) {
                 todayDone++
                 learnedToday.add(card)
             }
-            learnQueue.remove(card)
             topUpLearnQueue(isFree)
             if (!isFree && todayDone >= dailyGoal()) {
                 refreshLearnedToday()

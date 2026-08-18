@@ -18,6 +18,19 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.BugReport,
+            title = "修复队列与搜索竞态",
+            subtitle = "修复推荐/背词队列在异步操作后的误删、目标裁剪错误，以及词典搜索结果丢失排序模式、加载更多竞态等问题。",
+            bullets = listOf(
+                "推荐队列精确移除：consume 改为按词 ID 精确移除，避免数据库写入 suspend 后队列头部已变时误删当前卡片。",
+                "目标裁剪修正：推荐页降低每日目标时，已处理的词仍计入目标，不再裁剪过多导致队列短于预期。",
+                "背词双击防护：markLearned 在移除队列卡片前检查是否仍在队列中，防止双击导致重复计数。",
+                "词典排序保持：搜索结果保留用户当前排序模式，清空搜索后不再重置为默认排序。",
+                "加载更多竞态：用列表引用相等替代 size 检查，避免重置后恰好同大小的过期分页被误合并。",
+            ),
+            tip = "入口：推荐页 / 背词页的卡片操作；词典页搜索与翻页。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "修复推荐页课程标签冷启动",
             subtitle = "修复在推荐页选择「高中短语」等课程标签时，冷启动状态直接显示「已学完」且无法刷新的问题。",
@@ -58,17 +71,6 @@ object WhatsNewData {
                 "修复：DictionaryApp.kt 中 import androidx.compose.material3.ExperimentalLayoutApi 已被上游 Compose 库移除，改为仅使用 foundation.layout.ExperimentalLayoutApi。",
             ),
             tip = "本次变更仅影响构建流程，不影响 App 运行体验。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.FilterAlt,
-            title = "优化词典列表筛选与读音体验",
-            subtitle = "精简词典列表冗余标签，优化排序/筛选按钮布局，读音按钮支持点击切换与状态反馈。",
-            bullets = listOf(
-                "移除冗余标签：排序/筛选下拉按钮下方的课程标签快捷芯片已移除（下拉菜单已提供相同功能，不再重复）。",
-                "箭头位置优化：排序和筛选下拉按钮的箭头图标固定在按钮右侧边缘，而非紧跟在文字后面。",
-                "读音按钮切换：词详情页的英音/美音按钮点击后显示停止图标和「停止」文字，再次点击即可停止播放。",
-            ),
-            tip = "入口：词典标签页 → 搜索框下方排序/筛选按钮；词详情页 → 朗读按钮。",
         ),
     )
 }
