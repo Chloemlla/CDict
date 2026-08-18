@@ -19,6 +19,18 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "背词与推荐页新增课程筛选",
+            subtitle = "背词（Study）与推荐（Recommendation）页新增课程标签 + 雅思频率组双维度筛选，每页独立记忆并持久化，让学习更聚焦。",
+            bullets = listOf(
+                "课程标签筛选：背词和推荐页顶部新增下拉菜单，可按「高中 3500 词」「高中短语」等课程标签过滤，仅学习选定词表的单词。",
+                "频率组筛选：同时支持按雅思频率组（1–7 组）筛选，与课程标签自由组合，精确定位单词难度层级。",
+                "每页独立记忆：背词页与推荐页的筛选设置分别持久化，互不干扰，默认均为「全部词表 + 全部组」。",
+                "数据层适配：所有推荐抽样（核心新词 / 派生拓展 / 高频过渡）和背词冷启动梯度均感知当前筛选范围，不会漏出范围外的词。",
+            ),
+            tip = "可在背词或推荐页顶部找到筛选下拉菜单，选择词表或频率组后即刻生效。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "短语库 AI 语感标注准备就绪",
             subtitle = "短语库构建脚本新增按课程标签的 AI 标注入口，为后续对「高中短语」批量补语感描述铺路。",
             bullets = listOf(

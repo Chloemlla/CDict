@@ -80,6 +80,7 @@ fun RecommendationScreen(
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     wideLayout: Boolean,
+    onScopeChange: (StudyScope) -> Unit = {},
 ) {
     val context = LocalContext.current
     val phraseViewModel: PhraseSpeechViewModel = viewModel(
@@ -152,7 +153,7 @@ fun RecommendationScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 // 宽屏同样显示目标 / 进度 / 图例，并让当前卡在低高度窗口下可滚动。
-                                RecommendationHeader(state, onSetGoal)
+                                RecommendationHeader(state, onSetGoal, onScopeChange)
                                 RecommendationCurrentCard(
                                     state = state,
                                     phraseStates = phraseStates,
@@ -179,7 +180,7 @@ fun RecommendationScreen(
                                 .padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            RecommendationHeader(state, onSetGoal)
+                            RecommendationHeader(state, onSetGoal, onScopeChange)
                             RecommendationCurrentCard(
                                 state = state,
                                 phraseStates = phraseStates,
@@ -239,9 +240,15 @@ private fun RecommendationNoDictionary() {
 private fun RecommendationHeader(
     state: RecommendationScreenState.Ready,
     onSetGoal: (Int) -> Unit,
+    onScopeChange: (StudyScope) -> Unit = {},
 ) {
     val fraction = if (state.dailyGoal > 0) state.handledToday.toFloat() / state.dailyGoal else 0f
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ScopeFilterRow(
+            scope = state.scope,
+            availableCurriculumTags = state.availableCurriculumTags,
+            onScopeChange = onScopeChange,
+        )
         RecommendationGoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -506,13 +513,14 @@ private fun RecommendationEmpty(
     state: RecommendationScreenState.Ready,
     onContinueMore: () -> Unit,
     onSetGoal: (Int) -> Unit,
+    onScopeChange: (StudyScope) -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        RecommendationHeader(state, onSetGoal)
+        RecommendationHeader(state, onSetGoal, onScopeChange)
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             colors = CardDefaults.cardColors(

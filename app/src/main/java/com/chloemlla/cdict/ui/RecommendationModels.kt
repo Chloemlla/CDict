@@ -26,5 +26,7 @@ sealed interface RecommendationScreenState {
         val totalCount: Int,
         val items: List<RecommendationItemCard>,
         val handledToday: Int,
+        val scope: StudyScope = StudyScope(),
+        val availableCurriculumTags: List<String> = emptyList(),
     ) : RecommendationScreenState
 }

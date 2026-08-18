@@ -25,6 +25,8 @@ import java.time.LocalDate
 /** 与背词页共享同一个每日目标（同一 SharedPreferences），保证两侧进度一致。 */
 private const val REC_PREFS_NAME = "cdict_study_settings"
 private const val REC_PREF_KEY_GOAL = "study_daily_goal"
+private const val REC_PREF_KEY_SCOPE_TAG = "rec_scope_curriculum_tag"
+private const val REC_PREF_KEY_SCOPE_GROUP = "rec_scope_frequency_group"
 
 /** “稍后再看”打散：插回到当前词之后第 4~6 位（PRD 智能插入）。 */
 private const val DEFER_INSERT_SLOT = 5
@@ -42,6 +44,8 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private val _state = MutableStateFlow<RecommendationScreenState>(RecommendationScreenState.Loading)
     val state: StateFlow<RecommendationScreenState> = _state.asStateFlow()
 
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+
     private var dictDb: DictionaryDatabase? = null
     private var studyDb: StudyDatabase? = null
     private val queue = ArrayDeque<RecommendationItemCard>()
@@ -57,6 +61,10 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
                 is DatabaseState.Ready -> {
                     dictDb = result.database
                     studyDb = StudyDatabase.open(context)
+                    _availableTags.value = result.database.dictionaryDao().distinctCurriculumTags()
+                        .flatMap { it.split(",").map(String::trim).filter(String::isNotEmpty) }
+                        .distinct()
+                        .sorted()
                     buildFeed()
                 }
                 is DatabaseState.Failed -> {
@@ -70,6 +78,21 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private fun dailyGoal(): Int =
         prefs.getInt(REC_PREF_KEY_GOAL, DAILY_GOAL_DEFAULT)
             .coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
+
+    private fun savedScope(): StudyScope = StudyScope(
+        curriculumTag = prefs.getString(REC_PREF_KEY_SCOPE_TAG, null)?.takeIf(String::isNotEmpty),
+        frequencyGroup = if (prefs.contains(REC_PREF_KEY_SCOPE_GROUP)) prefs.getInt(REC_PREF_KEY_SCOPE_GROUP, -1).let { if (it in 1..7) it else null } else null,
+    )
+
+    fun onScopeChange(scope: StudyScope) {
+        prefs.edit {
+            if (scope.curriculumTag != null) putString(REC_PREF_KEY_SCOPE_TAG, scope.curriculumTag)
+            else remove(REC_PREF_KEY_SCOPE_TAG)
+            if (scope.frequencyGroup != null) putInt(REC_PREF_KEY_SCOPE_GROUP, scope.frequencyGroup)
+            else remove(REC_PREF_KEY_SCOPE_GROUP)
+        }
+        viewModelScope.launch { buildFeed() }
+    }
 
     /** 依据当前每日目标从头重建整条推荐流（点刷新时调用）。 */
     fun reload() {
@@ -85,9 +108,10 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private suspend fun buildFeed() {
         val eng = engine() ?: return
         val goal = dailyGoal()
+        val scope = savedScope()
         val occupied = consumedToday + queue.map { it.word.id }
         queue.clear()
-        val feed = eng.generateFeed(goal, today, occupied)
+        val feed = eng.generateFeed(goal, today, occupied, scope.curriculumTag, scope.frequencyGroup)
         feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
         totalCount = feed.items.size
         handledToday = 0
@@ -165,8 +189,9 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             val eng = engine() ?: return@launch
             val goal = dailyGoal()
+            val scope = savedScope()
             val occupied = consumedToday + queue.map { it.word.id }
-            val feed = eng.generateFeed(goal, today, occupied)
+            val feed = eng.generateFeed(goal, today, occupied, scope.curriculumTag, scope.frequencyGroup)
             feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
             totalCount += feed.items.size
             emit()
@@ -181,11 +206,12 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
         viewModelScope.launch {
             val delta = goal - prev
+            val scope = savedScope()
             when {
                 delta > 0 -> {
                     val eng = engine() ?: return@launch
                     val occupied = consumedToday + queue.map { it.word.id }
-                    val feed = eng.generateFeed(delta, today, occupied)
+                    val feed = eng.generateFeed(delta, today, occupied, scope.curriculumTag, scope.frequencyGroup)
                     feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
                     totalCount += feed.items.size
                 }
@@ -207,6 +233,8 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
             totalCount = totalCount,
             items = queue.toList(),
             handledToday = handledToday,
+            scope = savedScope(),
+            availableCurriculumTags = _availableTags.value,
         )
     }
 }

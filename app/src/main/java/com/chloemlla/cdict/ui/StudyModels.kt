@@ -51,6 +51,8 @@ sealed interface StudyScreenState {
         // True when the review phase is an on-demand test of today's newly-learned words
         // instead of yesterday's scheduled due queue; drives the header label.
         val isImmediateTest: Boolean = false,
+        val scope: StudyScope = StudyScope(),
+        val availableCurriculumTags: List<String> = emptyList(),
     ) : StudyScreenState
 }
 

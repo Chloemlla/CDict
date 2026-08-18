@@ -60,6 +60,8 @@ private const val DEFER_INSERT_SLOT = 4
 
 private const val PREF_KEY_GOAL = "study_daily_goal"
 private const val PREFS_NAME = "cdict_study_settings"
+private const val PREF_KEY_SCOPE_TAG = "study_scope_curriculum_tag"
+private const val PREF_KEY_SCOPE_GROUP = "study_scope_frequency_group"
 
 class StudyViewModel(context: Context) : ViewModel() {
     private val prefs: SharedPreferences =
@@ -70,6 +72,9 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     private val _masteredIds = MutableStateFlow<Set<Long>>(emptySet())
     val masteredIds: StateFlow<Set<Long>> = _masteredIds.asStateFlow()
+
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+    val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
 
     private var dictDb: DictionaryDatabase? = null
     private var studyDb: StudyDatabase? = null
@@ -97,6 +102,11 @@ class StudyViewModel(context: Context) : ViewModel() {
                     dictDb = result.database
                     studyDb = StudyDatabase.open(context)
                     val dao = studyDb!!.studyDao()
+                    // 加载可用课程标签
+                    _availableTags.value = result.database.dictionaryDao().distinctCurriculumTags()
+                        .flatMap { it.split(",").map(String::trim).filter(String::isNotEmpty) }
+                        .distinct()
+                        .sorted()
                     viewModelScope.launch {
                         dao.masteredIds().collect { _masteredIds.value = it.toSet() }
                     }
@@ -109,6 +119,21 @@ class StudyViewModel(context: Context) : ViewModel() {
     }
 
     private fun dailyGoal(): Int = prefs.getInt(PREF_KEY_GOAL, DAILY_GOAL_DEFAULT).coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
+
+    private fun savedScope(): StudyScope = StudyScope(
+        curriculumTag = prefs.getString(PREF_KEY_SCOPE_TAG, null)?.takeIf(String::isNotEmpty),
+        frequencyGroup = if (prefs.contains(PREF_KEY_SCOPE_GROUP)) prefs.getInt(PREF_KEY_SCOPE_GROUP, -1).let { if (it in 1..7) it else null } else null,
+    )
+
+    fun onScopeChange(scope: StudyScope) {
+        prefs.edit {
+            if (scope.curriculumTag != null) putString(PREF_KEY_SCOPE_TAG, scope.curriculumTag)
+            else remove(PREF_KEY_SCOPE_TAG)
+            if (scope.frequencyGroup != null) putInt(PREF_KEY_SCOPE_GROUP, scope.frequencyGroup)
+            else remove(PREF_KEY_SCOPE_GROUP)
+        }
+        viewModelScope.launch { reload() }
+    }
 
     fun setGoal(value: Int) {
         val goal = value.coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
@@ -358,19 +383,22 @@ class StudyViewModel(context: Context) : ViewModel() {
      */
     private suspend fun sampleNewWords(need: Int, occupied: Set<Long>): List<WordEntity> {
         if (need <= 0) return emptyList()
+        val scope = savedScope()
+        val tag = scope.curriculumTag
+        val group = scope.frequencyGroup
         val used = occupied.toMutableSet()
         val result = mutableListOf<WordEntity>()
         val core = need * 6 / 10
         val expand = need * 3 / 10
         val easy = need - core - expand
-        result += sampleGroup(core, DEFAULT_BOUNDARY_GROUP, used)
-        result += sampleGroup(expand, minOf(DEFAULT_BOUNDARY_GROUP + 1, 7), used)
-        result += sampleGroup(easy, maxOf(DEFAULT_BOUNDARY_GROUP - 1, 1), used)
+        result += sampleGroup(core, group ?: DEFAULT_BOUNDARY_GROUP, used, tag)
+        result += sampleGroup(expand, minOf((group ?: DEFAULT_BOUNDARY_GROUP) + 1, 7), used, tag)
+        result += sampleGroup(easy, maxOf((group ?: DEFAULT_BOUNDARY_GROUP) - 1, 1), used, tag)
         if (result.size < need) {
             val dictDao = dictDb?.dictionaryDao() ?: return result
             var attempts = 0
             while (result.size < need && attempts < 12) {
-                for (word in dictDao.randomWords(600)) {
+                for (word in dictDao.randomWordsFiltered(tag, 600)) {
                     if (result.size >= need) break
                     if (used.add(word.id)) result.add(word)
                 }
@@ -380,13 +408,15 @@ class StudyViewModel(context: Context) : ViewModel() {
         return result
     }
 
-    private suspend fun sampleGroup(target: Int, group: Int, used: MutableSet<Long>): List<WordEntity> {
+    private suspend fun sampleGroup(target: Int, group: Int, used: MutableSet<Long>, tag: String? = null): List<WordEntity> {
         if (target <= 0) return emptyList()
         val dictDao = dictDb?.dictionaryDao() ?: return emptyList()
         val out = mutableListOf<WordEntity>()
         var attempts = 0
         while (out.size < target && attempts < 8) {
-            for (word in dictDao.randomWordsInGroup(group, 200)) {
+            val pool = if (tag == null) dictDao.randomWordsInGroup(group, 200)
+            else dictDao.randomWordsInGroupFiltered(tag, group, 200)
+            for (word in pool) {
                 if (out.size >= target) break
                 if (used.add(word.id)) out.add(word)
             }
@@ -516,6 +546,8 @@ class StudyViewModel(context: Context) : ViewModel() {
             queueRemaining = learnQueue.size,
             learnedToday = learnedList,
             isImmediateTest = isImmediateTest,
+            scope = savedScope(),
+            availableCurriculumTags = _availableTags.value,
         )
     }
 

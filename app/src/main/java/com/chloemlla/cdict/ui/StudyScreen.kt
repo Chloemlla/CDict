@@ -100,6 +100,7 @@ fun StudyScreen(
     onExitFreePlay: () -> Unit,
     onSetGoal: (Int) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    onScopeChange: (StudyScope) -> Unit = {},
 ) {
     // 与词典词条一致：背词卡片的英文释义也经 vivo 网关自动翻译为中文，翻译状态按文本缓存。
     val context = LocalContext.current
@@ -191,12 +192,14 @@ fun StudyScreen(
                         phraseStates = phraseStates,
                         onTranslate = phraseViewModel::translate,
                         onSpeak = phraseViewModel::speak,
+                        onScopeChange = onScopeChange,
                     )
                     StudyPhase.DONE -> DoneFlow(
                         state = state,
                         onStartImmediateTest = onStartImmediateTest,
                         onContinueFreePlay = onContinueFreePlay,
                         onSetGoal = onSetGoal,
+                        onScopeChange = onScopeChange,
                     )
                 }
             }
@@ -501,6 +504,7 @@ private fun LearnFlow(
     phraseStates: Map<String, PhraseUiState>,
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
+    onScopeChange: (StudyScope) -> Unit = {},
 ) {
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
@@ -509,6 +513,11 @@ private fun LearnFlow(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+        ScopeFilterRow(
+            scope = state.scope,
+            availableCurriculumTags = state.availableCurriculumTags,
+            onScopeChange = onScopeChange,
+        )
         GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
         StudyProgressBar(state)
         if (isFree) {
@@ -734,6 +743,7 @@ private fun DoneFlow(
     onStartImmediateTest: () -> Unit,
     onContinueFreePlay: () -> Unit,
     onSetGoal: (Int) -> Unit,
+    onScopeChange: (StudyScope) -> Unit = {},
 ) {
     ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -742,6 +752,11 @@ private fun DoneFlow(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
         item(key = "summary") {
+            ScopeFilterRow(
+                scope = state.scope,
+                availableCurriculumTags = state.availableCurriculumTags,
+                onScopeChange = onScopeChange,
+            )
             GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
             StudyProgressBar(state)
             Card(

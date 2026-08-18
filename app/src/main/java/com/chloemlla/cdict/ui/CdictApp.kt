@@ -350,6 +350,7 @@ private fun DestinationContent(
                 onExitFreePlay = studyViewModel::exitFreePlay,
                 onSetGoal = studyViewModel::setGoal,
                 onPlayPronunciation = onDictionaryPlayPronunciation,
+                onScopeChange = studyViewModel::onScopeChange,
             )
             1 -> DictionaryApp(
                 state = dictionaryState,
@@ -376,6 +377,7 @@ private fun DestinationContent(
                 onOpenWord = onOpenDictionaryWord,
                 onPlayPronunciation = onDictionaryPlayPronunciation,
                 wideLayout = wideLayout,
+                onScopeChange = recommendationViewModel::onScopeChange,
             )
         }
         }

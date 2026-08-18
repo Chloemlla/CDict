@@ -37,6 +37,14 @@ interface DictionaryDao {
     @Query("SELECT * FROM words WHERE frequencyGroup = :group ORDER BY frequency, word LIMIT :limit OFFSET :offset")
     fun browseGroup(group: Int, limit: Int, offset: Int): Flow<List<WordEntity>>
 
+    // Tag-aware cold-start browse used by the recommendation cold path when a curriculum
+    // label is active: only entries carrying that label are offered as starters.
+    @Query(
+        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND frequencyGroup = :group ORDER BY frequency, word LIMIT :limit OFFSET :offset",
+    )
+    fun browseGroupFiltered(tag: String?, group: Int, limit: Int, offset: Int): Flow<List<WordEntity>>
+
     @Query("SELECT words.* FROM words JOIN word_search ON words.id = word_search.rowid WHERE word_search MATCH :query ORDER BY words.frequencyGroup, words.frequency, words.word LIMIT :limit")
     fun searchEnglish(query: String, limit: Int = 100): Flow<List<WordEntity>>
 
@@ -84,15 +92,48 @@ interface DictionaryDao {
     suspend fun wordsByIds(ids: List<Long>): List<WordEntity>
 
     // Random sample of words with a non-empty Chinese translation, used to draw
-    // distractor options for the next-day review questions.
+    // unfiltered distractor options for the next-day review questions.
     @Query("SELECT * FROM words WHERE translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit")
     suspend fun randomWords(limit: Int): List<WordEntity>
+
+    // Random sample over the whole corpus, filtered by an optional curriculum tag when the study or
+    // recommendation feed is scoped to one label (used for cold-start fallback padding).
+    @Query(
+        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit",
+    )
+    suspend fun randomWordsFiltered(tag: String?, limit: Int): List<WordEntity>
+
+    // Random sample over the whole corpus, filtered by an optional curriculum tag and frequency band.
+    // Used by Study/Recommendation blanket fallbacks when scoped band sampling runs dry.
+    @Query(
+        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND (:group IS NULL OR frequencyGroup = :group) AND translation IS NOT NULL AND length(translation) > 0 " +
+            "ORDER BY RANDOM() LIMIT :limit",
+    )
+    suspend fun randomScoped(tag: String?, group: Int?, limit: Int): List<WordEntity>
 
     // Random sample restricted to a frequency band, used by the adaptive cold-start
     // gradient (core / high-frequency-extension / simple words) to pull recommendations
     // from the right difficulty neighbourhood of the user's estimated level.
     @Query("SELECT * FROM words WHERE frequencyGroup = :group AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit")
     suspend fun randomWordsInGroup(group: Int, limit: Int): List<WordEntity>
+
+    // Tag-aware band sample: restricts the random draw to entries carrying a curriculum label
+    // (e.g. 高中 3500 词 / 高中短语). A null tag disables the filter, matching the unfiltered call.
+    @Query(
+        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND frequencyGroup = :group AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit",
+    )
+    suspend fun randomWordsInGroupFiltered(tag: String?, group: Int, limit: Int): List<WordEntity>
+
+    // Random over the whole corpus, filtered by an optional curriculum tag when the study or
+    // recommendation feed is scoped to one label (used for cold-start fallback padding).
+    @Query(
+        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit",
+    )
+    suspend fun randomWordsFiltered(tag: String?, limit: Int): List<WordEntity>
 
     // Expansion pool (方案A): new words sharing a word root with already-studied words, so the
     // daily exploration feed extends from familiar vocabulary instead of the review backlog.
@@ -101,6 +142,15 @@ interface DictionaryDao {
             "WHERE roots.root IN (:roots) ORDER BY words.frequencyGroup, words.frequency, words.word LIMIT :limit",
     )
     suspend fun wordsSharingRoots(roots: List<String>, limit: Int): List<WordEntity>
+
+    // Tag-aware root expansion: only new words that both share a studied root AND also carry the
+    // active curriculum label qualify, so a scoped feed never leaks in out-of-scope words.
+    @Query(
+        "SELECT DISTINCT words.* FROM words JOIN roots ON words.id = roots.wordId " +
+            "WHERE (:tag IS NULL OR INSTR(',' || words.curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND roots.root IN (:roots) ORDER BY words.frequencyGroup, words.frequency, words.word LIMIT :limit",
+    )
+    suspend fun wordsSharingRootsFiltered(tag: String?, roots: List<String>, limit: Int): List<WordEntity>
 
     @Query("SELECT * FROM words WHERE LOWER(word) IN (:words)")
     suspend fun wordsByText(words: List<String>): List<WordEntity>
