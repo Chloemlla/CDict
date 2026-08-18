@@ -545,11 +545,11 @@ private fun WordList(
                             }
                             if (state.query.isBlank() && state.words.isNotEmpty()) {
                                 item(key = "browse-footer") {
-                                    Box(
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(vertical = 16.dp),
-                                        contentAlignment = Alignment.Center,
+                                        horizontalAlignment = Alignment.CenterHorizontally,
                                     ) {
                                         AnimatedVisibility(
                                             visible = state.isLoadingMore,
