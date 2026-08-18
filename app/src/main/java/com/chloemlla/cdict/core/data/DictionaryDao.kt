@@ -127,14 +127,6 @@ interface DictionaryDao {
     )
     suspend fun randomWordsInGroupFiltered(tag: String?, group: Int, limit: Int): List<WordEntity>
 
-    // Random over the whole corpus, filtered by an optional curriculum tag when the study or
-    // recommendation feed is scoped to one label (used for cold-start fallback padding).
-    @Query(
-        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
-            "AND translation IS NOT NULL AND length(translation) > 0 ORDER BY RANDOM() LIMIT :limit",
-    )
-    suspend fun randomWordsFiltered(tag: String?, limit: Int): List<WordEntity>
-
     // Expansion pool (方案A): new words sharing a word root with already-studied words, so the
     // daily exploration feed extends from familiar vocabulary instead of the review backlog.
     @Query(
