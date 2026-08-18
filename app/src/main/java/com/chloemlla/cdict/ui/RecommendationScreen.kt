@@ -325,6 +325,7 @@ private fun RecommendationCurrentCard(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            @Suppress("UnusedContentLambdaTargetStateParameter")
             AnimatedContent(
                 targetState = word.id,
                 modifier = Modifier.fillMaxWidth(),
