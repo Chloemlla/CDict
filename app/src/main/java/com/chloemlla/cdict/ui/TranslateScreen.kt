@@ -2,13 +2,26 @@ package com.chloemlla.cdict.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -56,6 +69,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -82,6 +97,14 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
     val supportedLanguages by viewModel.supportedLanguages.collectAsStateWithLifecycle()
     val keyboardController = LocalSoftwareKeyboardController.current
     val canTranslate = query.isNotBlank() && state !is TranslationUiState.Translating
+
+    val buttonInteractionSource = remember { MutableInteractionSource() }
+    val buttonPressed by buttonInteractionSource.collectIsPressedAsState()
+    val buttonScale by animateFloatAsState(
+        targetValue = if (buttonPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "translateButtonScale",
+    )
 
     val context = LocalContext.current
     val pronunciationPlayer = remember { PronunciationPlayer(context) }
@@ -262,9 +285,14 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                     viewModel.translate()
                 },
                 enabled = canTranslate,
+                interactionSource = buttonInteractionSource,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
+                    .graphicsLayer {
+                        scaleX = buttonScale
+                        scaleY = buttonScale
+                    }
                     .semantics {
                         stateDescription = when {
                             state is TranslationUiState.Translating -> "翻译中"
@@ -294,15 +322,17 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
             AnimatedContent(
                 targetState = state,
                 transitionSpec = {
-                    (fadeIn() + slideInVertically { it / 8 }) togetherWith
-                        (fadeOut() + slideOutVertically { -it / 8 }) using
+                    (fadeIn(tween(250)) +
+                        slideInVertically(tween(250)) { it / 6 }) togetherWith
+                        (fadeOut(tween(180)) +
+                            shrinkVertically(tween(180))) using
                         SizeTransform(clip = true)
                 },
                 label = "translation state",
             ) { currentState ->
                 when (currentState) {
                     TranslationUiState.Idle -> EmptyTranslationState()
-                    TranslationUiState.Translating -> TranslatingState()
+                    TranslationUiState.Translating -> ShimmerSkeleton()
                     is TranslationUiState.Success -> TranslationResultBlock(
                         result = currentState.result,
                         onSpeak = { translation -> pronunciationPlayer.play(translation, Accent.US) },
@@ -350,14 +380,68 @@ private fun EmptyTranslationState() {
 }
 
 @Composable
-private fun TranslatingState() {
-    StateCard(
-        icon = Icons.Filled.Translate,
-        iconDescription = "正在翻译",
-        title = "正在翻译",
-        message = "请稍候，正在为你整理译文。",
-        showProgress = true,
+private fun ShimmerSkeleton() {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "shimmerAlpha",
     )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .graphicsLayer { this.alpha = alpha },
+                ) {
+                    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = CircleShape) {
+                        Spacer(Modifier.fillMaxSize())
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SkeletonLine(widthFraction = 0.4f, height = 20.dp, alpha = alpha)
+                    SkeletonLine(widthFraction = 0.25f, height = 14.dp, alpha = alpha)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            SkeletonLine(widthFraction = 1f, height = 18.dp, alpha = alpha)
+            SkeletonLine(widthFraction = 0.85f, height = 18.dp, alpha = alpha)
+            SkeletonLine(widthFraction = 0.6f, height = 18.dp, alpha = alpha)
+        }
+    }
+}
+
+@Composable
+private fun SkeletonLine(widthFraction: Float, height: androidx.compose.ui.unit.Dp, alpha: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(widthFraction)
+            .height(height)
+            .clip(RoundedCornerShape(6.dp))
+            .graphicsLayer { this.alpha = alpha },
+    ) {
+        Surface(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) {
+            Spacer(Modifier.fillMaxSize())
+        }
+    }
 }
 
 @Composable
@@ -366,8 +450,27 @@ private fun FailureState(
     onRetry: () -> Unit,
     enabled: Boolean,
 ) {
+    val shake = remember { Animatable(0f) }
+    LaunchedEffect(message) {
+        shake.animateTo(
+            targetValue = 0f,
+            animationSpec = keyframes {
+                durationMillis = 400
+                val amplitude = 10f
+                0f at 0
+                -amplitude at 50
+                amplitude at 100
+                -amplitude * 0.6f at 150
+                amplitude * 0.6f at 200
+                -amplitude * 0.3f at 250
+                0f at 300
+            },
+        )
+    }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { translationX = shake.value },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
         ),

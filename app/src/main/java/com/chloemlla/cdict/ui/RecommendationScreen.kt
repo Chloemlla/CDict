@@ -1,6 +1,17 @@
 package com.chloemlla.cdict.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -245,7 +257,12 @@ private fun RecommendationHeader(
     onSetGoal: (Int) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
 ) {
-    val fraction = if (state.dailyGoal > 0) state.handledToday.toFloat() / state.dailyGoal else 0f
+    val rawFraction = if (state.dailyGoal > 0) state.handledToday.toFloat() / state.dailyGoal else 0f
+    val fraction by animateFloatAsState(
+        targetValue = rawFraction.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 250),
+        label = "progress-fraction",
+    )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ScopeFilterRow(
             scope = state.scope,
@@ -269,7 +286,7 @@ private fun RecommendationHeader(
             )
         }
         LinearProgressIndicator(
-            progress = { fraction.coerceIn(0f, 1f) },
+            progress = { fraction },
             modifier = Modifier.fillMaxWidth().height(6.dp),
         )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,39 +325,50 @@ private fun RecommendationCurrentCard(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            RecommendationModePill(head.pool)
-            WordCardContent(
-                word = word,
-                phraseStates = phraseStates,
-                onPlayPronunciation = onPlayPronunciation,
-                onTranslate = onTranslate,
-                onSpeak = onSpeak,
-                playingKey = playingKey,
-                speakingKey = speakingKey,
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                bottomContent = {
-                    Row(modifier = Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        RecommendationInfoPill("IELTS 频率 ${word.frequency}")
-                        RecommendationInfoPill("组 ${word.frequencyGroup}")
-                    }
+            AnimatedContent(
+                targetState = word.id,
+                modifier = Modifier.fillMaxWidth(),
+                transitionSpec = {
+                    (slideInVertically(animationSpec = tween(220)) { it / 4 } + fadeIn(tween(200)))
+                        .togetherWith(
+                            slideOutVertically(animationSpec = tween(220)) { -it / 4 } + fadeOut(tween(180)),
+                        )
                 },
-            )
+                label = "recommendation-card",
+            ) { _ ->
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    RecommendationModePill(head.pool)
+                    WordCardContent(
+                        word = word,
+                        phraseStates = phraseStates,
+                        onPlayPronunciation = onPlayPronunciation,
+                        onTranslate = onTranslate,
+                        onSpeak = onSpeak,
+                        playingKey = playingKey,
+                        speakingKey = speakingKey,
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        bottomContent = {
+                            Row(modifier = Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                RecommendationInfoPill("IELTS 频率 ${word.frequency}")
+                                RecommendationInfoPill("组 ${word.frequencyGroup}")
+                            }
+                        },
+                    )
+                }
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedButton(
-                    onClick = onDefer,
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-                ) {
+                PressableOutlinedButton(onClick = onDefer, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
                     Text("稍后再看")
                 }
-                Button(
-                    onClick = onMarkLearned,
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-                ) {
+                PressableButton(onClick = onMarkLearned, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) {
                     Text("加入今日背词任务")
                 }
             }
@@ -540,7 +568,9 @@ private fun RecommendationGoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
 
 @Composable
 private fun RecommendationModePill(pool: RecommendationPool) {
-    val (bg, fg) = poolColors(pool)
+    val (targetBg, targetFg) = poolColors(pool)
+    val bg by animateColorAsState(targetValue = targetBg, animationSpec = tween(250), label = "mode-pill-bg")
+    val fg by animateColorAsState(targetValue = targetFg, animationSpec = tween(250), label = "mode-pill-fg")
     Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(8.dp)) {
         Text(
             text = recommendationPoolLabel(pool),
@@ -553,7 +583,9 @@ private fun RecommendationModePill(pool: RecommendationPool) {
 
 @Composable
 private fun RecommendationLegendPill(text: String, pool: RecommendationPool) {
-    val (bg, fg) = poolColors(pool)
+    val (targetBg, targetFg) = poolColors(pool)
+    val bg by animateColorAsState(targetValue = targetBg, animationSpec = tween(250), label = "legend-pill-bg")
+    val fg by animateColorAsState(targetValue = targetFg, animationSpec = tween(250), label = "legend-pill-fg")
     Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(6.dp)) {
         Text(
             text = text,
@@ -565,7 +597,8 @@ private fun RecommendationLegendPill(text: String, pool: RecommendationPool) {
 
 @Composable
 private fun RecommendationPoolDot(pool: RecommendationPool) {
-    val (bg, _) = poolColors(pool)
+    val (targetBg, _) = poolColors(pool)
+    val bg by animateColorAsState(targetValue = targetBg, animationSpec = tween(250), label = "pool-dot-bg")
     Surface(
         color = bg,
         shape = RoundedCornerShape(50),
@@ -599,3 +632,47 @@ private fun poolColors(pool: RecommendationPool): Pair<androidx.compose.ui.graph
         RecommendationPool.SIMPLE ->
             MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
     }
+
+@Composable
+private fun PressableButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "button-press-scale",
+    )
+    Button(
+        onClick = onClick,
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+        interactionSource = interactionSource,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun PressableOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "outlined-press-scale",
+    )
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
+        interactionSource = interactionSource,
+    ) {
+        content()
+    }
+}

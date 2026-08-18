@@ -18,6 +18,19 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "全面优化动画体验",
+            subtitle = "词典、翻译、推荐三页新增流畅的过渡动画与微交互反馈，操作更顺滑自然。",
+            bullets = listOf(
+                "推荐卡片切换：当前卡片操作后新卡片以滑动+淡入过渡进入，不再生硬跳切。",
+                "翻译加载骨架屏：翻译等待时显示脉冲骨架占位，替代空白等待；失败时错误卡片轻微抖动提醒。",
+                "词典列表入场：词条列表加载/筛选/排序时以交错淡入+微滑动入场，搜索清除时交叉淡出过渡。",
+                "进度条与按钮反馈：推荐页进度条平滑动画，主要按钮按压时轻微缩放反馈。",
+                "词典详情动画：详情卡片内容变化时平滑过渡，加载底部提示淡入显示。",
+            ),
+            tip = "入口：词典页搜索与列表；翻译页翻译；推荐页卡片操作。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.BugReport,
             title = "修复队列与搜索竞态",
             subtitle = "修复推荐/背词队列在异步操作后的误删、目标裁剪错误，以及词典搜索结果丢失排序模式、加载更多竞态等问题。",
@@ -63,15 +76,6 @@ object WhatsNewData {
                 "按钮加载状态：词典详情页的「加入背词计划」按钮在操作执行期间显示加载动画，防止重复点击。",
             ),
             tip = "入口：背词标签页 → 复习识记卡；词典页 → 词详情 → 背词计划按钮。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.BugReport,
-            title = "修复 CI 编译错误",
-            subtitle = "移除已废弃的 material3.ExperimentalLayoutApi 引用，消除编译期未解析引用错误。",
-            bullets = listOf(
-                "修复：DictionaryApp.kt 中 import androidx.compose.material3.ExperimentalLayoutApi 已被上游 Compose 库移除，改为仅使用 foundation.layout.ExperimentalLayoutApi。",
-            ),
-            tip = "本次变更仅影响构建流程，不影响 App 运行体验。",
         ),
     )
 }
