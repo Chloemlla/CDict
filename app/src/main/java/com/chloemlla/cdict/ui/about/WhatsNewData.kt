@@ -18,6 +18,17 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "优化复习体验与按钮反馈",
+            subtitle = "缩短复习识记卡延迟、增加触觉反馈、背词按钮加入加载状态。",
+            bullets = listOf(
+                "识记卡延迟优化：复习模式下完全陌生词的释义展示延迟从 3 秒缩短至 1.5 秒，减少等待时间。",
+                "触觉反馈：复习答题正确时轻触反馈、错误时重触提醒，配合提示音强化学习体感。",
+                "按钮加载状态：词典详情页的「加入背词计划」按钮在操作执行期间显示加载动画，防止重复点击。",
+            ),
+            tip = "入口：背词标签页 → 复习识记卡；词典页 → 词详情 → 背词计划按钮。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.BugReport,
             title = "修复 CI 编译错误",
             subtitle = "移除已废弃的 material3.ExperimentalLayoutApi 引用，消除编译期未解析引用错误。",
@@ -59,18 +70,6 @@ object WhatsNewData {
                 "数据：已标注词典库经 Git LFS 管理并随版本 + Release 更新，短语语感随 App 下载的词典资产生效。",
             ),
             tip = "在词典标签页筛选「高中短语」，词条卡片即可看到语感与搭配信息。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "1.1.0 版本发布",
-            subtitle = "本轮迭代新增高中英语短语库与课程标签筛选,并完成词典首次启动与打包体积的多项优化。",
-            bullets = listOf(
-                "短语库：内置「高中英语短语手札」,覆盖 11 个分类共约 1,262 条短语,可在筛选下拉菜单按「高中短语」查看。",
-                "课程标签：词典与词详情页支持「高中 3500 词 / 高中短语」标签,按课程筛选词表。",
-                "体积：词典在构建时经 Brotli 极限压缩,APK 体积显著减小;首次启动解压前检查可用空间。",
-                "稳定：首次启动解压串行化并校验结果,翻译请求取消过期结果避免覆盖,崩溃 SDK 启动更可靠。",
-            ),
-            tip = "可在词典标签页的排序 / 筛选下拉菜单中选择课程标签。",
         ),
     )
 }

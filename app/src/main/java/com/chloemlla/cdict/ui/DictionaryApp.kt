@@ -791,6 +791,12 @@ private fun WordDetail(
     val curriculumTags = parseCurriculumTags(word.curriculumTags)
     val ukPlaying = playingKey == "${word.id}:UK"
     val usPlaying = playingKey == "${word.id}:US"
+    var togglingWordId by remember { mutableStateOf<Long?>(null) }
+
+    // Clear toggling state when masteredIds updates (database operation completed).
+    LaunchedEffect(masteredIds) {
+        togglingWordId = null
+    }
 
     Scaffold(
         topBar = {
@@ -955,18 +961,30 @@ private fun WordDetail(
                             }
                         }
                         val mastered = word.id in masteredIds
+                        val isToggling = togglingWordId == word.id
                         OutlinedButton(
-                            onClick = { onToggleMastered(word) },
+                            onClick = {
+                                togglingWordId = word.id
+                                onToggleMastered(word)
+                            },
+                            enabled = !isToggling,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 12.dp)
                                 .heightIn(min = 48.dp),
                             contentPadding = ButtonDefaults.ContentPadding,
                         ) {
-                            Icon(
-                                imageVector = if (mastered) Icons.Filled.Check else Icons.Filled.Add,
-                                contentDescription = null,
-                            )
+                            if (isToggling) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (mastered) Icons.Filled.Check else Icons.Filled.Add,
+                                    contentDescription = null,
+                                )
+                            }
                             Spacer(Modifier.size(8.dp))
                             Text(if (mastered) "已掌握 · 移出背词计划" else "加入背词计划")
                         }

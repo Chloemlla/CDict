@@ -64,7 +64,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -317,7 +319,7 @@ private fun ReviewFlow(
     }
     LaunchedEffect(question.wordId, question.attempt, question.forceReveal) {
         if (question.forceReveal) {
-            kotlinx.coroutines.delay(3000)
+            kotlinx.coroutines.delay(1500)
             reveal = true
             onQuestionPresented()
         }
@@ -325,6 +327,7 @@ private fun ReviewFlow(
     // Short success tone when an answer is correct ("播放提示音"). Created and released
     // together with the review screen so it never outlives the REVIEW phase.
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val tone = remember(context) { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) }
     DisposableEffect(tone) {
         onDispose { tone.release() }
@@ -412,6 +415,7 @@ private fun ReviewFlow(
                 FeedbackBanner("回答正确，继续加油", CorrectGreen, CorrectGreenContainer)
                 // Auto-advance to the next question after a brief green confirmation.
                 LaunchedEffect(feedback) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LightImpact)
                     tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
                     kotlinx.coroutines.delay(650)
                     onAdvance()
@@ -419,6 +423,9 @@ private fun ReviewFlow(
             }
             feedback != null && !feedback.correct -> {
                 FeedbackBanner("答错了，正确答案：${feedback.correctText}", WrongRed, WrongRedContainer)
+                LaunchedEffect(feedback) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
                 Button(
                     onClick = onAdvance,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
