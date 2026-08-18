@@ -1,0 +1,99 @@
+name: Publish dictionary asset
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  publish:
+    name: Rebuild and publish dictionary release assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Recompute assetSignature on a working copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pub"
+          cp scripts/CDict-dict.db "$RUNNER_TEMP/pub/CDict-dict.db"
+          python - "$RUNNER_TEMP/pub/CDict-dict.db" <<'PY'
+          import hashlib, sqlite3, sys
+          db = sqlite3.connect(sys.argv[1])
+          # Mirrors SIGNATURE_COLUMNS ordering in build_phrase_db.py / merge_distribution.py.
+          cols = ("id","word","phoneticUk","phoneticUs","translation","definition",
+                  "mnemonic","frequencyGroup","frequency","emotionColor","register",
+                  "nuanceDescription","usageWarning","collocations","aiSupplemented",
+                  "headwordSummary","curriculumTags")
+          h = hashlib.sha256()
+          q = "SELECT " + ",".join(cols) + " FROM words ORDER BY id"
+          for row in db.execute(q):
+              h.update("|".join(str(v or "") for v in row).encode("utf-8"))
+              h.update(b"\n")
+          sig = h.hexdigest()
+          db.execute(
+              "UPDATE metadata SET value=? WHERE key='assetSignature'",
+              (sig,),
+          )
+          db.commit()
+          db.close()
+          print("assetSignature=" + sig)
+          PY
+          test -s "$RUNNER_TEMP/pub/CDict-dict.db"
+
+      - name: Extract dictionary signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/pub/CDict-dict.db" "$RUNNER_TEMP/pub/dict.signature" <<'PY'
+          import sqlite3, sys
+          con = sqlite3.connect(sys.argv[1])
+          sig = con.execute("SELECT value FROM metadata WHERE key='assetSignature'").fetchone()
+          if not sig:
+              raise SystemExit("error: missing assetSignature in dictionary db")
+          open(sys.argv[2], "w").write(sig[0] + "\n")
+          PY
+          test -s "$RUNNER_TEMP/pub/dict.signature"
+
+      - name: Compress dictionary asset with Brotli
+        run: |
+          set -euo pipefail
+          pip install brotli
+          python -c "import brotli; open('$RUNNER_TEMP/pub/dict.db.br','wb').write(brotli.compress(open('$RUNNER_TEMP/pub/CDict-dict.db','rb').read(), quality=11))"
+          test -s "$RUNNER_TEMP/pub/dict.db.br"
+
+      - name: Checksum release assets
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/pub" && sha256sum CDict-dict.db dict.db.br dict.signature > checksums.txt && cat checksums.txt)
+
+      - name: Publish dictionary release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release view dictionary-asset --json id >/dev/null 2>&1 || \
+            gh release create dictionary-asset \
+              --title "CDict dictionary asset" \
+              --notes "Merged dictionary database (distribution enrichment). Published automatically." \
+              --repo "$GITHUB_REPOSITORY"
+          gh release upload dictionary-asset \
+            "$RUNNER_TEMP/pub/CDict-dict.db" \
+            "$RUNNER_TEMP/pub/dict.db.br" \
+            "$RUNNER_TEMP/pub/dict.signature" \
+            "$RUNNER_TEMP/pub/checksums.txt" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
