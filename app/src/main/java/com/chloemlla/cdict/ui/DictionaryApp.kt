@@ -562,7 +562,7 @@ private fun <T> FilterDropdownMenu(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                 )
                 Icon(
                     imageVector = Icons.Filled.ArrowDropDown,

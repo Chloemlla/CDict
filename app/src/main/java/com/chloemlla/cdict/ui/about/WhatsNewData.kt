@@ -18,6 +18,16 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.FilterAlt,
+            title = "优化词典筛选按钮箭头位置",
+            subtitle = "词典列表顶部的排序和筛选下拉按钮，其下拉箭头图标移至按钮最右侧，与常见设计对齐。",
+            bullets = listOf(
+                "「按频率」「全部词条」等下拉按钮的箭头图标现在固定在按钮右侧边缘，而非紧跟在文字后面。",
+                "按钮文字较长时不再与箭头混在一起，视觉上更清晰。",
+            ),
+            tip = "入口：词典标签页 → 搜索框下方排序/筛选按钮。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "背词与推荐页新增课程筛选",
             subtitle = "背词（Study）与推荐（Recommendation）页新增课程标签 + 雅思频率组双维度筛选，每页独立记忆并持久化，让学习更聚焦。",
