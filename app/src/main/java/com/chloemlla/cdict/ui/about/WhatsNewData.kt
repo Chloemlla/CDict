@@ -31,14 +31,14 @@ object WhatsNewData {
         ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
-            title = "短语库 AI 语感标注准备就绪",
-            subtitle = "短语库构建脚本新增按课程标签的 AI 标注入口，为后续对「高中短语」批量补语感描述铺路。",
+            title = "高中短语获得 AI 语感标注",
+            subtitle = "「高中短语」全书 579 条已完成 AI 语感标注，覆盖感情色彩、语体、精细语意、避坑与常用搭配。",
             bullets = listOf(
-                "工具：annotate_dictionary.js 新增 --tag 课程标签过滤（如 --tag 高中短语），可只对短语补标感情色彩 / 语体 / 精细语意 / 避坑 / 常用搭配。",
-                "入口：命令为 node annotate_dictionary.js dict.db --tag 高中短语 --api-key …，按标签精确选中词条，不影响主词库。",
-                "后续：人工触发标注后，短语书在词条卡片与详情页的语感字段即会被填充。",
+                "内容：579 条高中短语全部补齐语感字段（感情色彩 / 语体 / 精细语意 / 避坑 / 常用搭配），与主词库同等渲染。",
+                "工具：annotate_dictionary.js 新增 --tag 课程标签过滤，命令为 node annotate_dictionary.js dict.db --tag 高中短语，按标签精确补标，不影响主词库。",
+                "数据：已标注词典库经 Git LFS 管理并随版本 + Release 更新，短语语感随 App 下载的词典资产生效。",
             ),
-            tip = "本次仅变更构建脚本，不影响 App 运行。",
+            tip = "在词典标签页筛选「高中短语」，词条卡片即可看到语感与搭配信息。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
