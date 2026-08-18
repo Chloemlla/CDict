@@ -188,9 +188,9 @@ class DictionaryViewModel(
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             val tag = currentCurriculumTag()
+            val mode = currentSortMode()
             val newState = if (query.isBlank()) {
                 totalCount = browseCount(db, tag)
-                val mode = currentSortMode()
                 val words = browsePage(db, mode, tag, 0)
                 DictionaryScreenState.Ready(
                     words = words,
@@ -205,6 +205,7 @@ class DictionaryViewModel(
                     words = db.dictionaryDao().searchChinese(query).first(),
                     query = query,
                     suggestion = null,
+                    sortMode = mode,
                     curriculumTag = tag,
                     availableCurriculumTags = availableTags,
                 )
@@ -235,6 +236,7 @@ class DictionaryViewModel(
                     words = words,
                     query = query,
                     suggestion = suggestion,
+                    sortMode = mode,
                     curriculumTag = tag,
                     availableCurriculumTags = availableTags,
                 )
@@ -250,6 +252,10 @@ class DictionaryViewModel(
         val offset = state.words.size
         val sortMode = state.sortMode
         val tag = state.curriculumTag
+        // Capture the list instance live when this page was requested; every list-resetting
+        // operation (search/sort/filter) builds a brand-new list, so referential equality is a
+        // reliable staleness signal that survives a reset which happens to produce the same size.
+        val baseWords = state.words
         // Flip the loading footer synchronously (no suspension in between) so the UI never re-requests.
         _state.value = state.copy(isLoadingMore = true)
         loadMoreInFlight = true
@@ -258,7 +264,7 @@ class DictionaryViewModel(
                 val more = browsePage(db, sortMode, tag, offset)
                 val latest = _state.value as? DictionaryScreenState.Ready ?: return@launch
                 // Discard stale results when a newer search, sort or filter change superseded this page.
-                if (latest.query.isNotBlank() || latest.sortMode != sortMode || latest.curriculumTag != tag || latest.words.size != offset) return@launch
+                if (latest.words !== baseWords) return@launch
                 val merged = latest.words + more
                 _state.value = latest.copy(
                     words = merged,

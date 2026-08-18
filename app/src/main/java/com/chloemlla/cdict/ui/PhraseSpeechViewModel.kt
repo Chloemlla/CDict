@@ -86,6 +86,9 @@ class PhraseSpeechViewModel(
 class PhraseSpeechViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return PhraseSpeechViewModel(VivoTranslationClient(), PronunciationPlayer(context)) as T
+        return PhraseSpeechViewModel(
+            VivoTranslationClient(),
+            PronunciationPlayer(context.applicationContext),
+        ) as T
     }
 }
