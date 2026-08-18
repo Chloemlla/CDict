@@ -103,6 +103,7 @@ fun StudyScreen(
     onSetGoal: (Int) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
+    playingKey: String? = null,
 ) {
     // 与词典词条一致：背词卡片的英文释义也经 vivo 网关自动翻译为中文，翻译状态按文本缓存。
     val context = LocalContext.current
@@ -195,6 +196,7 @@ fun StudyScreen(
                         onTranslate = phraseViewModel::translate,
                         onSpeak = phraseViewModel::speak,
                         onScopeChange = onScopeChange,
+                        playingKey = playingKey,
                     )
                     StudyPhase.DONE -> DoneFlow(
                         state = state,
@@ -513,6 +515,7 @@ private fun LearnFlow(
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
+    playingKey: String? = null,
 ) {
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
@@ -549,6 +552,7 @@ private fun LearnFlow(
                         onTranslate = onTranslate,
                         onSpeak = onSpeak,
                         onPlayPronunciation = onPlayPronunciation,
+                        playingKey = playingKey,
                     )
                 }
             } else {
@@ -601,6 +605,7 @@ private fun LearnCard(
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    playingKey: String? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -614,6 +619,7 @@ private fun LearnCard(
                 onPlayPronunciation = onPlayPronunciation,
                 onTranslate = onTranslate,
                 onSpeak = onSpeak,
+                playingKey = playingKey,
                 showPartOfSpeech = true,
                 modifier = Modifier.fillMaxWidth(),
                 bottomContent = {

@@ -174,6 +174,7 @@ fun DictionaryApp(
                             onRetryDetail = { onSelect(sel) },
                             onOpenWord = onOpenDerivedWord,
                             onPlayPronunciation = onPlayPronunciation,
+                            playingKey = state.playingKey,
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
                             onPhraseSpeak = phraseViewModel::speak,
@@ -759,6 +760,7 @@ private fun WordDetail(
     onRetryDetail: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    playingKey: String?,
     phraseStates: Map<String, PhraseUiState>,
     onPhraseTranslate: (String) -> Unit,
     onPhraseSpeak: (String) -> Unit,
@@ -916,6 +918,7 @@ private fun WordDetail(
                         PronunciationButtons(
                             word = word,
                             onPlayPronunciation = onPlayPronunciation,
+                            playingKey = playingKey,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                         val mastered = word.id in masteredIds

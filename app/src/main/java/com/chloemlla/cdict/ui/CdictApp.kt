@@ -166,6 +166,9 @@ fun CdictApp(
         }
     }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
+    // Shared playing key across all tabs so pronunciation buttons in study/recommendation
+    // pages also show the stop/playing state and auto-clear when audio finishes.
+    val playingKey = (dictionaryState as? DictionaryScreenState.Ready)?.playingKey
     // Keeps each tab's UI state (scroll position, search text, open detail) alive across tab
     // switches so returning to a tab restores exactly where the user left off.
     val tabStateHolder = rememberSaveableStateHolder()
@@ -246,6 +249,7 @@ fun CdictApp(
                         onMarkMastered = recommendationViewModel::markMastered,
                         onToggleMastered = { word -> studyViewModel.toggleMastered(word.id) },
                         onOpenDictionaryWord = onOpenDictionaryWord,
+                        playingKey = playingKey,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -280,6 +284,7 @@ fun CdictApp(
                     onMarkMastered = recommendationViewModel::markMastered,
                     onToggleMastered = { word -> studyViewModel.toggleMastered(word.id) },
                     onOpenDictionaryWord = onOpenDictionaryWord,
+                    playingKey = playingKey,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -310,6 +315,7 @@ private fun DestinationContent(
     onToggleMastered: (WordEntity) -> Unit,
     onMarkMastered: () -> Unit,
     onOpenDictionaryWord: (WordEntity) -> Unit,
+    playingKey: String?,
     modifier: Modifier = Modifier,
 ) {
     AnimatedContent(
@@ -351,6 +357,7 @@ private fun DestinationContent(
                 onSetGoal = studyViewModel::setGoal,
                 onPlayPronunciation = onDictionaryPlayPronunciation,
                 onScopeChange = studyViewModel::onScopeChange,
+                playingKey = playingKey,
             )
             1 -> DictionaryApp(
                 state = dictionaryState,
@@ -378,6 +385,7 @@ private fun DestinationContent(
                 onPlayPronunciation = onDictionaryPlayPronunciation,
                 wideLayout = wideLayout,
                 onScopeChange = recommendationViewModel::onScopeChange,
+                playingKey = playingKey,
             )
         }
         }

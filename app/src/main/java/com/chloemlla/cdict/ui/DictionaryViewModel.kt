@@ -398,8 +398,13 @@ class DictionaryViewModel(
     fun playPronunciation(word: WordEntity, accent: Accent) {
         val key = "${word.id}:${accent.name}"
         val current = _state.value as? DictionaryScreenState.Ready ?: return
-        // If already playing this audio, do nothing (no stop toggle).
-        if (current.playingKey == key) return
+        // Toggle: clicking the button that is currently playing stops it.
+        if (current.playingKey == key) {
+            pronunciationPlayer.stop()
+            _state.value = current.copy(playingKey = null)
+            return
+        }
+        // Auto-clear the playing state when this audio finishes naturally.
         pronunciationPlayer.onCompletion = {
             val s = _state.value as? DictionaryScreenState.Ready
             if (s != null) {

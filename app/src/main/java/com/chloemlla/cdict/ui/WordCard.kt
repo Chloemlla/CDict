@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -27,16 +28,19 @@ import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 
 /**
- * Shared UK/US pronunciation buttons. Each button always shows the play icon;
- * clicking while the audio is already playing does nothing.
+ * Shared UK/US pronunciation buttons. While a button's audio is playing it shows a stop
+ * state; clicking it again stops playback. Playback state auto-clears when audio finishes.
  * Used by the dictionary detail, study learn card, and recommendation card.
  */
 @Composable
 fun PronunciationButtons(
     word: WordEntity,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    playingKey: String? = null,
     modifier: Modifier = Modifier,
 ) {
+    val ukPlaying = playingKey == "${word.id}:UK"
+    val usPlaying = playingKey == "${word.id}:US"
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -48,9 +52,15 @@ fun PronunciationButtons(
                 .heightIn(min = 48.dp),
             contentPadding = ButtonDefaults.ContentPadding,
         ) {
-            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text("英音")
+            if (ukPlaying) {
+                Icon(Icons.Filled.Stop, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("停止")
+            } else {
+                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("英音")
+            }
         }
         FilledTonalButton(
             onClick = { onPlayPronunciation(word, Accent.US) },
@@ -59,9 +69,15 @@ fun PronunciationButtons(
                 .heightIn(min = 48.dp),
             contentPadding = ButtonDefaults.ContentPadding,
         ) {
-            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-            Spacer(Modifier.size(8.dp))
-            Text("美音")
+            if (usPlaying) {
+                Icon(Icons.Filled.Stop, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("停止")
+            } else {
+                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("美音")
+            }
         }
     }
 }
@@ -80,6 +96,7 @@ fun WordCardContent(
     onSpeak: (String) -> Unit,
     modifier: Modifier = Modifier,
     showPartOfSpeech: Boolean = false,
+    playingKey: String? = null,
     bottomContent: (@Composable () -> Unit)? = null,
 ) {
     val pos = if (showPartOfSpeech) {
@@ -149,6 +166,7 @@ fun WordCardContent(
         PronunciationButtons(
             word = word,
             onPlayPronunciation = onPlayPronunciation,
+            playingKey = playingKey,
             modifier = Modifier.padding(top = 16.dp),
         )
     }

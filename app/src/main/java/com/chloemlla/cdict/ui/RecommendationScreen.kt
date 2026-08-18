@@ -78,6 +78,7 @@ fun RecommendationScreen(
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     wideLayout: Boolean,
     onScopeChange: (StudyScope) -> Unit = {},
+    playingKey: String? = null,
 ) {
     val context = LocalContext.current
     val phraseViewModel: PhraseSpeechViewModel = viewModel(
@@ -161,6 +162,7 @@ fun RecommendationScreen(
                                     onDefer = onDefer,
                                     onOpenWord = onOpenWord,
                                     onPlayPronunciation = onPlayPronunciation,
+                                    playingKey = playingKey,
                                 )
                             }
                             RecommendationUpcomingList(
@@ -188,6 +190,7 @@ fun RecommendationScreen(
                                 onDefer = onDefer,
                                 onOpenWord = onOpenWord,
                                 onPlayPronunciation = onPlayPronunciation,
+                                playingKey = playingKey,
                             )
                             RecommendationUpcomingBlock(state, onOpenWord)
                         }
@@ -285,6 +288,7 @@ private fun RecommendationCurrentCard(
     onDefer: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    playingKey: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val head = state.items.first()
@@ -307,6 +311,7 @@ private fun RecommendationCurrentCard(
                 onPlayPronunciation = onPlayPronunciation,
                 onTranslate = onTranslate,
                 onSpeak = onSpeak,
+                playingKey = playingKey,
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 bottomContent = {
                     Row(modifier = Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
