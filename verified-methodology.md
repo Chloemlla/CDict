@@ -132,3 +132,77 @@ gh run view <RUN_ID> --log-failed | grep -aE "FAILED|Syntax error|Location:|Exce
 - **改动要最小化**：只修缺陷本身，不顺手重构；仓库规则明确禁写"超级文件"（大型聚合文件）。
 - **修完每批就 push 验证**：不要攒一大堆改动再推，否则一个错误要重跑全量 CI 且难定位。
 - **命名与提交规范**：Conventional Commits（`fix: ...`），message 说明"为什么"而非"改了什么"。
+
+---
+
+## 七、WhatsNewData 维护标准（已验证）
+
+每次提交必须同步更新 `app/src/main/java/com/chloemlla/cdict/ui/about/WhatsNewData.kt`，且只保留最近 **5 个**幻灯片条目。
+
+### 7.1 插入新幻灯片
+
+新幻灯片总是插在 `listOf(` 之后的第一位（最顶部），格式：
+
+```kotlin
+WhatsNewSlide(
+    icon = Icons.Filled.NewReleases,       // 与已有条目风格一致
+    title = "简短的标题（10 字以内）",
+    subtitle = "一行概括改动的目的与影响。",
+    bullets = listOf(
+        "要点 1：描述具体改动，包含用户可见的变化。",
+        "要点 2：如有技术细节，用简明确切的表述。",
+        "要点 3：不超过 3–4 条。",
+    ),
+    tip = "操作提示或入口说明。",
+),
+```
+
+### 7.2 保留最近 5 条
+
+插入新幻灯片后，**必须删除最旧的幻灯片**，使总数 ≤ 5。判断规则：
+
+1. 从 `listOf(` 之后的第一项开始计数，保留前 5 项（即索引 0–4）。
+2. 删除第 6 项及以后的全部条目（包括末尾的逗号与空行）。
+3. 如果 `listOf(` 内的条目数本来就 ≤ 5，则不需要删除。
+
+### 7.3 执行步骤
+
+```
+1. 打开 WhatsNewData.kt
+2. 在 listOf( 后第一位置插入新幻灯片
+3. 从末尾删除最旧的幻灯片，使总数 = 5
+4. 确认文件末尾格式正确：最后的幻灯片末尾无多余逗号，listOf( 的闭合 ) 保留
+```
+
+### 7.4 示例
+
+插入前（6 条，最后一条应删除）：
+
+```kotlin
+fun slides(): List<WhatsNewSlide> = listOf(
+    // [新幻灯片] ← 插入位置
+    SlideA(...),  // 第 1 (插入后成为第 2)
+    SlideB(...),  // 第 2
+    SlideC(...),  // 第 3
+    SlideD(...),  // 第 4
+    SlideE(...),  // 第 5
+    SlideF(...),  // 第 6 ← 删除此条
+)
+```
+
+插入后：
+
+```kotlin
+fun slides(): List<WhatsNewSlide> = listOf(
+    NewSlide(...),  // 第 1（新）
+    SlideA(...),    // 第 2
+    SlideB(...),    // 第 3
+    SlideC(...),    // 第 4
+    SlideD(...),    // 第 5
+)
+```
+
+### 7.5 例外
+
+- 如果某次提交只涉及基础设施变更（CI、依赖升级、构建脚本），且不影响用户可见功能，可仅更新已有幻灯片的内容而不新增。
+- 但必须确保 `slides().size ≤ 5`。如果已有 5 条，需要删除最旧的一条才能修改内容。

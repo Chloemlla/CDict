@@ -39,7 +39,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
@@ -48,7 +47,6 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -176,7 +174,6 @@ fun DictionaryApp(
                             onRetryDetail = { onSelect(sel) },
                             onOpenWord = onOpenDerivedWord,
                             onPlayPronunciation = onPlayPronunciation,
-                            playingKey = state.playingKey,
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
                             onPhraseSpeak = phraseViewModel::speak,
@@ -762,7 +759,6 @@ private fun WordDetail(
     onRetryDetail: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
-    playingKey: String?,
     phraseStates: Map<String, PhraseUiState>,
     onPhraseTranslate: (String) -> Unit,
     onPhraseSpeak: (String) -> Unit,
@@ -789,8 +785,6 @@ private fun WordDetail(
     val headwordSummary = word.headwordSummary?.takeIf { it.isNotBlank() }
     val supplements = supplementedFields(word)
     val curriculumTags = parseCurriculumTags(word.curriculumTags)
-    val ukPlaying = playingKey == "${word.id}:UK"
-    val usPlaying = playingKey == "${word.id}:US"
     var togglingWordId by remember { mutableStateOf<Long?>(null) }
 
     // Clear toggling state when masteredIds updates (database operation completed).
@@ -919,47 +913,11 @@ private fun WordDetail(
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            FilledTonalButton(
-                                onClick = { onPlayPronunciation(word, Accent.UK) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp),
-                                contentPadding = ButtonDefaults.ContentPadding,
-                            ) {
-                                if (ukPlaying) {
-                                    Icon(Icons.Filled.Stop, contentDescription = null)
-                                    Spacer(Modifier.size(8.dp))
-                                    Text("停止")
-                                } else {
-                                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                                    Spacer(Modifier.size(8.dp))
-                                    Text("英音")
-                                }
-                            }
-                            FilledTonalButton(
-                                onClick = { onPlayPronunciation(word, Accent.US) },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .heightIn(min = 48.dp),
-                                contentPadding = ButtonDefaults.ContentPadding,
-                            ) {
-                                if (usPlaying) {
-                                    Icon(Icons.Filled.Stop, contentDescription = null)
-                                    Spacer(Modifier.size(8.dp))
-                                    Text("停止")
-                                } else {
-                                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                                    Spacer(Modifier.size(8.dp))
-                                    Text("美音")
-                                }
-                            }
-                        }
+                        PronunciationButtons(
+                            word = word,
+                            onPlayPronunciation = onPlayPronunciation,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
                         val mastered = word.id in masteredIds
                         val isToggling = togglingWordId == word.id
                         OutlinedButton(

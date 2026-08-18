@@ -19,6 +19,17 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "统一朗读按钮与状态自动更新",
+            subtitle = "词典、推荐、背词三页共用一套朗读组件，播放结束自动复位，播放中点击不再误暂停。",
+            bullets = listOf(
+                "共用组件：词典详情、推荐卡片、背词卡片统一使用同一套英音/美音按钮，一处维护、三页同步。",
+                "状态自动更新：朗读播放完成后按钮状态自动复位，不会残留错误的播放状态。",
+                "播放中点击不暂停：音频播放过程中再次点击同一按钮不会停止播放，避免误触打断。",
+            ),
+            tip = "入口：词典词详情 → 朗读；推荐页 / 背词页卡片上的英音美音按钮。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "优化复习体验与按钮反馈",
             subtitle = "缩短复习识记卡延迟、增加触觉反馈、背词按钮加入加载状态。",
             bullets = listOf(
@@ -59,17 +70,6 @@ object WhatsNewData {
                 "数据层适配：所有推荐抽样（核心新词 / 派生拓展 / 高频过渡）和背词冷启动梯度均感知当前筛选范围，不会漏出范围外的词。",
             ),
             tip = "可在背词或推荐页顶部找到筛选下拉菜单，选择词表或频率组后即刻生效。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "高中短语获得 AI 语感标注",
-            subtitle = "「高中短语」全书 579 条已完成 AI 语感标注，覆盖感情色彩、语体、精细语意、避坑与常用搭配。",
-            bullets = listOf(
-                "内容：579 条高中短语全部补齐语感字段（感情色彩 / 语体 / 精细语意 / 避坑 / 常用搭配），与主词库同等渲染。",
-                "工具：annotate_dictionary.js 新增 --tag 课程标签过滤，命令为 node annotate_dictionary.js dict.db --tag 高中短语，按标签精确补标，不影响主词库。",
-                "数据：已标注词典库经 Git LFS 管理并随版本 + Release 更新，短语语感随 App 下载的词典资产生效。",
-            ),
-            tip = "在词典标签页筛选「高中短语」，词条卡片即可看到语感与搭配信息。",
         ),
     )
 }

@@ -26,14 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -545,7 +543,6 @@ private fun LearnFlow(
                     LearnCard(
                         word = card,
                         phraseStates = phraseStates,
-                        phraseUi = card.definition?.takeIf(String::isNotBlank)?.let(phraseStates::get),
                         onTranslate = onTranslate,
                         onSpeak = onSpeak,
                         onPlayPronunciation = onPlayPronunciation,
@@ -598,106 +595,39 @@ private fun LearnFlow(
 private fun LearnCard(
     word: WordEntity,
     phraseStates: Map<String, PhraseUiState>,
-    phraseUi: PhraseUiState?,
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
 ) {
-    val pos = word.translation?.takeIf(String::isNotBlank)?.let { primaryPartOfSpeech(it) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = word.word,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+            WordCardContent(
+                word = word,
+                phraseStates = phraseStates,
+                onPlayPronunciation = onPlayPronunciation,
+                onTranslate = onTranslate,
+                onSpeak = onSpeak,
+                showPartOfSpeech = true,
+                modifier = Modifier.fillMaxWidth(),
+                bottomContent = {
+                    if (wordHasAnnotations(word)) {
+                        HorizontalDivider(modifier = Modifier.padding(top = 14.dp))
+                        WordAnnotationSection(
+                            word = word,
+                            phraseStates = phraseStates,
+                            onTranslate = onTranslate,
+                            onSpeak = onSpeak,
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        )
+                    }
+                },
             )
-            pos?.takeIf { it.isNotBlank() }?.let {
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    Text(partOfSpeechLabel(it), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
-                }
-            }
-            val phonetics = listOfNotNull(
-                word.phoneticUk?.takeIf(String::isNotBlank)?.let { "英  $it" },
-                word.phoneticUs?.takeIf(String::isNotBlank)?.let { "美  $it" },
-            )
-            if (phonetics.isNotEmpty()) {
-                Text(
-                    text = phonetics.joinToString("  ·  "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 10.dp),
-                )
-            }
-            word.translation?.takeIf(String::isNotBlank)?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 14.dp),
-                )
-            }
-            word.definition?.takeIf(String::isNotBlank)?.let { def ->
-                SpeakableEnglishText(
-                    en = def,
-                    pinnedZh = null,
-                    ui = phraseUi,
-                    onTranslate = onTranslate,
-                    onSpeak = onSpeak,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-            }
-            if (wordHasAnnotations(word)) {
-                HorizontalDivider(modifier = Modifier.padding(top = 14.dp))
-                WordAnnotationSection(
-                    word = word,
-                    phraseStates = phraseStates,
-                    onTranslate = onTranslate,
-                    onSpeak = onSpeak,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                )
-            }
-            Row(modifier = Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = { onPlayPronunciation(word, Accent.UK) }, contentPadding = ButtonDefaults.ContentPadding) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("英音")
-                }
-                FilledTonalButton(onClick = { onPlayPronunciation(word, Accent.US) }, contentPadding = ButtonDefaults.ContentPadding) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("美音")
-                }
-            }
         }
     }
-}
-
-private fun partOfSpeechLabel(pos: String): String = when (pos) {
-    "n" -> "名词"
-    "v" -> "动词"
-    "adj" -> "形容词"
-    "adv" -> "副词"
-    "prep" -> "介词"
-    "conj" -> "连词"
-    "pron" -> "代词"
-    "num" -> "数词"
-    "art" -> "冠词"
-    else -> pos
 }
 
 @Composable

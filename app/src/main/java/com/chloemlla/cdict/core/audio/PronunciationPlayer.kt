@@ -50,6 +50,9 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     /** 同 <音色>:<文本> 的进行中下载共享；只由 Main 线程访问。 */
     private val inFlight = mutableMapOf<String, Deferred<YoudaoFetch>>()
 
+    /** Called when the current audio playback completes naturally (not via stop()). */
+    var onCompletion: (() -> Unit)? = null
+
     override fun speak(text: String) = play(text, Accent.US)
 
     fun stop() {
@@ -57,6 +60,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         playJob?.cancel()
         releasePlayer()
         tts?.stop()
+        onCompletion = null
     }
 
     fun play(word: String, accent: Accent) {
@@ -263,7 +267,10 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
                 if (generation == playGeneration && player === this) start()
             }
             setOnCompletionListener {
-                if (player === this) releasePlayer()
+                if (player === this) {
+                    releasePlayer()
+                    onCompletion?.invoke()
+                }
             }
             setOnErrorListener { _, _, _ ->
                 if (player === this) {

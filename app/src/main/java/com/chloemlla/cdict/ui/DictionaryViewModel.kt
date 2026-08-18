@@ -398,13 +398,14 @@ class DictionaryViewModel(
     fun playPronunciation(word: WordEntity, accent: Accent) {
         val key = "${word.id}:${accent.name}"
         val current = _state.value as? DictionaryScreenState.Ready ?: return
-        if (current.playingKey == key) {
-            pronunciationPlayer.stop()
-            _state.value = current.copy(playingKey = null)
-        } else {
-            pronunciationPlayer.play(word.word, accent)
-            _state.value = current.copy(playingKey = key)
+        // If already playing this audio, do nothing (no stop toggle).
+        if (current.playingKey == key) return
+        pronunciationPlayer.onCompletion = {
+            val s = _state.value as? DictionaryScreenState.Ready ?: return@onCompletion
+            _state.value = s.copy(playingKey = null)
         }
+        pronunciationPlayer.play(word.word, accent)
+        _state.value = current.copy(playingKey = key)
     }
 
     override fun onCleared() {

@@ -20,18 +20,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Recommend
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -292,10 +289,6 @@ private fun RecommendationCurrentCard(
 ) {
     val head = state.items.first()
     val word = head.word
-    val phonetics = listOfNotNull(
-        word.phoneticUk?.takeIf(String::isNotBlank)?.let { "英  $it" },
-        word.phoneticUs?.takeIf(String::isNotBlank)?.let { "美  $it" },
-    )
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -308,68 +301,20 @@ private fun RecommendationCurrentCard(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             RecommendationModePill(head.pool)
-            Text(
-                text = word.word,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 10.dp),
+            WordCardContent(
+                word = word,
+                phraseStates = phraseStates,
+                onPlayPronunciation = onPlayPronunciation,
+                onTranslate = onTranslate,
+                onSpeak = onSpeak,
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                bottomContent = {
+                    Row(modifier = Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RecommendationInfoPill("IELTS 频率 ${word.frequency}")
+                        RecommendationInfoPill("组 ${word.frequencyGroup}")
+                    }
+                },
             )
-            if (phonetics.isNotEmpty()) {
-                Text(
-                    text = phonetics.joinToString("  ·  "),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-            word.translation?.takeIf(String::isNotBlank)?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
-            // 非中文（英文释义）自动翻译为中文，与词典 / 背词页一致。
-            word.definition?.takeIf(String::isNotBlank)?.let { def ->
-                SpeakableEnglishText(
-                    en = def,
-                    pinnedZh = null,
-                    ui = phraseStates[def],
-                    onTranslate = onTranslate,
-                    onSpeak = onSpeak,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-            }
-            Row(modifier = Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                RecommendationInfoPill("IELTS 频率 ${word.frequency}")
-                RecommendationInfoPill("组 ${word.frequencyGroup}")
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilledTonalButton(
-                    onClick = { onPlayPronunciation(word, Accent.UK) },
-                    contentPadding = ButtonDefaults.ContentPadding,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("英音")
-                }
-                FilledTonalButton(
-                    onClick = { onPlayPronunciation(word, Accent.US) },
-                    contentPadding = ButtonDefaults.ContentPadding,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("美音")
-                }
-            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
