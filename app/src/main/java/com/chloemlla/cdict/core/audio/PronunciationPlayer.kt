@@ -59,11 +59,11 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val inFlight = mutableMapOf<String, Deferred<YoudaoFetch>>()
 
     /** Called when the current audio playback completes naturally (not via stop()). */
-    var onCompletion: (() -> Unit)? = null
+    override var onCompletion: (() -> Unit)? = null
 
     override fun speak(text: String) = play(text, Accent.US)
 
-    fun stop() {
+    override fun stop() {
         playGeneration++
         playJob?.cancel()
         releasePlayer()
