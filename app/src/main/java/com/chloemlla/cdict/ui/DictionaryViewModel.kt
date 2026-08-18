@@ -401,8 +401,10 @@ class DictionaryViewModel(
         // If already playing this audio, do nothing (no stop toggle).
         if (current.playingKey == key) return
         pronunciationPlayer.onCompletion = {
-            val s = _state.value as? DictionaryScreenState.Ready ?: return@onCompletion
-            _state.value = s.copy(playingKey = null)
+            val s = _state.value as? DictionaryScreenState.Ready
+            if (s != null) {
+                _state.value = s.copy(playingKey = null)
+            }
         }
         pronunciationPlayer.play(word.word, accent)
         _state.value = current.copy(playingKey = key)
