@@ -16,7 +16,7 @@
 
 **CDict** 是一款**离线优先**的雅思词典 Android 应用,基于 Kotlin、Jetpack Compose(Material 3)与 Room 构建,包名与应用 ID 均为 `com.chloemlla.cdict`。
 
-> **当前版本 `1.0.1`**(versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2026.08.00` · Room `2.8.4` · Kotlin/JVM 21 · AGP `9.3.1`
+> **当前版本 `1.1.0`** · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2026.08.00` · Room `2.8.4` · Kotlin/JVM 21 · AGP `9.3.1` · `versionCode` = HEAD 上的提交数(由 CI 计算)
 >
 > 词典核心**完全离线可用**;仅申请 `INTERNET` 权限,用于可选的在线翻译与发音。
 

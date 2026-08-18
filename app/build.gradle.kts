@@ -16,6 +16,11 @@ val cdictCommitHash: String = propertyOrEnvironment("CDICT_COMMIT_HASH") ?: "N/A
 val cdictBuildTimeSeconds: Long =
     propertyOrEnvironment("CDICT_BUILD_TIME")?.toLongOrNull()?.takeIf { it > 0 } ?: 0L
 
+// versionCode is supplied by CI as the number of commits on HEAD (git rev-list --count HEAD),
+// so it strictly increases with every commit. Local and test builds fall back to 1.
+val cdictVersionCode: Int =
+    propertyOrEnvironment("CDICT_VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+
 // CI materializes the lumen-crash SDK via scripts/fetch-lumen-crash-sdk.py and writes the
 // resolved version to lumen-crash.resolved.version; gradle.properties is a local fallback.
 val lumenCrashSdkVersion: String =
@@ -46,8 +51,8 @@ android {
         applicationId = "com.chloemlla.cdict"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = cdictVersionCode
+        versionName = "1.1.0"
         buildConfigField("String", "COMMIT_HASH", "\"${cdictCommitHash.replace("\"", "\\\"")}\"")
         buildConfigField("long", "BUILD_TIME", "${cdictBuildTimeSeconds}L")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

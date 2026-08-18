@@ -18,6 +18,18 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "1.1.0 版本发布",
+            subtitle = "本轮迭代新增高中英语短语库与课程标签筛选,并完成词典首次启动与打包体积的多项优化。",
+            bullets = listOf(
+                "短语库：内置「高中英语短语手札」,覆盖 11 个分类共约 1,262 条短语,可在筛选下拉菜单按「高中短语」查看。",
+                "课程标签：词典与词详情页支持「高中 3500 词 / 高中短语」标签,按课程筛选词表。",
+                "体积：词典在构建时经 Brotli 极限压缩,APK 体积显著减小;首次启动解压前检查可用空间。",
+                "稳定：首次启动解压串行化并校验结果,翻译请求取消过期结果避免覆盖,崩溃 SDK 启动更可靠。",
+            ),
+            tip = "可在词典标签页的排序 / 筛选下拉菜单中选择课程标签。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.FilterAlt,
             title = "优化词典筛选体验",
             subtitle = "词典列表新增课程标签快捷筛选，并在词条卡片直接展示所属手札分组（如「高中短语」）。",

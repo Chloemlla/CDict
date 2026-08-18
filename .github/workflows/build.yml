@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Set up Python
@@ -86,6 +88,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Set up Python
@@ -135,6 +139,7 @@ jobs:
           set -euo pipefail
           echo "CDICT_COMMIT_HASH=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "CDICT_BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
+          echo "CDICT_VERSION_CODE=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
       - name: Build debug APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
@@ -162,6 +167,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Read release version
@@ -227,6 +234,7 @@ jobs:
           set -euo pipefail
           echo "CDICT_COMMIT_HASH=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "CDICT_BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
+          echo "CDICT_VERSION_CODE=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
       - name: Build signed APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
