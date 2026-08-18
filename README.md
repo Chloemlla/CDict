@@ -16,7 +16,7 @@
 
 **CDict** is an offline-first IELTS dictionary for Android, built with Kotlin, Jetpack Compose (Material 3), and Room. The package and application ID are `com.chloemlla.cdict`.
 
-> **Current release `1.0.1`** (versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2024.12.01` · Room `2.8.4` · Kotlin/JVM 21
+> **Current release `1.0.1`** (versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2026.08.00` · Room `2.8.4` · Kotlin/JVM 21 · AGP `9.3.1`
 >
 > The full dictionary **works completely offline**; the only permissions required are `INTERNET` for optional online translation and pronunciation.
 
@@ -42,8 +42,9 @@
 
 | | |
 |---|---|
-| 🗂 **Offline-first** | 49,213 words across 7 IELTS frequency groups, bundled into the APK and copied into a Room database on first launch. |
+| 🗂 **Offline-first** | 49,213 words + 高中短语手札 (1,262 phrase entries, 11 categories) across 7 IELTS frequency groups, bundled into the APK and copied into a Room database on first launch. |
 | 🔍 **Smart search** | English full-text search (SQLite FTS5) over word / translation / definition, Chinese substring search, plus **Levenshtein typo suggestions** ("Did you mean …"). |
+| 🏷 **Curriculum tags** | Filter the dictionary by curriculum label (e.g. 高中 3500 词, 高中短语) with a dropdown menu; tagged entries show pills in word detail. |
 | 🔊 **Pronunciation** | Three-tier fallback (Youdao → vivo TTS → system TTS by default; selectable in About) with on-disk audio caching — no audio files shipped. |
 | 🌐 **Online translation** | Built-in translation engine backed by the vivo gateway, with a **three-layer cache**. |
 | 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
@@ -73,9 +74,10 @@ The app opens on the **Dictionary** tab by default. Navigation is responsive: th
 
 | Capability | Description |
 |---|---|
-| Corpus | 49,213 words across 7 IELTS frequency groups |
+| Corpus | 49,213 words + 高中短语手札 (1,262 phrase entries, 11 categories) across 7 IELTS frequency groups |
 | English search | Full-text search (SQLite FTS5) over English word, translation, and definition |
 | Chinese search | Chinese substring search via `LIKE` over word and translation |
+| Curriculum filter | Filter by curriculum label (e.g. 高中 3500 词, 高中短语) with a dropdown menu; entries show pills in word detail |
 | Ranking | Results re-ranked **Exact > Prefix > Frequency**, so core IELTS words surface first |
 | Typo tolerance | When a query finds nothing, a "Did you mean: …" suggestion is offered within a bounded **Levenshtein** edit distance (≤ 2) |
 | Sorting | Word list supports multiple sort modes (by frequency / alphabetical / reverse-alphabetical) |
@@ -92,6 +94,7 @@ Tapping an entry opens a detail page showing:
 - **Frequency** — `frequencyGroup` + IELTS `frequency`
 - **Roots** — `roots` and their meanings
 - **Derived terms** — `derivedTerms`
+- **Curriculum tags** — `curriculumTags` shown as FlowRow pills (e.g. 高中 3500 词, 高中短语)
 - **Historical heatmap** — `heatmap` of appearance scores over time
 - **Real exam sentences** — `sentences` (English + Chinese), up to 10 per word
 - **AI 语感 annotations** — an emotion-color badge (`emotionColor`) + register chip (`register`), a nuance description (`nuanceDescription`), a highlighted usage-warning box (`usageWarning`), and 常见搭配 collocations (`collocations`) that auto-translate to Chinese and can be read aloud. Shared by the word detail page and the study card.
@@ -175,10 +178,11 @@ The **Recommendation** tab builds a **fully offline** daily exploration feed (�
 | Layer | Choice |
 |---|---|
 | Language | Kotlin / JVM 21 |
-| UI | Jetpack Compose (Material 3), Compose BOM `2024.12.01`, experimental window-size-class for responsive layouts |
+| UI | Jetpack Compose (Material 3), Compose BOM `2026.08.00`, activity-compose `1.13.0`, experimental window-size-class for responsive layouts |
 | Persistence | Room `2.8.4` (dictionary + study + translation-cache databases), SQLite FTS5 |
 | Async / threading | Coroutines, repositories |
 | Min / Target / Compile SDK | 26 / 37 / 37 |
+| Build system | AGP `9.3.1`, Kotlin `2.4.10` |
 | Crash reporting | Lumen Crash SDK (version auto-resolved at build time) |
 
 ---
@@ -208,17 +212,20 @@ com.chloemlla.cdict
 - **Android Studio:** open the repo root — the IDE uses the Gradle wrapper automatically.
 - **Command line:** `./gradlew :app:assembleDebug` (requires generating the dictionary asset first, below).
 
-> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. The data-merge workflows create the Brotli-compressed asset before publishing it to the **GitHub Release**; CI downloads `dict.db.br` directly during builds instead of recompressing it. For a local `./gradlew :app:assembleDebug`, compress the committed asset manually: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`
+> **Note:** the AI-annotated dictionary ships in the repo at `scripts/CDict-dict.db`. The data-merge workflows create the Brotli-compressed asset before publishing it to the **GitHub Release**; CI downloads `dict.db.br` directly during builds instead of recompressing it. For a local `./gradlew :app:assembleDebug`, compress the committed asset manually: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`. The build config configures `androidResources.localeFilters` (zh/en) — the app uses only Chinese and English resources.
 
 ---
 
 ## Data Pipeline
 
-The dictionary is built from three sources:
+The dictionary is built from three sources, plus a phrase-library supplement:
 
 1. **Annotated base** — `scripts/CDict-dict.db` (49,213 words, 7 groups), committed in the repo, with AI annotation fields (`emotionColor`, `register`, `nuanceDescription`, `usageWarning`, `collocations`) produced by `scripts/annotate_dictionary.js` (node:sqlite, no Python). The annotator batches 10 words per OpenAI-compatible request (~10× fewer round-trips), checkpoint-resumes so interrupted runs keep progress, and retries / degrades failed words to protect annotation quality.
 2. **Rich-content merge** — `.github/workflows/merge-distribution.yml` (manual `workflow_dispatch`) merges rich content from an authorized `distribution.sqlite` export into the annotated base: `scripts/merge_distribution.py` matches ~17,925 headwords and fills US/UK phonetics, empty mnemonics (with etymology), derived terms, and example sentences. The result is validated and **published as a GitHub Release asset** (`dictionary-asset` tag) with the merged database, a pre-compressed `dict.db.br`, a `dict.signature` content checksum, and a SHA-256 checksums file.
-3. **FLDC reference source** — `scripts/fetch_fldc_export.py` decodes the custom binary payload served by fldc.pages.dev (two gzip chunk containers + a shared-prefix string pool) into the converter's JSON shape. `.github/workflows/export-fldc.yml` (manual `workflow_dispatch`) runs `convert_dictionary.py` end-to-end in CI and uploads the resulting ~107,143-word / 7-group reference asset as a workflow artifact.
+3. **Phrase library** — `.github/workflows/merge-phrases.yml` (manual `workflow_dispatch`, or sourcing from the committed `scripts/phrases.docx`) parses a structured docx word-list (11 sections, 1413 entries) via `scripts/build_phrase_db.py`, deduplicates to ~1,262 unique phrases, and merges them into the released CDict-dict.db with `curriculumTags = "高中短语"` so the app's curriculum filter can isolate phrase entries.
+4. **FLDC reference source** — `scripts/fetch_fldc_export.py` decodes the custom binary payload served by fldc.pages.dev (two gzip chunk containers + a shared-prefix string pool) into the converter's JSON shape. `.github/workflows/export-fldc.yml` (manual `workflow_dispatch`) runs `convert_dictionary.py` end-to-end in CI and uploads the resulting ~107,143-word / 7-group reference asset as a workflow artifact.
+
+**Curriculum tagging.** `scripts/apply_curriculum_tags.py` (run as a CI step in the distribution pipeline) idempotently applies a curriculum label (e.g. 高中 3500 词) to matching headwords in the `curriculumTags` column, then recomputes the asset signature. The tag is appended without duplicating existing labels, and the workflow is safe to re-run.
 
 CI stages the pre-compressed dictionary at build time by downloading `dict.db.br` and `dict.signature` from the hardcoded release URL and verifying their SHA-256 checksums:
 
@@ -243,7 +250,7 @@ cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 
 ## CI / CD
 
-`.github/workflows/build.yml` runs debug unit tests and lint on push / pull request. The signed release build is triggered either by a manual **`workflow_dispatch` (`publish=true`)** or by a **`v*` tag**. Release signing uses only these repository secrets:
+`.github/workflows/build.yml` runs debug unit tests and lint on push / pull request. `.github/workflows/codeql.yml` runs CodeQL analysis (Java/Kotlin autobuild) on push / pull request to the default branch. The signed release build is triggered either by a manual **`workflow_dispatch` (`publish=true`)** or by a **`v*` tag**. Release signing uses only these repository secrets:
 
 - `KEYSTORE_BASE64`
 - `KEYSTORE_PASSWORD`
@@ -252,9 +259,9 @@ cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 
 The pipeline: `keytool` verifies the decoded keystore → build APK / AAB → `apksigner` verifies the APK → generate SHA-256 checksums → upload artifacts → clean up temporary signing material. No keystore or plaintext credentials live in the repo. The **Lumen Crash SDK version is auto-resolved at build time** so it stays current without manual bumps.
 
-Two auxiliary `workflow_dispatch` workflows maintain the dictionary data: `merge-distribution.yml` publishes the merged rich-content asset to the `dictionary-asset` GitHub Release (downloaded by the build at compile time), and `export-fldc.yml` rebuilds the FLDC reference asset in CI.
+Three auxiliary `workflow_dispatch` workflows maintain the dictionary data: `merge-distribution.yml` publishes the merged rich-content asset to the `dictionary-asset` GitHub Release, `merge-phrases.yml` merges the phrase library into the same release, and `export-fldc.yml` rebuilds the FLDC reference asset in CI.
 
-Release builds enable **R8 minification** (`proguard-android-optimize.txt` + `proguard-rules.pro`) and **resource shrinking**, and emit per-ABI split APKs (`*universal*.apk` is the all-architecture package; the AAB lets Google Play split per device). A dedicated `releaseAab` build type produces the AAB with resource shrinking off (AGP cannot combine ABI splits + resource shrink + AAB in one build type; Play performs per-device shrinking at serve time).
+Release builds enable **R8 minification** (`proguard-android-optimize.txt` + `proguard-rules.pro`) and **resource shrinking**, and emit per-ABI split APKs (`*universal*.apk` is the all-architecture package; the AAB lets Google Play split per device). A dedicated `releaseAab` build type produces the AAB with resource shrinking off (AGP cannot combine ABI splits + resource shrink + AAB in one build type; Play performs per-device shrinking at serve time). Only `zh` and `en` locale resources are packaged (via `androidResources.localeFilters`), further reducing APK size.
 
 ---
 
@@ -262,7 +269,21 @@ Release builds enable **R8 minification** (`proguard-android-optimize.txt` + `pr
 
 A narrative of the development history, reconstructed from the commit log.
 
-### 1.0.x — Study, Recommendations & polish (current)
+### 1.1 — Phrase library, curriculum tags & pipeline hardening (current)
+
+The dictionary gained a structured phrase library, curriculum-tag filtering, and several infrastructure improvements:
+
+- **Phrase database**: Parsed 1,413 entries from a structured docx (11 sections, 1,262 unique after dedup) into a new SQLite asset matching the CDict schema (`scripts/build_phrase_db.py`), merged into the published CDict-dict.db with `curriculumTags = "高中短语"` so the app's curriculum filter can isolate phrase entries (`127e546`). The docx source is committed in the repo (`b80a334`), and `merge-phrases.yml` chains the build workflow to keep assets in sync (`230aa3c`).
+- **Curriculum tags**: Schema v5 (`MIGRATION_4_5`) adds `curriculumTags` column to `WordEntity`, shown as FlowRow pills in word detail. `scripts/apply_curriculum_tags.py` applies tags (e.g. 高中 3500 词) idempotently in the CI pipeline, and `validate_dictionary_asset.py` now requires the column (`d703a53`).
+- **Sort & curriculum filter dropdowns**: Added dropdown menus for sort mode (frequency / alphabetical / reverse-alphabetical) and curriculum-tag filter on the dictionary tab (`9195b6d`).
+- **APK size reduction**: Compressed `dict.db` with Brotli at build time (`d85b618`), using native Brotli + `ACCESS_BUFFER` for fast I/O (`07da17d`). Added storage-availability check before first-launch extraction (`8a7843d`), automatic version-detected database rebuild (`8a7843d`), and `androidResources.localeFilters` (zh/en) to replace deprecated `resourceConfigurations` (`49408d5`). Database extraction is serialized with a mutex (`f6a3dcf`), and the return value is checked to prevent empty-db creation (`f92019f`).
+- **Search & translation hardening**: FTS prefix query sanitizes operator characters, translation re-translates on input/direction change and cancels stale in-flight requests, detail page surfaces error+retry instead of infinite spinner (`d703a53`). `CancellationException` is rethrown so stale responses can't overwrite newer results (`2b21ff4`).
+- **Crash SDK fixes**: SDK installation moved to `onCreate` (`3a1c601`), directory created before space check (`5c6e0f0`), portable storage availability check (`d7425a9`), SDK installation failures exposed to the UI (`21f8182`), and default backend uploads enabled (`696b809`).
+- **CodeQL & security**: Added `codeql.yml` workflow, upgraded CodeQL Action v3→v4, switched to autobuild for Java/Kotlin (`4f747ec`, `b9387a1`, `65a9c22`). Used pure-Java `org.brotli:dec` to unblock CI builds (`58685d0`).
+- **CI pipeline**: `merge-phrases.yml` workflow added (`127e546`); build.yml chained after merge-phrases via `workflow_run` (`230aa3c`); Brotli assets published before Android builds (`4fb5b2c`); CodeQL v3→v4, setup-python 5→7, setup-java 4→5, gradle/actions 4→6, softprops/action-gh-release 2→3 (multiple dependabot commits).
+- **Dependency bumps**: Compose BOM `2024.12.01` → `2026.08.00`, AGP `9.3.0` → `9.3.1`, activity-compose `1.13.0`, Kotlin 2.4.10.
+
+### 1.0.x — Study, Recommendations & polish (previous)
 
 The app grew from a dictionary into a daily learning companion:
 

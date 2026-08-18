@@ -16,7 +16,7 @@
 
 **CDict** 是一款**离线优先**的雅思词典 Android 应用,基于 Kotlin、Jetpack Compose(Material 3)与 Room 构建,包名与应用 ID 均为 `com.chloemlla.cdict`。
 
-> **当前版本 `1.0.1`**(versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2024.12.01` · Room `2.8.4` · Kotlin/JVM 21
+> **当前版本 `1.0.1`**(versionCode `2`) · `minSdk 26` / `targetSdk 37` / `compileSdk 37` · Compose BOM `2026.08.00` · Room `2.8.4` · Kotlin/JVM 21 · AGP `9.3.1`
 >
 > 词典核心**完全离线可用**;仅申请 `INTERNET` 权限,用于可选的在线翻译与发音。
 
@@ -42,8 +42,9 @@
 
 | | |
 |---|---|
-| 🗂 **离线优先** | 内置 49,213 词条,分属 7 个 IELTS 频率组;首次启动复制到 Room 数据库,完全离线。 |
+| 🗂 **离线优先** | 内置 49,213 词条 + 高中短语手札(1,262 条短语,11 个分类),分属 7 个 IELTS 频率组;首次启动复制到 Room 数据库,完全离线。 |
 | 🔍 **智能搜索** | 英文全文搜索(SQLite FTS5,覆盖单词 / 翻译 / 释义)、中文子串搜索,以及 **Levenshtein 拼写纠错**(“你是不是想找……”)。 |
+| 🏷 **课程标签** | 通过下拉菜单按课程标签(如高中 3500 词、高中短语)筛选词典,带标签的词条在详情页展示标签胶囊。 |
 | 🔊 **发音** | 三级回退(默认有道 → vivo 合成 → 系统 TTS,可在「关于」中切换在线来源优先级),配合磁盘音频缓存,无需打包任何音频文件。 |
 | 🌐 **在线翻译** | 内置 vivo 网关注入的翻译引擎,带**三层缓存**。 |
 | 🧠 **背词模式** | 按 IELTS 频率加权的自适应间隔重复,含干扰项引擎与次日四选一复习。 |
@@ -73,14 +74,15 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 
 | 能力 | 说明 |
 |---|---|
-| 词库规模 | 49,213 词条,分属 7 个 IELTS 频率组 |
+| 词库规模 | 49,213 词条 + 高中短语手札(1,262 条短语,11 个分类),分属 7 个 IELTS 频率组 |
 | 英文搜索 | 英文全文搜索(SQLite FTS5),覆盖单词 / 翻译 / 释义 |
 | 中文搜索 | 中文子串搜索(`LIKE` 匹配单词与翻译) |
+| 课程标签筛选 | 通过下拉菜单按课程标签(如高中 3500 词、高中短语)筛选,词详情页展示标签胶囊 |
 | 排序 | 结果按 **精确 > 前缀 > 频率** 重排,核心 IELTS 词优先浮现 |
 | 拼写纠错 | 无结果时给出 **Levenshtein** 编辑距离(≤ 2)内的“你是不是想找……”建议 |
 | 排序方式 | 词表支持切换排序(按频率 / 按字母 / 字母倒序) |
 | 无限滚动 | 词表分页加载,浏览流畅 |
-| 离线存储 | Brotli 压缩的 `dict.db.br` 首次启动解压到本地，然后用 Room 打开数据库 |
+| 离线存储 | Brotli 压缩的 `dict.db.br` 首次启动解压到本地,然后用 Room 打开数据库 |
 
 ### 🧩 词详情页
 
@@ -92,6 +94,7 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 - **频率**:频率组 `frequencyGroup` + IELTS 频率 `frequency`
 - **词根** `roots` 及其含义
 - **派生词** `derivedTerms`
+- **课程标签** `curriculumTags` 以 FlowRow 标签胶囊展示(如高中 3500 词、高中短语)
 - **历年出现频率热力图** `heatmap`:各时间段出现得分
 - **真题句子** `sentences`:英文原文 + 中文翻译,每词最多 10 条
 - **AI 语感标注**:感情色彩徽标(`emotionColor`)+ 语体标签(`register`)、精细语意(`nuanceDescription`)、高亮避坑提示(`usageWarning`),以及**常见搭配**(`collocations`)——每条搭配自动翻译为中文并可朗读。词详情页与背词卡片共用。
@@ -175,10 +178,11 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 | 层次 | 选型 |
 |---|---|
 | 语言 | Kotlin / JVM 21 |
-| UI | Jetpack Compose (Material 3),Compose BOM `2024.12.01`,实验版 window-size-class 实现响应式布局 |
+| UI | Jetpack Compose (Material 3),Compose BOM `2026.08.00`,activity-compose `1.13.0`,实验版 window-size-class 实现响应式布局 |
 | 持久化 | Room `2.8.4`(词典 / 背词 / 翻译缓存三库),SQLite FTS5 |
 | 异步 | 协程、Repository 仓库模式 |
 | 版本 | min / target / compile SDK `26 / 37 / 37` |
+| 构建系统 | AGP `9.3.1`,Kotlin `2.4.10` |
 | 崩溃上报 | Lumen Crash SDK(版本在构建时自动解析) |
 
 ---
@@ -208,17 +212,20 @@ com.chloemlla.cdict
 - **Android Studio**:直接打开仓库根目录即可,IDE 会自动使用 Gradle Wrapper。
 - **命令行**:`./gradlew :app:assembleDebug`(需先生成词典资产,见下)。
 
-> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。数据合并工作流会在发布到 **GitHub Release** 前生成 Brotli 压缩资产；CI 构建阶段直接下载 `dict.db.br`，不再重复压缩。本地执行 `./gradlew :app:assembleDebug` 前需先压缩: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`
+> **注意**:AI 语感标注后的词典随仓库携带,位于 `scripts/CDict-dict.db`。数据合并工作流会在发布到 **GitHub Release** 前生成 Brotli 压缩资产；CI 构建阶段直接下载 `dict.db.br`，不再重复压缩。本地执行 `./gradlew :app:assembleDebug` 前需先压缩: `pip install brotli && python -c "import brotli; data=open('scripts/CDict-dict.db','rb').read(); open('app/src/main/assets/dict.db.br','wb').write(brotli.compress(data, quality=11))"`。构建配置通过 `androidResources.localeFilters` 只保留中英文资源。
 
 ---
 
 ## 数据管线
 
-词典由三路数据源构建:
+词典由四路数据源构建:
 
 1. **已标注底库** — `scripts/CDict-dict.db`(49,213 词,7 组),随仓库提交,AI 标注字段(`emotionColor`、`register`、`nuanceDescription`、`usageWarning`、`collocations`)由 `scripts/annotate_dictionary.js`(node:sqlite,不使用 Python)生成。标注脚本每批 10 词合并为一次 OpenAI 兼容请求(往返次数降约 90%),带断点续传(中断后进度不丢),并对失败词重试 / 降级兜底以保证标注质量。
 2. **富内容合并** — `.github/workflows/merge-distribution.yml`(手动 `workflow_dispatch`)把授权导出的 `distribution.sqlite` 富内容并入已标注底库:`scripts/merge_distribution.py` 匹配约 17,925 个共有词,补充 US/UK 音标、空位助记(含词源)、派生词,以及带中文译文的例句。产物经校验后**发布到 GitHub Release**(tag `dictionary-asset`),包含合并数据库、预压缩的 `dict.db.br`、`dict.signature` 内容校验和、以及 SHA-256 校验文件。
-3. **FLDC 参考数据源** — `scripts/fetch_fldc_export.py` 解码 fldc.pages.dev 分发的自定义二进制载荷(两个 gzip 分块容器 + 共享前缀字符串池)为转换器 JSON。`.github/workflows/export-fldc.yml`(手动 `workflow_dispatch`)在 CI 中端到端运行 `convert_dictionary.py`,并把产出的约 107,143 词 / 7 组参考资产上传为工作流构件。
+3. **短语库** — `.github/workflows/merge-phrases.yml`(手动 `workflow_dispatch`,或使用仓库提交的 `scripts/phrases.docx`)通过 `scripts/build_phrase_db.py` 解析结构化 docx 词表(11 节,1,413 条),去重后约 1,262 个独特短语,并入发布的 CDict-dict.db,并标记 `curriculumTags = "高中短语"`,让 App 的课程标签筛选可以隔离短语条目。
+4. **FLDC 参考数据源** — `scripts/fetch_fldc_export.py` 解码 fldc.pages.dev 分发的自定义二进制载荷(两个 gzip 分块容器 + 共享前缀字符串池)为转换器 JSON。`.github/workflows/export-fldc.yml`(手动 `workflow_dispatch`)在 CI 中端到端运行 `convert_dictionary.py`,并把产出的约 107,143 词 / 7 组参考资产上传为工作流构件。
+
+**课程标签标注。** `scripts/apply_curriculum_tags.py`(作为分发流水线的 CI 步骤运行)以幂等方式对 `curriculumTags` 列中匹配的 headword 应用课程标签(如高中 3500 词),然后重新计算资产签名。标签不会重复、已有标签被保留,工作流可安全重复运行。
 
 CI 在构建时从硬编码的 Release 地址下载已由数据合并工作流生成的 `dict.db.br` 和 `dict.signature`，只校验这两个构建资产的 SHA-256 后直接打包:
 
@@ -243,7 +250,7 @@ cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 
 ## CI / CD
 
-`.github/workflows/build.yml` 在 push / pull request 时运行 debug 单元测试与 lint;签名发布构建由手动 **`workflow_dispatch`(`publish=true`)** 或 **`v*` tag** 触发。发布签名仅使用以下仓库 secrets:
+`.github/workflows/build.yml` 在 push / pull request 时运行 debug 单元测试与 lint。`.github/workflows/codeql.yml` 在 push / pull request 时对默认分支运行 CodeQL 分析(Java/Kotlin autobuild)。签名发布构建由手动 **`workflow_dispatch`(`publish=true`)** 或 **`v*` tag** 触发。发布签名仅使用以下仓库 secrets:
 
 - `KEYSTORE_BASE64`
 - `KEYSTORE_PASSWORD`
@@ -252,9 +259,9 @@ cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 
 工作流依次:`keytool` 校验解码后的 keystore → 构建 APK / AAB → `apksigner` 校验 APK → 生成 SHA-256 校验和 → 上传产物 → 清理临时签名材料。仓库不含任何 keystore 或明文凭据。**Lumen Crash SDK 版本在构建时自动解析**,无需手动升级。
 
-发布构建开启 **R8 混淆**(`proguard-android-optimize.txt` + `proguard-rules.pro`)与**资源收缩**,并按 ABI 产出拆分 APK(`*universal*.apk` 为全架构包;AAB 交给 Google Play 按设备拆分)。专门的 `releaseAab` buildType 以关闭资源收缩的方式产出 AAB(AGP 无法在同一种 buildType 内同时启用 ABI 拆分 + 资源收缩 + AAB;Play 在服务端按设备做资源收缩)。
+发布构建开启 **R8 混淆**(`proguard-android-optimize.txt` + `proguard-rules.pro`)与**资源收缩**,并按 ABI 产出拆分 APK(`*universal*.apk` 为全架构包;AAB 交给 Google Play 按设备拆分)。专门的 `releaseAab` buildType 以关闭资源收缩的方式产出 AAB(AGP 无法在同一种 buildType 内同时启用 ABI 拆分 + 资源收缩 + AAB;Play 在服务端按设备做资源收缩)。仅打包 `zh` 和 `en` 语言资源(通过 `androidResources.localeFilters`),进一步缩小 APK。
 
-另有两条手动 `workflow_dispatch` 工作流维护词典数据:`merge-distribution.yml` 把合并后的富内容资产发布到 `dictionary-asset` GitHub Release(构建阶段下载),`export-fldc.yml` 在 CI 中重建 FLDC 参考资产。
+另有三条手动 `workflow_dispatch` 工作流维护词典数据:`merge-distribution.yml` 把合并后的富内容资产发布到 `dictionary-asset` GitHub Release,`merge-phrases.yml` 将短语库合并到同一 Release,`export-fldc.yml` 在 CI 中重建 FLDC 参考资产。
 
 ---
 
@@ -262,7 +269,21 @@ cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
 
 依据提交历史重建的演进脉络。
 
-### 1.0.x —— 背词、推荐与打磨(当前)
+### 1.1 —— 短语库、课程标签与数据管线加固(当前)
+
+词典新增结构化短语库、课程标签筛选,以及多项基础设施改进:
+
+- **短语库**:从结构化 docx(11 节,1,413 条)解析并去重为约 1,262 个独特短语,构建匹配 CDict schema 的 SQLite 资产(`scripts/build_phrase_db.py`),并入发布的 CDict-dict.db,标记 `curriculumTags = "高中短语"` 以便 App 的课程标签筛选隔离短语条目(`127e546`)。docx 源文件提交在仓库中(`b80a334`),`merge-phrases.yml` 通过 `workflow_run` 串联构建工作流(`230aa3c`)。
+- **课程标签**:Schema v5(`MIGRATION_4_5`)为 `WordEntity` 新增 `curriculumTags` 列,在词详情页以 FlowRow 标签胶囊展示。`scripts/apply_curriculum_tags.py` 在 CI 管线中幂等地应用标签(如高中 3500 词),`validate_dictionary_asset.py` 现在要求该列存在(`d703a53`)。
+- **排序与课程标签下拉菜单**:词典页新增排序方式下拉菜单(按频率 / 按字母 / 字母倒序)和课程标签筛选下拉菜单(9195b6d)。
+- **APK 瘦身**:构建时用 Brotli 压缩 `dict.db`(`d85b618`),使用原生 Brotli + `ACCESS_BUFFER` 实现快速 I/O(`07da17d`)。首次启动解压前检查存储空间(`8a7843d`),自动检测版本号变化并重建数据库(`8a7843d`),用 `androidResources.localeFilters`(zh/en)替代已弃用的 `resourceConfigurations`(`49408d5`)。数据库解压互斥串行化(`f6a3dcf`),校验返回值防止创建空库(`f92019f`)。
+- **搜索与翻译加固**:FTS 前缀查询清理操作符字符,翻译在输入/方向变化时重新翻译并取消过期请求,详情页在网络错误时显示错误+重试而非无限转圈(`d703a53`)。`CancellationException` 正确向上抛出,阻止过期响应覆盖最新结果(`2b21ff4`)。
+- **崩溃 SDK 修复**:SDK 安装移至 `onCreate`(`3a1c601`),解压前创建目录(`5c6e0f0`),使用可移植存储可用性检查(`d7425a9`),SDK 安装失败暴露到 UI(`21f8182`),启用默认后端上传(`696b809`)。
+- **CodeQL 与安全**:新增 `codeql.yml` 工作流,CodeQL Action v3→v4,切换为 Java/Kotlin autobuild(`4f747ec`、`b9387a1`、`65a9c22`)。使用纯 Java `org.brotli:dec` 库解决 CI 构建障碍(`58685d0`)。
+- **CI 管线**:新增 `merge-phrases.yml` 工作流(`127e546`);build.yml 通过 `workflow_run` 串联在 merge-phrases 之后(`230aa3c`);Brotli 资产在 Android 构建前发布(`4fb5b2c`);CodeQL v3→v4、setup-python 5→7、setup-java 4→5、gradle/actions 4→6、softprops/action-gh-release 2→3(多个 dependabot 提交)。
+- **依赖升级**:Compose BOM `2024.12.01` → `2026.08.00`,AGP `9.3.0` → `9.3.1`,activity-compose `1.13.0`,Kotlin 2.4.10。
+
+### 1.0.x —— 背词、推荐与打磨(上一版)
 
 应用从词典演进为每日学习伴侣:
 
