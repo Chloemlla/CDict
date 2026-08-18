@@ -2,6 +2,15 @@ package com.chloemlla.cdict.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +21,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,7 +90,9 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -201,6 +214,17 @@ fun DictionaryApp(
 
 @Composable
 private fun LoadingScreen() {
+    // Pulsing shimmer skeleton — a gentle alpha loop signals progress rather than a frozen blank screen.
+    val transition = rememberInfiniteTransition(label = "loading-shimmer")
+    val pulse by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "loading-pulse",
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -212,14 +236,27 @@ private fun LoadingScreen() {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             CircularProgressIndicator(
-                modifier = Modifier.semantics {
-                    contentDescription = "正在加载离线词典"
-                },
+                modifier = Modifier
+                    .alpha(pulse)
+                    .semantics {
+                        contentDescription = "正在加载离线词典"
+                    },
             )
             Text(
                 text = "正在加载离线词典…",
                 style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.alpha(pulse),
             )
+            repeat(3) { i ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f - i * 0.1f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = pulse))
+                        .alpha(0.5f),
+                )
+            }
         }
     }
 }
@@ -276,6 +313,17 @@ private fun WordList(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
+
+    // Staggered entrance animation: re-trigger only on initial load, filter, sort, or query
+    // change — not on every scroll. A keyed reset gives each list refresh its own fade+slide pass.
+    val entranceKey = "${state.sortMode.name}:${state.curriculumTag}:${state.query}"
+    val entranceProgress = remember(entranceKey) {
+        androidx.compose.animation.core.Animatable(0f)
+    }
+    LaunchedEffect(entranceKey) {
+        entranceProgress.snapTo(0f)
+        entranceProgress.animateTo(1f, animationSpec = tween(durationMillis = 280))
+    }
 
     // System back (button or edge-swipe gesture) with a non-blank query clears the search
     // before exiting, mirroring standard search-box behaviour. Dismiss once blank.
@@ -452,61 +500,97 @@ private fun WordList(
                     },
                 )
             } else {
-                Text(
-                    text = if (query.isBlank()) "全部词条" else "匹配词条",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
-                )
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    state = listState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(state.words, key = { it.id }) { word ->
-                        WordResultCard(
-                            word = word,
-                            onSelect = onSelect,
+                // Crossfade (~200ms) when the query is cleared: search results hand off to the
+                // browse list without a hard pop. Binds to the query presence, not the text itself.
+                Crossfade(
+                    targetState = query.isNotBlank(),
+                    animationSpec = tween(durationMillis = 200),
+                    label = "search-clear-crossfade",
+                ) { isSearching ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = if (isSearching) "匹配词条" else "全部词条",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
                         )
-                    }
-                    if (state.query.isBlank() && state.words.isNotEmpty()) {
-                        item(key = "browse-footer") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                when {
-                                    state.isLoadingMore -> Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            state = listState,
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            itemsIndexed(state.words, key = { _, word -> word.id }) { index, word ->
+                                // Stagger: each item fades in with a tiny vertical slide, capped so
+                                // long lists don't drag the entrance past the animation duration.
+                                val itemDelay = (index.coerceAtMost(8) * 24).toInt()
+                                val itemAlpha by animateFloatAsState(
+                                    targetValue = if (entranceProgress.value >= 1f ||
+                                        entranceProgress.value >= (itemDelay + 1) / 281f
+                                    ) 1f else 0f,
+                                    animationSpec = tween(durationMillis = 220),
+                                    label = "item-alpha-$index",
+                                )
+                                WordResultCard(
+                                    word = word,
+                                    onSelect = onSelect,
+                                    modifier = Modifier
+                                        .graphicsLayer {
+                                            alpha = itemAlpha
+                                            translationY = (1f - itemAlpha) * 24f
+                                        },
+                                )
+                            }
+                            if (state.query.isBlank() && state.words.isNotEmpty()) {
+                                item(key = "browse-footer") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 16.dp),
+                                        contentAlignment = Alignment.Center,
                                     ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                            strokeWidth = 2.dp,
-                                        )
-                                        Text(
-                                            text = "加载更多…",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
+                                        AnimatedVisibility(
+                                            visible = state.isLoadingMore,
+                                            enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(18.dp),
+                                                    strokeWidth = 2.dp,
+                                                )
+                                                Text(
+                                                    text = "加载更多…",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                        AnimatedVisibility(
+                                            visible = !state.isLoadingMore && state.hasMore,
+                                            enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+                                        ) {
+                                            Text(
+                                                text = "继续下滑加载更多",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        AnimatedVisibility(
+                                            visible = !state.isLoadingMore && !state.hasMore,
+                                            enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+                                        ) {
+                                            Text(
+                                                text = "已展示全部 ${state.words.size} 个词条",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
                                     }
-
-                                    state.hasMore -> Text(
-                                        text = "继续下滑加载更多",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-
-                                    else -> Text(
-                                        text = "已展示全部 ${state.words.size} 个词条",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
                                 }
                             }
                         }
@@ -676,10 +760,21 @@ private fun WordResultCard(
     val translation = word.translation?.takeIf { it.isNotBlank() }
     val definition = word.definition?.takeIf { it.isNotBlank() }
 
+    // Subtle press scale (0.98) — a barely-perceptible haptic-ish cue that the row is tappable.
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "card-press-scale",
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(
+                interactionSource = interactionSource,
                 onClickLabel = "查看单词 ${word.word}",
                 role = Role.Button,
                 onClick = { onSelect(word) },
@@ -1344,7 +1439,9 @@ private fun DetailSectionCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = tween(durationMillis = 220)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
