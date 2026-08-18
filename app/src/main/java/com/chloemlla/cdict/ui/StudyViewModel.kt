@@ -154,6 +154,8 @@ class StudyViewModel(context: Context) : ViewModel() {
     fun reload() {
         viewModelScope.launch {
             val dao = studyDb?.studyDao() ?: return@launch
+            learnQueue.clear()
+            reviewQueue.clear()
             todayDone = dao.learnedTodayCount(today)
             refreshLearnedToday()
             val cap = (dailyGoal() * REVIEW_CAP_MULTIPLIER).toInt()
