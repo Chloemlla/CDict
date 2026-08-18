@@ -56,11 +56,20 @@ class RecommendationEngine(
         val used = (studied + excludedIds).toMutableSet()
 
         // 冷启动：从未学过任何词，直接给“组 1 最常见”的前 goal 个词。
+        // 当指定了课程标签（如”高中短语”）时，该标签下的词可能不在标准雅思频率组
+        // （1-7）内，因此先用 browseGroupFiltered 尝试，不足时退回到 randomWordsFiltered
+        // 全域随机抽样，保证 feed 不为空。
         if (studied.isEmpty()) {
             val cold = if (tag == null) {
                 dictDao.browseGroup(group ?: 1, goal, 0).first()
             } else {
-                dictDao.browseGroupFiltered(tag, group ?: 1, goal, 0).first()
+                val tagged = dictDao.browseGroupFiltered(tag, group ?: 1, goal, 0).first()
+                if (tagged.size < goal) {
+                    val fallback = dictDao.randomWordsFiltered(tag, goal)
+                    (tagged + fallback).take(goal)
+                } else {
+                    tagged
+                }
             }.map { RecommendationItem(it, RecommendationPool.CORE_NEW) }
             return RecommendationFeed(cold.take(goal), goal)
         }
