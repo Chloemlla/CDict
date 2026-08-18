@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -53,6 +55,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -434,6 +437,28 @@ private fun WordList(
                 }
             }
 
+            if (query.isBlank() && state.availableCurriculumTags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.availableCurriculumTags.forEach { tag ->
+                        FilterChip(
+                            selected = state.curriculumTag == tag,
+                            onClick = {
+                                onCurriculumTagChanged(
+                                    if (state.curriculumTag == tag) null else tag,
+                                )
+                            },
+                            label = { Text(tag, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        )
+                    }
+                }
+            }
+
             if (state.words.isEmpty()) {
                 EmptySearchState(
                     query = query,
@@ -731,6 +756,15 @@ private fun WordResultCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 MetadataPill(text = "IELTS 频率 ${word.frequency}")
+            }
+            val tags = parseCurriculumTags(word.curriculumTags)
+            if (tags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    tags.take(3).forEach { tag -> CurriculumTagPill(tag) }
+                }
             }
         }
     }

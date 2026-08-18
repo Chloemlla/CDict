@@ -18,6 +18,17 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.FilterAlt,
+            title = "优化词典筛选体验",
+            subtitle = "词典列表新增课程标签快捷筛选，并在词条卡片直接展示所属手札分组（如「高中短语」）。",
+            bullets = listOf(
+                "快捷筛选：浏览列表上方新增一组可横向滚动的标签芯片（如「高中短语」），一键即可只看对应分组，再次点击取消筛选。",
+                "分组可见：词条卡片底部直接显示该词所属的课程标签，浏览时一眼即可识别词条来自哪个手札分组。",
+                "筛选体验：原有的「全部词条／课程标签」下拉与快捷芯片联动，选中的标签在两种入口中同步高亮。",
+            ),
+            tip = "入口：词典标签页 → 搜索框下方标签栏（清除搜索词后可滚动查看）。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.BugReport,
             title = "升级 CodeQL Action 到 v4",
             subtitle = "CodeQL Action v3 将在 2026 年 12 月被弃用，GitHub Actions 运行环境已升级到 Node 24。",
