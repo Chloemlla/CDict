@@ -97,6 +97,7 @@ fun WordCardContent(
     modifier: Modifier = Modifier,
     showPartOfSpeech: Boolean = false,
     playingKey: String? = null,
+    speakingKey: String? = null,
     bottomContent: (@Composable () -> Unit)? = null,
 ) {
     val pos = if (showPartOfSpeech) {
@@ -159,6 +160,7 @@ fun WordCardContent(
                 ui = phraseStates[def],
                 onTranslate = onTranslate,
                 onSpeak = onSpeak,
+                speakingKey = speakingKey,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
         }

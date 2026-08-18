@@ -35,8 +35,15 @@ class PhraseSpeechViewModelTest {
 
     private class FakeSpeaker : PronunciationSpeaker {
         var spoken: String? = null
+        var stopped = false
+        override var onCompletion: (() -> Unit)? = null
         override fun speak(text: String) {
             spoken = text
+        }
+
+        override fun stop() {
+            stopped = true
+            onCompletion = null
         }
 
         override fun release() {}
@@ -113,6 +120,38 @@ class PhraseSpeechViewModelTest {
         val vm = PhraseSpeechViewModel(okClient("ok"), speaker)
         vm.speak("hello")
         assertEquals("hello", speaker.spoken)
+    }
+
+    @Test
+    fun `speak sets speaking key and same text toggles to stop`() = runTest {
+        val speaker = FakeSpeaker()
+        val vm = PhraseSpeechViewModel(okClient("ok"), speaker)
+        vm.speak("hello")
+        assertEquals("hello", vm.speakingKey.value)
+        vm.speak("hello")
+        assertTrue(speaker.stopped)
+        assertEquals(null, vm.speakingKey.value)
+    }
+
+    @Test
+    fun `speak another text switches speaking key without stopping`() = runTest {
+        val speaker = FakeSpeaker()
+        val vm = PhraseSpeechViewModel(okClient("ok"), speaker)
+        vm.speak("hello")
+        vm.speak("world")
+        assertEquals("world", vm.speakingKey.value)
+        assertEquals("world", speaker.spoken)
+        assertEquals(false, speaker.stopped)
+    }
+
+    @Test
+    fun `completion clears speaking key`() = runTest {
+        val speaker = FakeSpeaker()
+        val vm = PhraseSpeechViewModel(okClient("ok"), speaker)
+        vm.speak("hello")
+        assertEquals("hello", vm.speakingKey.value)
+        speaker.onCompletion?.invoke()
+        assertEquals(null, vm.speakingKey.value)
     }
 
     @Test

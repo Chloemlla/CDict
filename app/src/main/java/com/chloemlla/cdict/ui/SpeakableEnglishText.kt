@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,11 +32,13 @@ internal fun SpeakableEnglishText(
     onTranslate: (String) -> Unit,
     onSpeak: (String) -> Unit,
     modifier: Modifier = Modifier,
+    speakingKey: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     LaunchedEffect(en) {
         if (pinnedZh == null && ui == null) onTranslate(en)
     }
+    val speaking = speakingKey == en
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -54,9 +57,13 @@ internal fun SpeakableEnglishText(
                 modifier = Modifier.semantics { contentDescription = "朗读 $en" },
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    imageVector = if (speaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (speaking) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
             trailing?.invoke()

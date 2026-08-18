@@ -85,6 +85,7 @@ fun RecommendationScreen(
         factory = remember { PhraseSpeechViewModelFactory(context) },
     )
     val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
+    val speakingKey by phraseViewModel.speakingKey.collectAsStateWithLifecycle()
     val onTranslate = phraseViewModel::translate
     val onSpeak = phraseViewModel::speak
 
@@ -163,6 +164,7 @@ fun RecommendationScreen(
                                     onOpenWord = onOpenWord,
                                     onPlayPronunciation = onPlayPronunciation,
                                     playingKey = playingKey,
+                                    speakingKey = speakingKey,
                                 )
                             }
                             RecommendationUpcomingList(
@@ -191,6 +193,7 @@ fun RecommendationScreen(
                                 onOpenWord = onOpenWord,
                                 onPlayPronunciation = onPlayPronunciation,
                                 playingKey = playingKey,
+                                speakingKey = speakingKey,
                             )
                             RecommendationUpcomingBlock(state, onOpenWord)
                         }
@@ -289,6 +292,7 @@ private fun RecommendationCurrentCard(
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     playingKey: String? = null,
+    speakingKey: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val head = state.items.first()
@@ -312,6 +316,7 @@ private fun RecommendationCurrentCard(
                 onTranslate = onTranslate,
                 onSpeak = onSpeak,
                 playingKey = playingKey,
+                speakingKey = speakingKey,
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 bottomContent = {
                     Row(modifier = Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -196,6 +196,7 @@ fun WordAnnotationSection(
     phraseStates: Map<String, PhraseUiState> = emptyMap(),
     onTranslate: ((String) -> Unit)? = null,
     onSpeak: ((String) -> Unit)? = null,
+    speakingKey: String? = null,
 ) {
     val nuance = word.nuanceDescription?.takeIf { it.isNotBlank() }
     val warning = word.usageWarning?.takeIf { it.isNotBlank() }
@@ -218,6 +219,7 @@ fun WordAnnotationSection(
                             ui = phraseStates[collocation],
                             onTranslate = onTranslate,
                             onSpeak = onSpeak,
+                            speakingKey = speakingKey,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

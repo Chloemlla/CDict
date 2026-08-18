@@ -34,6 +34,10 @@ class PhraseSpeechViewModel(
     private val _states = MutableStateFlow<Map<String, PhraseUiState>>(emptyMap())
     val states: StateFlow<Map<String, PhraseUiState>> = _states.asStateFlow()
 
+    /** 当前正在朗读的英文文本；播放结束自动清空，同文本再次点击切换为停止。 */
+    private val _speakingKey = MutableStateFlow<String?>(null)
+    val speakingKey: StateFlow<String?> = _speakingKey.asStateFlow()
+
     /** 为某段英文请求中文译文；已加载/加载中则幂等跳过。 */
     fun translate(en: String) {
         if (en.isBlank()) return
@@ -58,7 +62,19 @@ class PhraseSpeechViewModel(
     }
 
     fun speak(en: String) {
-        if (en.isNotBlank()) speaker.speak(en)
+        if (en.isBlank()) return
+        // Toggle: clicking the text that is currently speaking stops it.
+        if (_speakingKey.value == en) {
+            speaker.stop()
+            _speakingKey.value = null
+            return
+        }
+        // Auto-clear the speaking state when this audio finishes naturally.
+        speaker.onCompletion = {
+            if (_speakingKey.value != null) _speakingKey.value = null
+        }
+        speaker.speak(en)
+        _speakingKey.value = en
     }
 
     override fun onCleared() {

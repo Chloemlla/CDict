@@ -111,6 +111,7 @@ fun StudyScreen(
         factory = remember { PhraseSpeechViewModelFactory(context) },
     )
     val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
+    val speakingKey by phraseViewModel.speakingKey.collectAsStateWithLifecycle()
     // Developer backdoor: five rapid taps on the 背词 title open the developer panel.
     var devTaps by remember { mutableIntStateOf(0) }
     var lastDevTap by remember { mutableLongStateOf(0L) }
@@ -195,6 +196,7 @@ fun StudyScreen(
                         phraseStates = phraseStates,
                         onTranslate = phraseViewModel::translate,
                         onSpeak = phraseViewModel::speak,
+                        speakingKey = speakingKey,
                         onScopeChange = onScopeChange,
                         playingKey = playingKey,
                     )
@@ -516,6 +518,7 @@ private fun LearnFlow(
     onSpeak: (String) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
     playingKey: String? = null,
+    speakingKey: String? = null,
 ) {
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
@@ -553,6 +556,7 @@ private fun LearnFlow(
                         onSpeak = onSpeak,
                         onPlayPronunciation = onPlayPronunciation,
                         playingKey = playingKey,
+                        speakingKey = speakingKey,
                     )
                 }
             } else {
@@ -606,6 +610,7 @@ private fun LearnCard(
     onSpeak: (String) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     playingKey: String? = null,
+    speakingKey: String? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -620,6 +625,7 @@ private fun LearnCard(
                 onTranslate = onTranslate,
                 onSpeak = onSpeak,
                 playingKey = playingKey,
+                speakingKey = speakingKey,
                 showPartOfSpeech = true,
                 modifier = Modifier.fillMaxWidth(),
                 bottomContent = {
@@ -630,6 +636,7 @@ private fun LearnCard(
                             phraseStates = phraseStates,
                             onTranslate = onTranslate,
                             onSpeak = onSpeak,
+                            speakingKey = speakingKey,
                             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                         )
                     }

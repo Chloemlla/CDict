@@ -3,6 +3,7 @@ package com.chloemlla.cdict.core.audio
 import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.io.File
 import java.net.HttpURLConnection
@@ -21,6 +22,13 @@ import kotlinx.coroutines.launch
 /** 文本朗读能力抽象，便于注入与测试；[PronunciationPlayer] 为其默认实现。 */
 interface PronunciationSpeaker {
     fun speak(text: String)
+
+    /** 停止当前朗读。实现类应同时清空 [onCompletion]，避免停止后回调误触发。 */
+    fun stop()
+
+    /** 当前朗读自然结束（或被 TTS 回退中止）时回调，用于自动复位播放状态。 */
+    var onCompletion: (() -> Unit)?
+
     fun release()
 }
 
@@ -361,6 +369,15 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         newTts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS && generation == playGeneration && tts === newTts) {
                 newTts?.language = locale
+                newTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        if (generation == playGeneration && tts === newTts) onCompletion?.invoke()
+                    }
+                    override fun onError(utteranceId: String?) {
+                        if (generation == playGeneration && tts === newTts) onCompletion?.invoke()
+                    }
+                })
                 newTts?.speak(word, TextToSpeech.QUEUE_FLUSH, null, word)
             }
         }

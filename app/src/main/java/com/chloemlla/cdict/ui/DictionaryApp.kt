@@ -128,6 +128,7 @@ fun DictionaryApp(
         factory = remember { PhraseSpeechViewModelFactory(context) },
     )
     val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
+    val speakingKey by phraseViewModel.speakingKey.collectAsStateWithLifecycle()
     when (state) {
         DictionaryScreenState.Loading -> LoadingScreen()
         is DictionaryScreenState.Error -> ErrorScreen(state.message)
@@ -178,6 +179,7 @@ fun DictionaryApp(
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
                             onPhraseSpeak = phraseViewModel::speak,
+                            speakingKey = speakingKey,
                             masteredIds = masteredIds,
                             onToggleMastered = onToggleMastered,
                         )
@@ -764,6 +766,7 @@ private fun WordDetail(
     phraseStates: Map<String, PhraseUiState>,
     onPhraseTranslate: (String) -> Unit,
     onPhraseSpeak: (String) -> Unit,
+    speakingKey: String?,
     masteredIds: Set<Long>,
     onToggleMastered: (WordEntity) -> Unit,
 ) {
@@ -905,6 +908,7 @@ private fun WordDetail(
                                     ui = phraseStates[it],
                                     onTranslate = onPhraseTranslate,
                                     onSpeak = onPhraseSpeak,
+                                    speakingKey = speakingKey,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
@@ -975,6 +979,7 @@ private fun WordDetail(
                             phraseStates = phraseStates,
                             onTranslate = onPhraseTranslate,
                             onSpeak = onPhraseSpeak,
+                            speakingKey = speakingKey,
                         )
                     }
                 }
@@ -1026,6 +1031,7 @@ private fun WordDetail(
                                 ui = phraseStates[mnemonic],
                                 onTranslate = onPhraseTranslate,
                                 onSpeak = onPhraseSpeak,
+                                speakingKey = speakingKey,
                             )
                             AiSupplementTrailing(show = "mnemonic" in supplements)
                         }
@@ -1093,6 +1099,7 @@ private fun WordDetail(
                                         ui = phraseStates[root.root],
                                         onTranslate = onPhraseTranslate,
                                         onSpeak = onPhraseSpeak,
+                                        speakingKey = speakingKey,
                                     )
                                 } else {
                                     root.meaning?.takeIf { it.isNotBlank() }?.let {
@@ -1120,6 +1127,7 @@ private fun WordDetail(
                                         ui = phraseStates[term],
                                         onTranslate = onPhraseTranslate,
                                         onSpeak = onPhraseSpeak,
+                                        speakingKey = speakingKey,
                                         modifier = Modifier.fillMaxWidth(),
                                         trailing = if (targetWord == null) null else {
                                             { TextButton(onClick = { onOpenWord(targetWord) }) { Text("前往") } }
@@ -1157,6 +1165,7 @@ private fun WordDetail(
                                                     ui = phraseStates[relation.targetWord],
                                                     onTranslate = onPhraseTranslate,
                                                     onSpeak = onPhraseSpeak,
+                                                    speakingKey = speakingKey,
                                                     modifier = Modifier.fillMaxWidth(),
                                                     trailing = if (targetWord == null) null else {
                                                         { TextButton(onClick = { onOpenWord(targetWord) }) { Text("前往") } }
@@ -1183,6 +1192,7 @@ private fun WordDetail(
                                         ui = phraseStates[form.formText],
                                         onTranslate = onPhraseTranslate,
                                         onSpeak = onPhraseSpeak,
+                                        speakingKey = speakingKey,
                                         modifier = Modifier.fillMaxWidth(),
                                         trailing = if (form.formTags.isBlank()) null else {
                                             {
@@ -1215,6 +1225,7 @@ private fun WordDetail(
                                         ui = phraseStates[etymology.text],
                                         onTranslate = onPhraseTranslate,
                                         onSpeak = onPhraseSpeak,
+                                        speakingKey = speakingKey,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
@@ -1312,6 +1323,7 @@ private fun WordDetail(
                                         ui = phraseStates[sentence.english],
                                         onTranslate = onPhraseTranslate,
                                         onSpeak = onPhraseSpeak,
+                                        speakingKey = speakingKey,
                                     )
                                 }
                                 AiSupplementTrailing(show = "sentences" in supplements)
