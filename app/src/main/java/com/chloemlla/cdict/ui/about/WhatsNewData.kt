@@ -18,6 +18,15 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.BugReport,
+            title = "修复 CI 编译错误",
+            subtitle = "移除已废弃的 material3.ExperimentalLayoutApi 引用，消除编译期未解析引用错误。",
+            bullets = listOf(
+                "修复：DictionaryApp.kt 中 import androidx.compose.material3.ExperimentalLayoutApi 已被上游 Compose 库移除，改为仅使用 foundation.layout.ExperimentalLayoutApi。",
+            ),
+            tip = "本次变更仅影响构建流程，不影响 App 运行体验。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.FilterAlt,
             title = "优化词典列表筛选与读音体验",
             subtitle = "精简词典列表冗余标签，优化排序/筛选按钮布局，读音按钮支持点击切换与状态反馈。",
@@ -62,17 +71,6 @@ object WhatsNewData {
                 "稳定：首次启动解压串行化并校验结果,翻译请求取消过期结果避免覆盖,崩溃 SDK 启动更可靠。",
             ),
             tip = "可在词典标签页的排序 / 筛选下拉菜单中选择课程标签。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.FilterAlt,
-            title = "优化词典筛选体验",
-            subtitle = "词典列表新增课程标签快捷筛选，并在词条卡片直接展示所属手札分组（如「高中短语」）。",
-            bullets = listOf(
-                "快捷筛选：浏览列表上方新增一组可横向滚动的标签芯片（如「高中短语」），一键即可只看对应分组，再次点击取消筛选。",
-                "分组可见：词条卡片底部直接显示该词所属的课程标签，浏览时一眼即可识别词条来自哪个手札分组。",
-                "筛选体验：原有的「全部词条／课程标签」下拉与快捷芯片联动，选中的标签在两种入口中同步高亮。",
-            ),
-            tip = "入口：词典标签页 → 搜索框下方标签栏（清除搜索词后可滚动查看）。",
         ),
     )
 }
