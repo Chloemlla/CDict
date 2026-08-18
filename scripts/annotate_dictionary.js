@@ -21,10 +21,11 @@
  *   node annotate_dictionary.js dict.db --base-url https://tokenrhythm.studio/v1 --api-key sk-xxx --model deepseek-chat
  *   node annotate_dictionary.js dict.db --limit 100              # 只标前 100 个缺失词
  *   node annotate_dictionary.js dict.db --groups 1,2             # 只标 1/2 组
+ *   node annotate_dictionary.js dict.db --tag 高中短语            # 只标带该课程标签的词（如高中短语）
  *   node annotate_dictionary.js dict.db --input ann.jsonl        # 合并外部标注，不调 API
  *   node annotate_dictionary.js dict.db --dry-run                # 只统计缺多少，不写库
  *   环境变量可覆盖：AI_BASE_URL / AI_API_KEY / AI_MODEL / PARALLEL / AI_BATCH / DICT_DB / ANNOTATE_STATE /
- *                  AI_MAX_RETRIES / VERBOSE
+ *                  ANNOTATE_TAG / AI_MAX_RETRIES / VERBOSE
  */
 'use strict';
 
@@ -40,6 +41,7 @@ const args = process.argv.slice(2);
 const VALUE_OPTS = new Set([
   '--parallel', '--batch', '--base-url', '--api-key', '--model', '--input',
   '--limit', '--groups', '--state', '--max-retries', '--output',
+  '--tag',
 ]);
 const consumed = new Set();
 args.forEach((a, i) => { if (VALUE_OPTS.has(a)) { consumed.add(i); consumed.add(i + 1); } });
@@ -60,6 +62,7 @@ const CONFIG = {
   input: getOpt('--input', process.env.ANNOTATE_INPUT || ''),
   output: getOpt('--output', process.env.ANNOTATE_OUTPUT || ''),
   limit: Math.max(0, parseInt(getOpt('--limit', process.env.ANNOTATE_LIMIT || '0'), 10) || 0),
+  tag: (getOpt('--tag', process.env.ANNOTATE_TAG || '') || '').trim(),
   groups: (getOpt('--groups', '') || '').split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isInteger(n) && n > 0),
   maxRetries: Math.max(1, parseInt(getOpt('--max-retries', process.env.AI_MAX_RETRIES || '3'), 10) || 3),
   force: args.includes('--force'),
@@ -158,7 +161,7 @@ function ensureColumns(db) {
 
 function loadWords(db) {
   return db.prepare(
-    `SELECT id, word, frequencyGroup, translation, ${ANNOTATION_COLUMNS.join(', ')} ` +
+    `SELECT id, word, frequencyGroup, translation, curriculumTags, ${ANNOTATION_COLUMNS.join(', ')} ` +
       'FROM words ORDER BY frequencyGroup, frequency, id',
   ).all();
 }
@@ -500,6 +503,7 @@ async function runAi(db, words) {
     if (CONFIG.force) return true;
     return !wordAnnotationComplete(w);
   });
+  if (CONFIG.tag && !CONFIG.groups.length) pending = pending.filter((w) => String(w.curriculumTags || '').split(',').some((t) => t.trim() === CONFIG.tag));
   if (CONFIG.groups.length) pending = pending.filter((w) => CONFIG.groups.includes(w.frequencyGroup));
   if (CONFIG.limit > 0) pending = pending.slice(0, CONFIG.limit);
   const skipped = words.length - pending.length;
