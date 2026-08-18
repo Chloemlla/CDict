@@ -65,6 +65,7 @@ sealed interface DictionaryScreenState {
         val hasMore: Boolean = false,
         val isLoadingMore: Boolean = false,
         val updateNeeded: Boolean = false,
+        val playingKey: String? = null,
     ) : DictionaryScreenState
     data class Error(val message: String) : DictionaryScreenState
 }
@@ -395,7 +396,15 @@ class DictionaryViewModel(
     }
 
     fun playPronunciation(word: WordEntity, accent: Accent) {
-        pronunciationPlayer.play(word.word, accent)
+        val key = "${word.id}:${accent.name}"
+        val current = _state.value as? DictionaryScreenState.Ready ?: return
+        if (current.playingKey == key) {
+            pronunciationPlayer.stop()
+            _state.value = current.copy(playingKey = null)
+        } else {
+            pronunciationPlayer.play(word.word, accent)
+            _state.value = current.copy(playingKey = key)
+        }
     }
 
     override fun onCleared() {

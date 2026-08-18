@@ -48,14 +48,15 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalLayoutApi
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -176,6 +177,7 @@ fun DictionaryApp(
                             onRetryDetail = { onSelect(sel) },
                             onOpenWord = onOpenDerivedWord,
                             onPlayPronunciation = onPlayPronunciation,
+                            playingKey = state.playingKey,
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
                             onPhraseSpeak = phraseViewModel::speak,
@@ -434,28 +436,6 @@ private fun WordList(
                         active = state.curriculumTag != null,
                         modifier = Modifier.weight(1f),
                     )
-                }
-            }
-
-            if (query.isBlank() && state.availableCurriculumTags.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    state.availableCurriculumTags.forEach { tag ->
-                        FilterChip(
-                            selected = state.curriculumTag == tag,
-                            onClick = {
-                                onCurriculumTagChanged(
-                                    if (state.curriculumTag == tag) null else tag,
-                                )
-                            },
-                            label = { Text(tag, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        )
-                    }
                 }
             }
 
@@ -783,6 +763,7 @@ private fun WordDetail(
     onRetryDetail: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
+    playingKey: String?,
     phraseStates: Map<String, PhraseUiState>,
     onPhraseTranslate: (String) -> Unit,
     onPhraseSpeak: (String) -> Unit,
@@ -809,6 +790,8 @@ private fun WordDetail(
     val headwordSummary = word.headwordSummary?.takeIf { it.isNotBlank() }
     val supplements = supplementedFields(word)
     val curriculumTags = parseCurriculumTags(word.curriculumTags)
+    val ukPlaying = playingKey == "${word.id}:UK"
+    val usPlaying = playingKey == "${word.id}:US"
 
     Scaffold(
         topBar = {
@@ -944,9 +927,15 @@ private fun WordDetail(
                                     .heightIn(min = 48.dp),
                                 contentPadding = ButtonDefaults.ContentPadding,
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                                Spacer(Modifier.size(8.dp))
-                                Text("英音")
+                                if (ukPlaying) {
+                                    Icon(Icons.Filled.Stop, contentDescription = null)
+                                    Spacer(Modifier.size(8.dp))
+                                    Text("停止")
+                                } else {
+                                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
+                                    Spacer(Modifier.size(8.dp))
+                                    Text("英音")
+                                }
                             }
                             FilledTonalButton(
                                 onClick = { onPlayPronunciation(word, Accent.US) },
@@ -955,9 +944,15 @@ private fun WordDetail(
                                     .heightIn(min = 48.dp),
                                 contentPadding = ButtonDefaults.ContentPadding,
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
-                                Spacer(Modifier.size(8.dp))
-                                Text("美音")
+                                if (usPlaying) {
+                                    Icon(Icons.Filled.Stop, contentDescription = null)
+                                    Spacer(Modifier.size(8.dp))
+                                    Text("停止")
+                                } else {
+                                    Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
+                                    Spacer(Modifier.size(8.dp))
+                                    Text("美音")
+                                }
                             }
                         }
                         val mastered = word.id in masteredIds

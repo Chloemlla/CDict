@@ -52,6 +52,13 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
 
     override fun speak(text: String) = play(text, Accent.US)
 
+    fun stop() {
+        playGeneration++
+        playJob?.cancel()
+        releasePlayer()
+        tts?.stop()
+    }
+
     fun play(word: String, accent: Accent) {
         playGeneration++
         playJob?.cancel()
