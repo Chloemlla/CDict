@@ -312,9 +312,8 @@ jobs:
         run: |
           set -euo pipefail
           tag="v${CDICT_VERSION_NAME}-${CDICT_SHORT_HASH}"
-          body="## CDict ${CDICT_VERSION_NAME}-${CDICT_SHORT_HASH}
-
-Release for commit ${GITHUB_SHA}."
+          body="$(printf '## CDict %s-%s\n\nRelease for commit %s.' \
+            "${CDICT_VERSION_NAME}" "${CDICT_SHORT_HASH}" "${GITHUB_SHA}")"
           release_id="$(gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
