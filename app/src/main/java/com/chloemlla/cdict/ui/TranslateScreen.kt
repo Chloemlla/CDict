@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Translate
@@ -371,11 +372,69 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
 
 @Composable
 private fun EmptyTranslationState() {
+    val supportedLangs = listOf("en", "zh", "ja", "ko", "fr", "de", "es", "ru")
     StateCard(
         icon = Icons.Filled.Info,
         iconDescription = "等待输入",
         title = "准备开始",
         message = "在上方输入文本并选择翻译方向，译文会显示在这里。",
+        showProgress = false,
+    )
+    // Helpful tips card
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lightbulb,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = "使用技巧",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TranslateTip("多行输入", "支持长文本、段落、整句翻译")
+                TranslateTip("自动检测语言", "选择「自动检测 → 目标语言」无需手动选源语言")
+                TranslateTip("朗读译文", "英语译文点击 🔊 可美式/英式发音")
+                TranslateTip("清除重输", "点击输入框右侧 ✕ 快速清空")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TranslateTip(title: String, desc: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(72.dp),
+        )
+        Text(
+            text = desc,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.weight(1f),
+        )
     )
 }
 

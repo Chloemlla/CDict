@@ -1,0 +1,2322 @@
+{
+  "version": 1,
+  "completed": {
+    "49214": {
+      "word": "be angry with",
+      "ts": 1787045878056
+    },
+    "49215": {
+      "word": "be careful with",
+      "ts": 1787045878080
+    },
+    "49216": {
+      "word": "be confident in",
+      "ts": 1787045878106
+    },
+    "49217": {
+      "word": "be fit for",
+      "ts": 1787045878130
+    },
+    "49218": {
+      "word": "be happy with",
+      "ts": 1787045878156
+    },
+    "49219": {
+      "word": "be helpful to",
+      "ts": 1787045878181
+    },
+    "49220": {
+      "word": "be kind to",
+      "ts": 1787045878206
+    },
+    "49221": {
+      "word": "be late for",
+      "ts": 1787045878239
+    },
+    "49222": {
+      "word": "be like",
+      "ts": 1787045878264
+    },
+    "49223": {
+      "word": "be short of",
+      "ts": 1787045878297
+    },
+    "49224": {
+      "word": "be strict in",
+      "ts": 1787045866381
+    },
+    "49225": {
+      "word": "be sure about",
+      "ts": 1787046231535
+    },
+    "49226": {
+      "word": "be surprised at",
+      "ts": 1787046231560
+    },
+    "49227": {
+      "word": "be tired with",
+      "ts": 1787046231593
+    },
+    "49228": {
+      "word": "be uncertain about",
+      "ts": 1787046231627
+    },
+    "49229": {
+      "word": "be unique to",
+      "ts": 1787046231660
+    },
+    "49230": {
+      "word": "be weak in",
+      "ts": 1787046231701
+    },
+    "49231": {
+      "word": "catch up with others",
+      "ts": 1787046231734
+    },
+    "49232": {
+      "word": "develop a good habit",
+      "ts": 1787046231768
+    },
+    "49233": {
+      "word": "form a good habit",
+      "ts": 1787046231801
+    },
+    "49234": {
+      "word": "get fully prepared",
+      "ts": 1787045872906
+    },
+    "49235": {
+      "word": "improve the ability",
+      "ts": 1787045872930
+    },
+    "49236": {
+      "word": "keep a balanced diet",
+      "ts": 1787045872956
+    },
+    "49237": {
+      "word": "lay a solid foundation",
+      "ts": 1787045872997
+    },
+    "49238": {
+      "word": "make a deep impression on",
+      "ts": 1787045873023
+    },
+    "49239": {
+      "word": "make steady progress",
+      "ts": 1787045873047
+    },
+    "49240": {
+      "word": "relieve pressure/ stress",
+      "ts": 1787045873073
+    },
+    "49241": {
+      "word": "stick to one's dream",
+      "ts": 1787045873097
+    },
+    "49242": {
+      "word": "turn to sb. for help",
+      "ts": 1787045873123
+    },
+    "49243": {
+      "word": "update one's knowledge",
+      "ts": 1787045873147
+    },
+    "49244": {
+      "word": "accuse sb. of",
+      "ts": 1787046231835
+    },
+    "49245": {
+      "word": "agree to",
+      "ts": 1787045881048
+    },
+    "49246": {
+      "word": "argue with sb.",
+      "ts": 1787045881080
+    },
+    "49247": {
+      "word": "argue about sth.",
+      "ts": 1787045881116
+    },
+    "49248": {
+      "word": "arrive at/ in",
+      "ts": 1787045881155
+    },
+    "49249": {
+      "word": "attend to",
+      "ts": 1787046243243
+    },
+    "49250": {
+      "word": "blame sb. for",
+      "ts": 1787045881222
+    },
+    "49251": {
+      "word": "break in",
+      "ts": 1787045881256
+    },
+    "49252": {
+      "word": "break through",
+      "ts": 1787045881289
+    },
+    "49253": {
+      "word": "bring back",
+      "ts": 1787045881323
+    },
+    "49254": {
+      "word": "bring down",
+      "ts": 1787045871956
+    },
+    "49255": {
+      "word": "bring in",
+      "ts": 1787045871989
+    },
+    "49256": {
+      "word": "call on/ upon",
+      "ts": 1787045872014
+    },
+    "49257": {
+      "word": "call up",
+      "ts": 1787045872055
+    },
+    "49258": {
+      "word": "leave alone",
+      "ts": 1787045872081
+    },
+    "49259": {
+      "word": "leave for",
+      "ts": 1787045872120
+    },
+    "49260": {
+      "word": "lend a hand",
+      "ts": 1787045872156
+    },
+    "49261": {
+      "word": "live through",
+      "ts": 1787045872180
+    },
+    "49262": {
+      "word": "look down upon/ on",
+      "ts": 1787045872206
+    },
+    "49263": {
+      "word": "make a mistake",
+      "ts": 1787045872230
+    },
+    "49264": {
+      "word": "make an apology",
+      "ts": 1787045894347
+    },
+    "49265": {
+      "word": "marry sb.",
+      "ts": 1787045894381
+    },
+    "49266": {
+      "word": "meet with",
+      "ts": 1787045894414
+    },
+    "49267": {
+      "word": "operate on",
+      "ts": 1787045894448
+    },
+    "49268": {
+      "word": "pay back",
+      "ts": 1787045894481
+    },
+    "49269": {
+      "word": "praise sb. for",
+      "ts": 1787045894514
+    },
+    "49270": {
+      "word": "pretend to do",
+      "ts": 1787045894547
+    },
+    "49271": {
+      "word": "prevent... from...",
+      "ts": 1787045894581
+    },
+    "49272": {
+      "word": "protect... from...",
+      "ts": 1787045894614
+    },
+    "49273": {
+      "word": "pull in",
+      "ts": 1787045894648
+    },
+    "49274": {
+      "word": "push on",
+      "ts": 1787045912918
+    },
+    "49275": {
+      "word": "get up",
+      "ts": 1787045912948
+    },
+    "49276": {
+      "word": "give back",
+      "ts": 1787045912987
+    },
+    "49277": {
+      "word": "go against",
+      "ts": 1787045913006
+    },
+    "49278": {
+      "word": "go in for",
+      "ts": 1787045913048
+    },
+    "49279": {
+      "word": "go into",
+      "ts": 1787045913073
+    },
+    "49280": {
+      "word": "have trouble in",
+      "ts": 1787045913106
+    },
+    "49281": {
+      "word": "hold out",
+      "ts": 1787045913132
+    },
+    "49282": {
+      "word": "improve in",
+      "ts": 1787045913156
+    },
+    "49283": {
+      "word": "introduce to",
+      "ts": 1787045913182
+    },
+    "49284": {
+      "word": "join in",
+      "ts": 1787045895872
+    },
+    "49285": {
+      "word": "join up",
+      "ts": 1787045895907
+    },
+    "49286": {
+      "word": "jump at",
+      "ts": 1787045895939
+    },
+    "49287": {
+      "word": "keep back",
+      "ts": 1787045895973
+    },
+    "49288": {
+      "word": "keep off",
+      "ts": 1787045896006
+    },
+    "49289": {
+      "word": "keep out",
+      "ts": 1787045896039
+    },
+    "49290": {
+      "word": "keep up",
+      "ts": 1787045896073
+    },
+    "49291": {
+      "word": "knock at/ on",
+      "ts": 1787045896106
+    },
+    "49292": {
+      "word": "knock into",
+      "ts": 1787045896139
+    },
+    "49293": {
+      "word": "copy down",
+      "ts": 1787045896166
+    },
+    "49294": {
+      "word": "cut out",
+      "ts": 1787045889163
+    },
+    "49295": {
+      "word": "decide on/ upon",
+      "ts": 1787045889189
+    },
+    "49296": {
+      "word": "depend on/ upon",
+      "ts": 1787045889223
+    },
+    "49297": {
+      "word": "die down",
+      "ts": 1787045889256
+    },
+    "49298": {
+      "word": "disagree with",
+      "ts": 1787045889306
+    },
+    "49299": {
+      "word": "do well in",
+      "ts": 1787045889339
+    },
+    "49300": {
+      "word": "dream of/ about",
+      "ts": 1787045889373
+    },
+    "49301": {
+      "word": "enter for",
+      "ts": 1787045889405
+    },
+    "49302": {
+      "word": "exchange A for B",
+      "ts": 1787045889439
+    },
+    "49303": {
+      "word": "exist in",
+      "ts": 1787045889472
+    },
+    "49304": {
+      "word": "expect of",
+      "ts": 1787045894681
+    },
+    "49305": {
+      "word": "fall over",
+      "ts": 1787045894716
+    },
+    "49306": {
+      "word": "fight against",
+      "ts": 1787045894747
+    },
+    "49307": {
+      "word": "fight for",
+      "ts": 1787045894781
+    },
+    "49308": {
+      "word": "fool around",
+      "ts": 1787045894814
+    },
+    "49309": {
+      "word": "get along",
+      "ts": 1787045894848
+    },
+    "49310": {
+      "word": "get away",
+      "ts": 1787045894880
+    },
+    "49311": {
+      "word": "get back",
+      "ts": 1787045894914
+    },
+    "49312": {
+      "word": "get in",
+      "ts": 1787045894947
+    },
+    "49313": {
+      "word": "get out",
+      "ts": 1787045894981
+    },
+    "49314": {
+      "word": "get over",
+      "ts": 1787045905140
+    },
+    "49315": {
+      "word": "a piece of",
+      "ts": 1787045905164
+    },
+    "49316": {
+      "word": "all right",
+      "ts": 1787045905190
+    },
+    "49317": {
+      "word": "all the best",
+      "ts": 1787045905214
+    },
+    "49318": {
+      "word": "as a rule",
+      "ts": 1787045905240
+    },
+    "49319": {
+      "word": "as soon as",
+      "ts": 1787045905264
+    },
+    "49320": {
+      "word": "at a time",
+      "ts": 1787045905290
+    },
+    "49321": {
+      "word": "at all",
+      "ts": 1787045905314
+    },
+    "49322": {
+      "word": "at birth",
+      "ts": 1787045905340
+    },
+    "49323": {
+      "word": "at dawn",
+      "ts": 1787045905364
+    },
+    "49324": {
+      "word": "at sea",
+      "ts": 1787045908656
+    },
+    "49325": {
+      "word": "bit by bit",
+      "ts": 1787045908681
+    },
+    "49326": {
+      "word": "break the rule",
+      "ts": 1787045908706
+    },
+    "49327": {
+      "word": "by air",
+      "ts": 1787045908731
+    },
+    "49328": {
+      "word": "by day",
+      "ts": 1787045908756
+    },
+    "49329": {
+      "word": "by force",
+      "ts": 1787045908781
+    },
+    "49330": {
+      "word": "by mistake",
+      "ts": 1787045908806
+    },
+    "49331": {
+      "word": "by the end of",
+      "ts": 1787045908831
+    },
+    "49332": {
+      "word": "stop to do",
+      "ts": 1787045908862
+    },
+    "49333": {
+      "word": "supply to",
+      "ts": 1787045908881
+    },
+    "49334": {
+      "word": "take a look",
+      "ts": 1787045904031
+    },
+    "49335": {
+      "word": "take action",
+      "ts": 1787045904064
+    },
+    "49336": {
+      "word": "take charge",
+      "ts": 1787045904090
+    },
+    "49337": {
+      "word": "talk of",
+      "ts": 1787045904114
+    },
+    "49338": {
+      "word": "tell a lie",
+      "ts": 1787045904148
+    },
+    "49339": {
+      "word": "tell apart",
+      "ts": 1787045904181
+    },
+    "49340": {
+      "word": "think of",
+      "ts": 1787045904206
+    },
+    "49341": {
+      "word": "turn in",
+      "ts": 1787045904239
+    },
+    "49342": {
+      "word": "turn over",
+      "ts": 1787045904265
+    },
+    "49343": {
+      "word": "work at",
+      "ts": 1787045904289
+    },
+    "49344": {
+      "word": "a kind of",
+      "ts": 1787045914314
+    },
+    "49345": {
+      "word": "react to",
+      "ts": 1787045914339
+    },
+    "49346": {
+      "word": "rely on/ upon",
+      "ts": 1787045914372
+    },
+    "49347": {
+      "word": "remind sb. of",
+      "ts": 1787045914398
+    },
+    "49348": {
+      "word": "remove from",
+      "ts": 1787045914432
+    },
+    "49349": {
+      "word": "ring back",
+      "ts": 1787045914456
+    },
+    "49350": {
+      "word": "ring off",
+      "ts": 1787045914489
+    },
+    "49351": {
+      "word": "ring up",
+      "ts": 1787045914523
+    },
+    "49352": {
+      "word": "run after",
+      "ts": 1787045914556
+    },
+    "49353": {
+      "word": "run away",
+      "ts": 1787045914590
+    },
+    "49354": {
+      "word": "rush to",
+      "ts": 1787045918790
+    },
+    "49355": {
+      "word": "say hello to",
+      "ts": 1787045918822
+    },
+    "49356": {
+      "word": "see off",
+      "ts": 1787045918856
+    },
+    "49357": {
+      "word": "see to",
+      "ts": 1787045918889
+    },
+    "49358": {
+      "word": "send up",
+      "ts": 1787045918923
+    },
+    "49359": {
+      "word": "separate from",
+      "ts": 1787045918955
+    },
+    "49360": {
+      "word": "serve as",
+      "ts": 1787045918989
+    },
+    "49361": {
+      "word": "shake hands with",
+      "ts": 1787045919022
+    },
+    "49362": {
+      "word": "shoot at",
+      "ts": 1787045919056
+    },
+    "49363": {
+      "word": "shut up",
+      "ts": 1787045919089
+    },
+    "49364": {
+      "word": "sit up",
+      "ts": 1787045935481
+    },
+    "49365": {
+      "word": "speak highly of",
+      "ts": 1787045935523
+    },
+    "49366": {
+      "word": "spend on",
+      "ts": 1787045935556
+    },
+    "49367": {
+      "word": "spread out",
+      "ts": 1787045935581
+    },
+    "49368": {
+      "word": "stop doing",
+      "ts": 1787045935606
+    },
+    "49369": {
+      "word": "make answer",
+      "ts": 1787045935631
+    },
+    "49370": {
+      "word": "make friends",
+      "ts": 1787045935656
+    },
+    "49371": {
+      "word": "make the best of",
+      "ts": 1787045935681
+    },
+    "49372": {
+      "word": "no more",
+      "ts": 1787045935706
+    },
+    "49373": {
+      "word": "on a visit",
+      "ts": 1787045935731
+    },
+    "49374": {
+      "word": "on earth",
+      "ts": 1787045925972
+    },
+    "49375": {
+      "word": "on fire",
+      "ts": 1787045926006
+    },
+    "49376": {
+      "word": "on leave",
+      "ts": 1787045926039
+    },
+    "49377": {
+      "word": "on show",
+      "ts": 1787045926073
+    },
+    "49378": {
+      "word": "on the air",
+      "ts": 1787045926106
+    },
+    "49379": {
+      "word": "on the earth",
+      "ts": 1787045926139
+    },
+    "49380": {
+      "word": "on the point of",
+      "ts": 1787045926172
+    },
+    "49381": {
+      "word": "on the radio",
+      "ts": 1787045926206
+    },
+    "49382": {
+      "word": "once more",
+      "ts": 1787045926239
+    },
+    "49383": {
+      "word": "once upon a time",
+      "ts": 1787045926273
+    },
+    "49384": {
+      "word": "or so",
+      "ts": 1787045926339
+    },
+    "49385": {
+      "word": "out of breath",
+      "ts": 1787045926373
+    },
+    "49386": {
+      "word": "out of danger",
+      "ts": 1787045926406
+    },
+    "49387": {
+      "word": "out of doors",
+      "ts": 1787045926440
+    },
+    "49388": {
+      "word": "in debt",
+      "ts": 1787045926473
+    },
+    "49389": {
+      "word": "in difficulty",
+      "ts": 1787045926507
+    },
+    "49390": {
+      "word": "in future",
+      "ts": 1787045926539
+    },
+    "49391": {
+      "word": "in good health",
+      "ts": 1787045926573
+    },
+    "49392": {
+      "word": "in peace",
+      "ts": 1787045926617
+    },
+    "49393": {
+      "word": "in secret",
+      "ts": 1787045926640
+    },
+    "49394": {
+      "word": "in silence",
+      "ts": 1787046243276
+    },
+    "49395": {
+      "word": "in surprise",
+      "ts": 1787046243302
+    },
+    "49396": {
+      "word": "in tears",
+      "ts": 1787046243326
+    },
+    "49397": {
+      "word": "in the air",
+      "ts": 1787046243352
+    },
+    "49398": {
+      "word": "in the habit of",
+      "ts": 1787046243430
+    },
+    "49399": {
+      "word": "in trouble",
+      "ts": 1787046243454
+    },
+    "49400": {
+      "word": "keep a promise",
+      "ts": 1787046243484
+    },
+    "49401": {
+      "word": "keep silent",
+      "ts": 1787046243510
+    },
+    "49402": {
+      "word": "knock into sb.",
+      "ts": 1787046243534
+    },
+    "49403": {
+      "word": "learn... by heart",
+      "ts": 1787046230801
+    },
+    "49404": {
+      "word": "lose heart",
+      "ts": 1787046230835
+    },
+    "49405": {
+      "word": "lose one's life",
+      "ts": 1787046230868
+    },
+    "49406": {
+      "word": "make a fire",
+      "ts": 1787046230901
+    },
+    "49407": {
+      "word": "make a promise",
+      "ts": 1787046230944
+    },
+    "49408": {
+      "word": "make a record",
+      "ts": 1787046230976
+    },
+    "49409": {
+      "word": "call on sb.",
+      "ts": 1787046231010
+    },
+    "49410": {
+      "word": "day and night",
+      "ts": 1787046231043
+    },
+    "49411": {
+      "word": "day by day",
+      "ts": 1787046231076
+    },
+    "49412": {
+      "word": "do one's best",
+      "ts": 1787046231110
+    },
+    "49413": {
+      "word": "do sb. a favor",
+      "ts": 1787046234526
+    },
+    "49414": {
+      "word": "even if/ though",
+      "ts": 1787046234560
+    },
+    "49415": {
+      "word": "feel like doing",
+      "ts": 1787046234593
+    },
+    "49416": {
+      "word": "for fear of",
+      "ts": 1787046234627
+    },
+    "49417": {
+      "word": "for fun",
+      "ts": 1787046234659
+    },
+    "49418": {
+      "word": "for hire",
+      "ts": 1787046234685
+    },
+    "49419": {
+      "word": "for lack of",
+      "ts": 1787046234718
+    },
+    "49420": {
+      "word": "for the time being",
+      "ts": 1787046234746
+    },
+    "49421": {
+      "word": "generation aftergeneration",
+      "ts": 1787046234784
+    },
+    "49422": {
+      "word": "go on a diet",
+      "ts": 1787046234810
+    },
+    "49423": {
+      "word": "have a gift for",
+      "ts": 1787046246827
+    },
+    "49424": {
+      "word": "have a good time",
+      "ts": 1787046246859
+    },
+    "49425": {
+      "word": "have mercy on",
+      "ts": 1787046246885
+    },
+    "49426": {
+      "word": "heart and soul",
+      "ts": 1787046246957
+    },
+    "49427": {
+      "word": "here and there",
+      "ts": 1787046246977
+    },
+    "49428": {
+      "word": "in all",
+      "ts": 1787046247010
+    },
+    "49429": {
+      "word": "in anger",
+      "ts": 1787046247035
+    },
+    "49430": {
+      "word": "make a living by",
+      "ts": 1787046247068
+    },
+    "49431": {
+      "word": "accompany sb. to",
+      "ts": 1787046247094
+    },
+    "49432": {
+      "word": "accomplish a task",
+      "ts": 1787046247126
+    },
+    "49433": {
+      "word": "according to plan",
+      "ts": 1787046240676
+    },
+    "49434": {
+      "word": "advise sb. to do",
+      "ts": 1787046240709
+    },
+    "49435": {
+      "word": "afford to do",
+      "ts": 1787046240735
+    },
+    "49436": {
+      "word": "after a while",
+      "ts": 1787046240759
+    },
+    "49437": {
+      "word": "against the law",
+      "ts": 1787046240785
+    },
+    "49438": {
+      "word": "announce to",
+      "ts": 1787046240814
+    },
+    "49439": {
+      "word": "answer for",
+      "ts": 1787046240845
+    },
+    "49440": {
+      "word": "apply oneself to",
+      "ts": 1787046240877
+    },
+    "49441": {
+      "word": "as early as",
+      "ts": 1787046240901
+    },
+    "49442": {
+      "word": "as many as",
+      "ts": 1787046240926
+    },
+    "49443": {
+      "word": "assure sb. of",
+      "ts": 1787046247627
+    },
+    "49444": {
+      "word": "at a price",
+      "ts": 1787046247660
+    },
+    "49445": {
+      "word": "at the foot of",
+      "ts": 1787046247685
+    },
+    "49446": {
+      "word": "be amazed at",
+      "ts": 1787046247718
+    },
+    "49447": {
+      "word": "be buried in",
+      "ts": 1787046247752
+    },
+    "49448": {
+      "word": "be decorated with",
+      "ts": 1787046247785
+    },
+    "49449": {
+      "word": "be frozen with",
+      "ts": 1787046247819
+    },
+    "49450": {
+      "word": "be committed to",
+      "ts": 1787046247851
+    },
+    "49451": {
+      "word": "bring convenience to",
+      "ts": 1787046247885
+    },
+    "49452": {
+      "word": "carry forward the spirit",
+      "ts": 1787046247920
+    },
+    "49453": {
+      "word": "create a better environment",
+      "ts": 1787046253134
+    },
+    "49454": {
+      "word": "deal with the problem",
+      "ts": 1787045950114
+    },
+    "49455": {
+      "word": "save resources",
+      "ts": 1787045950148
+    },
+    "49456": {
+      "word": "throw rubbish everywhere",
+      "ts": 1787045950173
+    },
+    "49457": {
+      "word": "live in harmony with",
+      "ts": 1787045950198
+    },
+    "49458": {
+      "word": "a sense of achievement",
+      "ts": 1787045950222
+    },
+    "49459": {
+      "word": "a sense of duty",
+      "ts": 1787045950248
+    },
+    "49460": {
+      "word": "a sense of honor",
+      "ts": 1787045950273
+    },
+    "49461": {
+      "word": "be in low spirits",
+      "ts": 1787045950298
+    },
+    "49462": {
+      "word": "be in high spirits",
+      "ts": 1787045950322
+    },
+    "49463": {
+      "word": "ease one's mind",
+      "ts": 1787045950348
+    },
+    "49464": {
+      "word": "relieve anxiety",
+      "ts": 1787046253168
+    },
+    "49465": {
+      "word": "out of place",
+      "ts": 1787046253201
+    },
+    "49466": {
+      "word": "so as to",
+      "ts": 1787046253235
+    },
+    "49467": {
+      "word": "so long as",
+      "ts": 1787046253268
+    },
+    "49468": {
+      "word": "take a bath",
+      "ts": 1787046253302
+    },
+    "49469": {
+      "word": "take a rest",
+      "ts": 1787046253334
+    },
+    "49470": {
+      "word": "take a seat",
+      "ts": 1787046253368
+    },
+    "49471": {
+      "word": "take hold of",
+      "ts": 1787046253401
+    },
+    "49472": {
+      "word": "take office",
+      "ts": 1787046253435
+    },
+    "49473": {
+      "word": "to be honest",
+      "ts": 1787046260710
+    },
+    "49474": {
+      "word": "up to now",
+      "ts": 1787046260744
+    },
+    "49475": {
+      "word": "with delight",
+      "ts": 1787046260776
+    },
+    "49476": {
+      "word": "with difficulty",
+      "ts": 1787046260810
+    },
+    "49477": {
+      "word": "with fear",
+      "ts": 1787046260843
+    },
+    "49478": {
+      "word": "with pleasure",
+      "ts": 1787046260877
+    },
+    "49479": {
+      "word": "without delay",
+      "ts": 1787046260910
+    },
+    "49480": {
+      "word": "arouse public concern",
+      "ts": 1787046260943
+    },
+    "49481": {
+      "word": "carry weight",
+      "ts": 1787046260976
+    },
+    "49482": {
+      "word": "cast light on",
+      "ts": 1787046261060
+    },
+    "49483": {
+      "word": "catch fire",
+      "ts": 1787046255360
+    },
+    "49484": {
+      "word": "catch sight of",
+      "ts": 1787046255446
+    },
+    "49485": {
+      "word": "cause damage to",
+      "ts": 1787046255484
+    },
+    "49486": {
+      "word": "change for the better",
+      "ts": 1787046255510
+    },
+    "49487": {
+      "word": "cheer for",
+      "ts": 1787046255543
+    },
+    "49488": {
+      "word": "classify into",
+      "ts": 1787046255577
+    },
+    "49489": {
+      "word": "clear away",
+      "ts": 1787046255609
+    },
+    "49490": {
+      "word": "climb up",
+      "ts": 1787046255643
+    },
+    "49491": {
+      "word": "concentrate one's mindon",
+      "ts": 1787046255676
+    },
+    "49492": {
+      "word": "concern oneself with",
+      "ts": 1787046255712
+    },
+    "49493": {
+      "word": "congratulate on",
+      "ts": 1787046277944
+    },
+    "49494": {
+      "word": "connect to",
+      "ts": 1787045953781
+    },
+    "49495": {
+      "word": "consider doing",
+      "ts": 1787045953807
+    },
+    "49496": {
+      "word": "contribute money to",
+      "ts": 1787046277977
+    },
+    "49497": {
+      "word": "convince sb. of",
+      "ts": 1787046278002
+    },
+    "49498": {
+      "word": "cook meals",
+      "ts": 1787046278027
+    },
+    "49499": {
+      "word": "copy from",
+      "ts": 1787046278052
+    },
+    "49500": {
+      "word": "crowd into",
+      "ts": 1787046278077
+    },
+    "49501": {
+      "word": "cure sb. of",
+      "ts": 1787046278106
+    },
+    "49502": {
+      "word": "cut short",
+      "ts": 1787046278135
+    },
+    "49503": {
+      "word": "date from",
+      "ts": 1787046278161
+    },
+    "49504": {
+      "word": "deal in",
+      "ts": 1787045952331
+    },
+    "49505": {
+      "word": "decorate with",
+      "ts": 1787045952365
+    },
+    "49506": {
+      "word": "delay doing",
+      "ts": 1787045952389
+    },
+    "49507": {
+      "word": "delight in",
+      "ts": 1787045952415
+    },
+    "49508": {
+      "word": "depend on sb. for",
+      "ts": 1787045952439
+    },
+    "49509": {
+      "word": "describe as",
+      "ts": 1787045952465
+    },
+    "49510": {
+      "word": "desert to",
+      "ts": 1787045952489
+    },
+    "49511": {
+      "word": "die from",
+      "ts": 1787045952515
+    },
+    "49512": {
+      "word": "differ in",
+      "ts": 1787045952539
+    },
+    "49513": {
+      "word": "direct to",
+      "ts": 1787045952573
+    },
+    "49514": {
+      "word": "disapprove of",
+      "ts": 1787045956865
+    },
+    "49515": {
+      "word": "be honored for",
+      "ts": 1787045956889
+    },
+    "49516": {
+      "word": "be impressed by",
+      "ts": 1787045956915
+    },
+    "49517": {
+      "word": "be located in",
+      "ts": 1787045956939
+    },
+    "49518": {
+      "word": "be occupied in",
+      "ts": 1787045956965
+    },
+    "49519": {
+      "word": "be of high quality",
+      "ts": 1787045956998
+    },
+    "49520": {
+      "word": "be on the increase",
+      "ts": 1787045957025
+    },
+    "49521": {
+      "word": "be opposed to",
+      "ts": 1787045957048
+    },
+    "49522": {
+      "word": "be patient with",
+      "ts": 1787045957074
+    },
+    "49523": {
+      "word": "be related to",
+      "ts": 1787045957115
+    },
+    "49524": {
+      "word": "be seated",
+      "ts": 1787045963414
+    },
+    "49525": {
+      "word": "be senior to",
+      "ts": 1787046278185
+    },
+    "49526": {
+      "word": "be skeptical about",
+      "ts": 1787045963473
+    },
+    "49527": {
+      "word": "be thankful to",
+      "ts": 1787045963498
+    },
+    "49528": {
+      "word": "be thirsty for",
+      "ts": 1787045963531
+    },
+    "49529": {
+      "word": "be to blame",
+      "ts": 1787046278219
+    },
+    "49530": {
+      "word": "be well worth",
+      "ts": 1787045963590
+    },
+    "49531": {
+      "word": "beg for",
+      "ts": 1787045963624
+    },
+    "49532": {
+      "word": "begin with",
+      "ts": 1787045963657
+    },
+    "49533": {
+      "word": "bend down",
+      "ts": 1787045963692
+    },
+    "49534": {
+      "word": "benefit sb.",
+      "ts": 1787046278243
+    },
+    "49535": {
+      "word": "bid farewell to",
+      "ts": 1787046278269
+    },
+    "49536": {
+      "word": "bite one's lips",
+      "ts": 1787046021425
+    },
+    "49537": {
+      "word": "boil down to",
+      "ts": 1787046032999
+    },
+    "49538": {
+      "word": "book a ticket",
+      "ts": 1787046037092
+    },
+    "49539": {
+      "word": "bow to",
+      "ts": 1787046278293
+    },
+    "49540": {
+      "word": "break a promise",
+      "ts": 1787046089542
+    },
+    "49541": {
+      "word": "break into tears",
+      "ts": 1787046105184
+    },
+    "49542": {
+      "word": "breathe in",
+      "ts": 1787046118050
+    },
+    "49543": {
+      "word": "breathe out",
+      "ts": 1787046128008
+    },
+    "49544": {
+      "word": "bring joy to",
+      "ts": 1787045966265
+    },
+    "49545": {
+      "word": "brush one's teeth",
+      "ts": 1787045966298
+    },
+    "49546": {
+      "word": "build a fire",
+      "ts": 1787045966332
+    },
+    "49547": {
+      "word": "burst with joy",
+      "ts": 1787045966365
+    },
+    "49548": {
+      "word": "calculate on",
+      "ts": 1787045966399
+    },
+    "49549": {
+      "word": "call attention to",
+      "ts": 1787045966431
+    },
+    "49550": {
+      "word": "calm oneself",
+      "ts": 1787045966465
+    },
+    "49551": {
+      "word": "can't help doing",
+      "ts": 1787045966498
+    },
+    "49552": {
+      "word": "can't wait to do",
+      "ts": 1787045966524
+    },
+    "49553": {
+      "word": "care nothing about",
+      "ts": 1787045966548
+    },
+    "49554": {
+      "word": "at an early age",
+      "ts": 1787045964615
+    },
+    "49555": {
+      "word": "up till now",
+      "ts": 1787045964649
+    },
+    "49556": {
+      "word": "prefer A to B",
+      "ts": 1787045964681
+    },
+    "49557": {
+      "word": "in this way",
+      "ts": 1787045964715
+    },
+    "49558": {
+      "word": "in cash",
+      "ts": 1787045964748
+    },
+    "49559": {
+      "word": "in chains",
+      "ts": 1787045964782
+    },
+    "49560": {
+      "word": "in comfort",
+      "ts": 1787045964815
+    },
+    "49561": {
+      "word": "in despair",
+      "ts": 1787045964848
+    },
+    "49562": {
+      "word": "in flower",
+      "ts": 1787045964881
+    },
+    "49563": {
+      "word": "in fun",
+      "ts": 1787045964915
+    },
+    "49564": {
+      "word": "in high spirits",
+      "ts": 1787045968615
+    },
+    "49565": {
+      "word": "in love",
+      "ts": 1787045968648
+    },
+    "49566": {
+      "word": "in no case",
+      "ts": 1787046278319
+    },
+    "49567": {
+      "word": "in one's opinion",
+      "ts": 1787045968715
+    },
+    "49568": {
+      "word": "in operation",
+      "ts": 1787046278343
+    },
+    "49569": {
+      "word": "in order that",
+      "ts": 1787046278369
+    },
+    "49570": {
+      "word": "in pain",
+      "ts": 1787045968815
+    },
+    "49571": {
+      "word": "in preparation for",
+      "ts": 1787046278394
+    },
+    "49572": {
+      "word": "in rags",
+      "ts": 1787045968882
+    },
+    "49573": {
+      "word": "in relief",
+      "ts": 1787045968914
+    },
+    "49574": {
+      "word": "in ruins",
+      "ts": 1787046278419
+    },
+    "49575": {
+      "word": "in safety",
+      "ts": 1787046278443
+    },
+    "49576": {
+      "word": "in search for",
+      "ts": 1787046281840
+    },
+    "49577": {
+      "word": "in shape",
+      "ts": 1787046281877
+    },
+    "49578": {
+      "word": "in spite",
+      "ts": 1787046281903
+    },
+    "49579": {
+      "word": "in support of",
+      "ts": 1787046281935
+    },
+    "49580": {
+      "word": "in the event of",
+      "ts": 1787046281961
+    },
+    "49581": {
+      "word": "in the form of",
+      "ts": 1787046281993
+    },
+    "49582": {
+      "word": "in the least",
+      "ts": 1787046282027
+    },
+    "49583": {
+      "word": "in the open air",
+      "ts": 1787046282060
+    },
+    "49584": {
+      "word": "in the process of",
+      "ts": 1787045987687
+    },
+    "49585": {
+      "word": "in time of need",
+      "ts": 1787045987887
+    },
+    "49586": {
+      "word": "insist on doing",
+      "ts": 1787045987987
+    },
+    "49587": {
+      "word": "get divorced",
+      "ts": 1787045988065
+    },
+    "49588": {
+      "word": "get engaged",
+      "ts": 1787045988131
+    },
+    "49589": {
+      "word": "get injured",
+      "ts": 1787045988230
+    },
+    "49590": {
+      "word": "give a lecture",
+      "ts": 1787045988313
+    },
+    "49591": {
+      "word": "give a performance",
+      "ts": 1787045988415
+    },
+    "49592": {
+      "word": "give advice to",
+      "ts": 1787045988482
+    },
+    "49593": {
+      "word": "give chase",
+      "ts": 1787045988565
+    },
+    "49594": {
+      "word": "give lessons to",
+      "ts": 1787045978007
+    },
+    "49595": {
+      "word": "give signs of",
+      "ts": 1787045978149
+    },
+    "49596": {
+      "word": "glance at",
+      "ts": 1787045978284
+    },
+    "49597": {
+      "word": "go hiking",
+      "ts": 1787045978376
+    },
+    "49598": {
+      "word": "go hunting",
+      "ts": 1787045978399
+    },
+    "49599": {
+      "word": "go mad",
+      "ts": 1787045978432
+    },
+    "49600": {
+      "word": "go missing",
+      "ts": 1787045978465
+    },
+    "49601": {
+      "word": "go on a trip",
+      "ts": 1787045978499
+    },
+    "49602": {
+      "word": "go shopping",
+      "ts": 1787045978532
+    },
+    "49603": {
+      "word": "go skating",
+      "ts": 1787045978566
+    },
+    "49604": {
+      "word": "go skiing",
+      "ts": 1787045983515
+    },
+    "49605": {
+      "word": "go swimming",
+      "ts": 1787045983548
+    },
+    "49606": {
+      "word": "greet sb. with",
+      "ts": 1787045983574
+    },
+    "49607": {
+      "word": "grow rich",
+      "ts": 1787045983607
+    },
+    "49608": {
+      "word": "guard against",
+      "ts": 1787045983664
+    },
+    "49609": {
+      "word": "guess at",
+      "ts": 1787045983733
+    },
+    "49610": {
+      "word": "hand down",
+      "ts": 1787045983781
+    },
+    "49611": {
+      "word": "happen to do",
+      "ts": 1787045983829
+    },
+    "49612": {
+      "word": "have a try",
+      "ts": 1787045983899
+    },
+    "49613": {
+      "word": "have classes",
+      "ts": 1787045984079
+    },
+    "49614": {
+      "word": "have on",
+      "ts": 1787046282127
+    },
+    "49615": {
+      "word": "head towards",
+      "ts": 1787046282160
+    },
+    "49616": {
+      "word": "heal the wound",
+      "ts": 1787046269277
+    },
+    "49617": {
+      "word": "hesitate to do",
+      "ts": 1787046269310
+    },
+    "49618": {
+      "word": "hide away",
+      "ts": 1787046269343
+    },
+    "49619": {
+      "word": "hit on/ upon",
+      "ts": 1787046269377
+    },
+    "49620": {
+      "word": "hold one's head high",
+      "ts": 1787046269409
+    },
+    "49621": {
+      "word": "hurry to",
+      "ts": 1787046269443
+    },
+    "49622": {
+      "word": "identify with",
+      "ts": 1787046269477
+    },
+    "49623": {
+      "word": "ignore advice",
+      "ts": 1787046269510
+    },
+    "49624": {
+      "word": "imagine doing",
+      "ts": 1787046269543
+    },
+    "49625": {
+      "word": "improve on",
+      "ts": 1787046269577
+    },
+    "49626": {
+      "word": "do a good deed",
+      "ts": 1787046274627
+    },
+    "49627": {
+      "word": "do research on",
+      "ts": 1787046274661
+    },
+    "49628": {
+      "word": "do wrong to sb.",
+      "ts": 1787046274693
+    },
+    "49629": {
+      "word": "double check",
+      "ts": 1787046274719
+    },
+    "49630": {
+      "word": "draw near",
+      "ts": 1787046274752
+    },
+    "49631": {
+      "word": "dream about",
+      "ts": 1787046274777
+    },
+    "49632": {
+      "word": "dress in",
+      "ts": 1787046274802
+    },
+    "49633": {
+      "word": "drive away",
+      "ts": 1787046274827
+    },
+    "49634": {
+      "word": "drop behind",
+      "ts": 1787046274852
+    },
+    "49635": {
+      "word": "end with",
+      "ts": 1787046274877
+    },
+    "49636": {
+      "word": "engage oneself in",
+      "ts": 1787046284495
+    },
+    "49637": {
+      "word": "envy sb. sth.",
+      "ts": 1787046284527
+    },
+    "49638": {
+      "word": "escape doing",
+      "ts": 1787046284561
+    },
+    "49639": {
+      "word": "even so",
+      "ts": 1787046284593
+    },
+    "49640": {
+      "word": "every other day",
+      "ts": 1787046284627
+    },
+    "49641": {
+      "word": "excuse sb. for",
+      "ts": 1787046284660
+    },
+    "49642": {
+      "word": "expect too much of",
+      "ts": 1787046284694
+    },
+    "49643": {
+      "word": "explain to",
+      "ts": 1787046284727
+    },
+    "49644": {
+      "word": "expose to",
+      "ts": 1787046284761
+    },
+    "49645": {
+      "word": "face difficulties",
+      "ts": 1787046284794
+    },
+    "49646": {
+      "word": "fall into ruin",
+      "ts": 1787046287111
+    },
+    "49647": {
+      "word": "far and wide",
+      "ts": 1787046287144
+    },
+    "49648": {
+      "word": "feel at home",
+      "ts": 1787046287177
+    },
+    "49649": {
+      "word": "feel down",
+      "ts": 1787046287210
+    },
+    "49650": {
+      "word": "fight a battle",
+      "ts": 1787046287244
+    },
+    "49651": {
+      "word": "figure on",
+      "ts": 1787046287277
+    },
+    "49652": {
+      "word": "fix one's eyes on",
+      "ts": 1787046287311
+    },
+    "49653": {
+      "word": "focus attention on",
+      "ts": 1787046287344
+    },
+    "49654": {
+      "word": "forbid sb. to do",
+      "ts": 1787046287394
+    },
+    "49655": {
+      "word": "forget about",
+      "ts": 1787046287419
+    },
+    "49656": {
+      "word": "forgive sb. for",
+      "ts": 1787046288894
+    },
+    "49657": {
+      "word": "form the habit of",
+      "ts": 1787046288928
+    },
+    "49658": {
+      "word": "free from",
+      "ts": 1787046288959
+    },
+    "49659": {
+      "word": "frown at",
+      "ts": 1787046288993
+    },
+    "49660": {
+      "word": "fulfill a promise",
+      "ts": 1787046289027
+    },
+    "49661": {
+      "word": "gain weight",
+      "ts": 1787046289060
+    },
+    "49662": {
+      "word": "gaze at",
+      "ts": 1787046289095
+    },
+    "49663": {
+      "word": "get angry",
+      "ts": 1787046289127
+    },
+    "49664": {
+      "word": "get changed",
+      "ts": 1787046015066
+    },
+    "49665": {
+      "word": "get close to",
+      "ts": 1787046015099
+    },
+    "49666": {
+      "word": "play basketball",
+      "ts": 1787046015133
+    },
+    "49667": {
+      "word": "play football",
+      "ts": 1787046015165
+    },
+    "49668": {
+      "word": "play the piano",
+      "ts": 1787046015199
+    },
+    "49669": {
+      "word": "prefer to do",
+      "ts": 1787046015232
+    },
+    "49670": {
+      "word": "prevent sb. from doing",
+      "ts": 1787046015266
+    },
+    "49671": {
+      "word": "pretend to be",
+      "ts": 1787046015299
+    },
+    "49672": {
+      "word": "prohibit sb. from doing",
+      "ts": 1787046015333
+    },
+    "49673": {
+      "word": "protect... from",
+      "ts": 1787046015366
+    },
+    "49674": {
+      "word": "provide for",
+      "ts": 1787046289187
+    },
+    "49675": {
+      "word": "provide sb. with sth.",
+      "ts": 1787046289219
+    },
+    "49676": {
+      "word": "quarrel with",
+      "ts": 1787046316261
+    },
+    "49677": {
+      "word": "refuse to do",
+      "ts": 1787046316294
+    },
+    "49678": {
+      "word": "remain calm",
+      "ts": 1787046316328
+    },
+    "49679": {
+      "word": "remain silent",
+      "ts": 1787046316360
+    },
+    "49680": {
+      "word": "remind sb. to do",
+      "ts": 1787046316394
+    },
+    "49681": {
+      "word": "replace with",
+      "ts": 1787046316427
+    },
+    "49682": {
+      "word": "reply to",
+      "ts": 1787046316461
+    },
+    "49683": {
+      "word": "report to",
+      "ts": 1787046316494
+    },
+    "49684": {
+      "word": "request sb. to do",
+      "ts": 1787046316528
+    },
+    "49685": {
+      "word": "require to do",
+      "ts": 1787046316560
+    },
+    "49686": {
+      "word": "make a living by doing",
+      "ts": 1787046011149
+    },
+    "49687": {
+      "word": "make a plan",
+      "ts": 1787046011174
+    },
+    "49688": {
+      "word": "make a suggestion",
+      "ts": 1787046011207
+    },
+    "49689": {
+      "word": "make certain",
+      "ts": 1787046292753
+    },
+    "49690": {
+      "word": "make contact with",
+      "ts": 1787046011265
+    },
+    "49691": {
+      "word": "make it",
+      "ts": 1787046011291
+    },
+    "49692": {
+      "word": "make room",
+      "ts": 1787046011324
+    },
+    "49693": {
+      "word": "make sure of",
+      "ts": 1787046011350
+    },
+    "49694": {
+      "word": "manage without",
+      "ts": 1787046023808
+    },
+    "49695": {
+      "word": "mark down",
+      "ts": 1787046023841
+    },
+    "49696": {
+      "word": "mark up",
+      "ts": 1787046023874
+    },
+    "49697": {
+      "word": "marry into",
+      "ts": 1787046023908
+    },
+    "49698": {
+      "word": "meet the standard",
+      "ts": 1787046023941
+    },
+    "49699": {
+      "word": "mend one's ways",
+      "ts": 1787046023975
+    },
+    "49700": {
+      "word": "mix A with B",
+      "ts": 1787046024007
+    },
+    "49701": {
+      "word": "mock at",
+      "ts": 1787046024042
+    },
+    "49702": {
+      "word": "move away",
+      "ts": 1787046024074
+    },
+    "49703": {
+      "word": "name... after",
+      "ts": 1787046024108
+    },
+    "49704": {
+      "word": "narrow down",
+      "ts": 1787046020508
+    },
+    "49705": {
+      "word": "object to doing",
+      "ts": 1787046020541
+    },
+    "49706": {
+      "word": "occur to sb.",
+      "ts": 1787046020574
+    },
+    "49707": {
+      "word": "operate a machine",
+      "ts": 1787046020607
+    },
+    "49708": {
+      "word": "oppose to",
+      "ts": 1787046020641
+    },
+    "49709": {
+      "word": "order sth. from",
+      "ts": 1787046020674
+    },
+    "49710": {
+      "word": "inspire sb. to do",
+      "ts": 1787046020708
+    },
+    "49711": {
+      "word": "introduce into",
+      "ts": 1787046020741
+    },
+    "49712": {
+      "word": "invite sb. to",
+      "ts": 1787046020775
+    },
+    "49713": {
+      "word": "join the army",
+      "ts": 1787046020810
+    },
+    "49714": {
+      "word": "judge by/ from",
+      "ts": 1787046030891
+    },
+    "49715": {
+      "word": "keep a diary",
+      "ts": 1787046030925
+    },
+    "49716": {
+      "word": "keep doing",
+      "ts": 1787046030957
+    },
+    "49717": {
+      "word": "keep in order",
+      "ts": 1787046030991
+    },
+    "49718": {
+      "word": "keep out of",
+      "ts": 1787046031024
+    },
+    "49719": {
+      "word": "knock over",
+      "ts": 1787046031058
+    },
+    "49720": {
+      "word": "know for sure",
+      "ts": 1787046031091
+    },
+    "49721": {
+      "word": "laugh over",
+      "ts": 1787046031125
+    },
+    "49722": {
+      "word": "lay eggs",
+      "ts": 1787046031158
+    },
+    "49723": {
+      "word": "lead a hard life",
+      "ts": 1787046031193
+    },
+    "49724": {
+      "word": "lean against",
+      "ts": 1787046026108
+    },
+    "49725": {
+      "word": "learn by oneself",
+      "ts": 1787046026141
+    },
+    "49726": {
+      "word": "leave off",
+      "ts": 1787046026174
+    },
+    "49727": {
+      "word": "leave word",
+      "ts": 1787046292785
+    },
+    "49728": {
+      "word": "lend oneself to",
+      "ts": 1787046292819
+    },
+    "49729": {
+      "word": "lie on the ground",
+      "ts": 1787046026274
+    },
+    "49730": {
+      "word": "like crazy",
+      "ts": 1787046026308
+    },
+    "49731": {
+      "word": "listen for",
+      "ts": 1787046026341
+    },
+    "49732": {
+      "word": "live a happy life",
+      "ts": 1787046026375
+    },
+    "49733": {
+      "word": "live by",
+      "ts": 1787046026407
+    },
+    "49734": {
+      "word": "look about",
+      "ts": 1787046032124
+    },
+    "49735": {
+      "word": "look back on",
+      "ts": 1787046032158
+    },
+    "49736": {
+      "word": "look down on",
+      "ts": 1787046032191
+    },
+    "49737": {
+      "word": "look forward to doing",
+      "ts": 1787046032225
+    },
+    "49738": {
+      "word": "look into the matter",
+      "ts": 1787046032257
+    },
+    "49739": {
+      "word": "look round",
+      "ts": 1787046032283
+    },
+    "49740": {
+      "word": "look up to",
+      "ts": 1787046032316
+    },
+    "49741": {
+      "word": "lose control",
+      "ts": 1787046032341
+    },
+    "49742": {
+      "word": "teach oneself",
+      "ts": 1787046032366
+    },
+    "49743": {
+      "word": "tear up",
+      "ts": 1787046032392
+    },
+    "49744": {
+      "word": "tell a story",
+      "ts": 1787046031741
+    },
+    "49745": {
+      "word": "tell the truth",
+      "ts": 1787046031775
+    },
+    "49746": {
+      "word": "thank sb. for",
+      "ts": 1787046031807
+    },
+    "49747": {
+      "word": "think through",
+      "ts": 1787046031841
+    },
+    "49748": {
+      "word": "touch on",
+      "ts": 1787046031874
+    },
+    "49749": {
+      "word": "turn around",
+      "ts": 1787046031908
+    },
+    "49750": {
+      "word": "type in",
+      "ts": 1787046031941
+    },
+    "49751": {
+      "word": "vary from",
+      "ts": 1787046031975
+    },
+    "49752": {
+      "word": "warn sb. of",
+      "ts": 1787046032007
+    },
+    "49753": {
+      "word": "watch over",
+      "ts": 1787046032033
+    },
+    "49754": {
+      "word": "weep for",
+      "ts": 1787046042799
+    },
+    "49755": {
+      "word": "weigh down",
+      "ts": 1787046042825
+    },
+    "49756": {
+      "word": "sign an agreement",
+      "ts": 1787046292852
+    },
+    "49757": {
+      "word": "smile at",
+      "ts": 1787046042875
+    },
+    "49758": {
+      "word": "smooth away",
+      "ts": 1787046042899
+    },
+    "49759": {
+      "word": "spend... on",
+      "ts": 1787046042925
+    },
+    "49760": {
+      "word": "stand up",
+      "ts": 1787046042949
+    },
+    "49761": {
+      "word": "start a business",
+      "ts": 1787046292886
+    },
+    "49762": {
+      "word": "start out",
+      "ts": 1787046042999
+    },
+    "49763": {
+      "word": "stay up",
+      "ts": 1787046043025
+    },
+    "49764": {
+      "word": "step forward",
+      "ts": 1787046039483
+    },
+    "49765": {
+      "word": "stick out",
+      "ts": 1787046039516
+    },
+    "49766": {
+      "word": "stick to doing",
+      "ts": 1787046039542
+    },
+    "49767": {
+      "word": "strengthen theconnection",
+      "ts": 1787046292918
+    },
+    "49768": {
+      "word": "struggle against",
+      "ts": 1787046045400
+    },
+    "49769": {
+      "word": "struggle for",
+      "ts": 1787046045441
+    },
+    "49770": {
+      "word": "succeed in doing",
+      "ts": 1787046045466
+    },
+    "49771": {
+      "word": "suggest doing",
+      "ts": 1787046045499
+    },
+    "49772": {
+      "word": "supply sb. with sth.",
+      "ts": 1787046292952
+    },
+    "49773": {
+      "word": "take a deep breath",
+      "ts": 1787046045557
+    },
+    "49774": {
+      "word": "take apart",
+      "ts": 1787046047233
+    },
+    "49775": {
+      "word": "resist doing",
+      "ts": 1787046047266
+    },
+    "49776": {
+      "word": "rise up",
+      "ts": 1787046047300
+    },
+    "49777": {
+      "word": "risk doing",
+      "ts": 1787046047333
+    },
+    "49778": {
+      "word": "run away from",
+      "ts": 1787046047367
+    },
+    "49779": {
+      "word": "run short of",
+      "ts": 1787046047399
+    },
+    "49780": {
+      "word": "rush into",
+      "ts": 1787046047433
+    },
+    "49781": {
+      "word": "say goodbye to",
+      "ts": 1787046047474
+    },
+    "49782": {
+      "word": "scold sb. for",
+      "ts": 1787046047508
+    },
+    "49783": {
+      "word": "send away",
+      "ts": 1787046047541
+    },
+    "49784": {
+      "word": "send off",
+      "ts": 1787046040625
+    },
+    "49785": {
+      "word": "set a goal",
+      "ts": 1787046040649
+    },
+    "49786": {
+      "word": "set about doing",
+      "ts": 1787046040675
+    },
+    "49787": {
+      "word": "set fire to",
+      "ts": 1787046040699
+    },
+    "49788": {
+      "word": "share sth. with",
+      "ts": 1787046040741
+    },
+    "49789": {
+      "word": "shout out",
+      "ts": 1787046040766
+    },
+    "49790": {
+      "word": "shower with",
+      "ts": 1787046040792
+    },
+    "49791": {
+      "word": "shrug off",
+      "ts": 1787046040816
+    },
+    "49792": {
+      "word": "shut off",
+      "ts": 1787046040841
+    }
+  },
+  "failed": {}
+}

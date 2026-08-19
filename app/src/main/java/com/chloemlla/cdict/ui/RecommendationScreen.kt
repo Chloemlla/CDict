@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Recommend
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
@@ -144,13 +146,15 @@ fun RecommendationScreen(
         ResponsiveContentBox(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (state) {
                 RecommendationScreenState.Loading -> RecommendationLoading()
-                RecommendationScreenState.NoDictionary -> RecommendationNoDictionary()
+                RecommendationScreenState.NoDictionary -> RecommendationNoDictionary(onReload)
                 is RecommendationScreenState.Ready -> {
                     if (state.items.isEmpty()) {
                         RecommendationEmpty(
                             state = state,
                             onContinueMore = onContinueMore,
+                            onReload = onReload,
                             onSetGoal = onSetGoal,
+                            onScopeChange = onScopeChange,
                         )
                     } else if (wideLayout) {
                         Row(
@@ -218,37 +222,82 @@ fun RecommendationScreen(
 
 @Composable
 private fun RecommendationLoading() {
+    val transition = rememberInfiniteTransition(label = "rec-loading-shimmer")
+    val pulse by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "rec-loading-pulse",
+    )
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            CircularProgressIndicator()
-            Text("正在生成今日推荐…", style = MaterialTheme.typography.bodyMedium)
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .alpha(pulse)
+                    .semantics {
+                        contentDescription = "正在生成今日推荐"
+                    },
+            )
+            Text(
+                text = "正在生成今日推荐…",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.alpha(pulse),
+            )
+            repeat(3) { i ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f - i * 0.1f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = pulse))
+                        .alpha(0.5f),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun RecommendationNoDictionary() {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+private fun RecommendationNoDictionary(onReload: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Card(
             modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "词典加载失败",
+                    modifier = Modifier.size(48.dp),
+                )
                 Text(
-                    "无法打开离线词典",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "无法打开离线词典",
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "推荐页依赖本地词库，请确认安装包包含 dict.db。",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "推荐页依赖本地词库，请确认安装包包含 dict.db。",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
                 )
+                Button(
+                    onClick = onReload,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("重试加载")
+                }
             }
         }
     }
@@ -456,14 +505,23 @@ private fun RecommendationUpcomingRow(
     card: RecommendationItemCard,
     onOpenWord: (WordEntity) -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "upcoming-row-press-scale",
+    )
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(
+                interactionSource = interactionSource,
                 onClickLabel = "查看单词 ${card.word.word}",
                 role = Role.Button,
                 onClick = { onOpenWord(card.word) },
-            ),
+            )
+            .graphicsLayer { scaleX = scale; scaleY = scale },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(12.dp),
     ) {

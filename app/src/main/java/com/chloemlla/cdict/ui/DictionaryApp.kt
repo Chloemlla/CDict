@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.ButtonDefaults
@@ -315,6 +316,9 @@ private fun WordList(
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
 
+    // Track if a debounced search is in-flight (query changed but view model hasn't applied yet)
+    val isSearchPending = state.query != query && query.isNotBlank()
+
     // Staggered entrance animation: re-trigger only on initial load, filter, sort, or query
     // change — not on every scroll. A keyed reset gives each list refresh its own fade+slide pass.
     val entranceKey = "${state.sortMode.name}:${state.curriculumTag}:${state.query}"
@@ -426,16 +430,29 @@ private fun WordList(
                 },
                 trailingIcon = if (query.isNotBlank()) {
                     {
-                        IconButton(
-                            onClick = {
-                                query = ""
-                                onQueryChanged("")
-                            },
-                            modifier = Modifier.semantics {
-                                contentDescription = "清除搜索内容"
-                            },
+                        Row(
+                            modifier = Modifier.padding(end = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(Icons.Default.Clear, contentDescription = null)
+                            if (isSearchPending) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        query = ""
+                                        onQueryChanged("")
+                                    },
+                                    modifier = Modifier.semantics {
+                                        contentDescription = "清除搜索内容"
+                                    },
+                                ) {
+                                    Icon(Icons.Default.Clear, contentDescription = null)
+                                }
+                            }
                         }
                     }
                 } else {
@@ -499,6 +516,7 @@ private fun WordList(
                         query = ""
                         onQueryChanged("")
                     },
+                    onCurriculumTagChanged = onCurriculumTagChanged,
                 )
             } else {
                 // Crossfade (~200ms) when the query is cleared: search results hand off to the
@@ -674,6 +692,7 @@ private fun ColumnScope.EmptySearchState(
     suggestion: WordEntity?,
     onSuggestionClick: (WordEntity) -> Unit,
     onClear: () -> Unit,
+    onCurriculumTagChanged: (String?) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -684,13 +703,13 @@ private fun ColumnScope.EmptySearchState(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
                 imageVector = if (query.isBlank()) Icons.AutoMirrored.Filled.MenuBook else Icons.Default.SearchOff,
                 contentDescription = if (query.isBlank()) "词典为空" else "没有找到匹配词条",
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(56.dp),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
             )
             Text(
                 text = if (query.isBlank()) "词典中暂无词条" else "没有找到匹配词条",
@@ -699,9 +718,10 @@ private fun ColumnScope.EmptySearchState(
             )
             if (query.isNotBlank()) {
                 Text(
-                    text = "试试英文单词、中文翻译或定义",
+                    text = "试试英文单词、中文翻译或定义搜索",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                 )
                 // "Did you mean?" (PRD §3.1): the closest headword within edit distance <= 2,
                 // shown because nothing matched the typed query.
@@ -710,7 +730,7 @@ private fun ColumnScope.EmptySearchState(
                         onClick = { onSuggestionClick(suggestion) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 52.dp),
+                            .heightIn(min = 56.dp),
                         colors = CardDefaults.outlinedCardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         ),
@@ -720,13 +740,13 @@ private fun ColumnScope.EmptySearchState(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp),
+                                modifier = Modifier.size(20.dp),
                             )
                             Text(
                                 text = "是否查找：${suggestion.word}",
@@ -736,6 +756,44 @@ private fun ColumnScope.EmptySearchState(
                             )
                         }
                     }
+                } else {
+                    // No suggestion found — show helpful tips
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Lightbulb,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Text(
+                                    text = "搜索技巧",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                SearchTip("英文单词", "如 abandon、precision")
+                                SearchTip("中文翻译", "如 放弃、精确")
+                                SearchTip("英文定义关键词", "如 \"give up\"、\"exact\"")
+                            }
+                        }
+                    }
                 }
                 TextButton(
                     onClick = onClear,
@@ -743,8 +801,43 @@ private fun ColumnScope.EmptySearchState(
                 ) {
                     Text("清除搜索")
                 }
+            } else {
+                // Empty dictionary — guide user
+                Text(
+                    text = "词典数据正在加载，或当前筛选条件下无词条",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                TextButton(
+                    onClick = { onCurriculumTagChanged(null) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text("查看全部词条")
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchTip(label: String, example: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(80.dp),
+        )
+        Text(
+            text = example,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

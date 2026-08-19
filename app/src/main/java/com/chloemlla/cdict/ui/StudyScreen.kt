@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.School
@@ -176,7 +177,7 @@ fun StudyScreen(
         ) {
             when (state) {
                 StudyScreenState.Loading -> StudyLoading()
-                is StudyScreenState.NoDictionary -> StudyError(state.message)
+                is StudyScreenState.NoDictionary -> StudyError(state.message, onReload)
                 is StudyScreenState.Ready -> when (state.phase) {
                     StudyPhase.REVIEW -> ReviewFlow(
                         state = state,
@@ -199,6 +200,7 @@ fun StudyScreen(
                         speakingKey = speakingKey,
                         onScopeChange = onScopeChange,
                         playingKey = playingKey,
+                        onReload = onReload,
                     )
                     StudyPhase.DONE -> DoneFlow(
                         state = state,
@@ -277,24 +279,141 @@ fun StudyScreen(
 
 @Composable
 private fun StudyLoading() {
+    val transition = rememberInfiniteTransition(label = "study-loading-shimmer")
+    val pulse by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "study-loading-pulse",
+    )
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            CircularProgressIndicator()
-            Text("正在准备今日背词…", style = MaterialTheme.typography.bodyMedium)
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .alpha(pulse)
+                    .semantics {
+                        contentDescription = "正在准备今日背词"
+                    },
+            )
+            Text(
+                text = "正在准备今日背词…",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.alpha(pulse),
+            )
+            repeat(3) { i ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.8f - i * 0.1f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = pulse))
+                        .alpha(0.5f),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun StudyError(message: String) {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+private fun StudyError(message: String, onReload: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "词典加载失败",
+                    modifier = Modifier.size(48.dp),
+                )
+                Text(
+                    text = "无法打开词典",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = message.takeIf { it.isNotBlank() } ?: "无法读取本地词典数据。",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                )
+                Button(
+                    onClick = onReload,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("重试加载")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StudyEmpty(
+    onReload: () -> Unit,
+    onScopeChange: (StudyScope) -> Unit,
+    availableCurriculumTags: List<String>,
+    currentScope: StudyScope,
+) {
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("无法打开词典", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(message, style = MaterialTheme.typography.bodyMedium)
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                    contentDescription = "词典为空",
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                )
+                Text(
+                    text = "暂无可学习词条",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "当前筛选条件下没有可学习的词条。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                // Show scope filter to help user adjust
+                if (availableCurriculumTags.isNotEmpty()) {
+                    ScopeFilterRow(
+                        scope = currentScope,
+                        availableCurriculumTags = availableCurriculumTags,
+                        onScopeChange = onScopeChange,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { onScopeChange(StudyScope()) },
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    ) {
+                        Text("查看全部")
+                    }
+                    Button(
+                        onClick = onReload,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("刷新")
+                    }
+                }
             }
         }
     }
@@ -477,6 +596,13 @@ private fun ReviewOption(
         ReviewOptionHighlight.Wrong -> WrongRedContainer to WrongRed
         null -> MaterialTheme.colorScheme.surfaceContainerLow to MaterialTheme.colorScheme.onSurface
     }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "option-press-scale",
+    )
     Surface(
         color = bg,
         contentColor = fg,
@@ -484,7 +610,12 @@ private fun ReviewOption(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .semantics {
+                role = Role.Button
+                contentDescription = "选项 ${('A' + index)}：$text"
+            },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -527,6 +658,7 @@ private fun LearnFlow(
     onScopeChange: (StudyScope) -> Unit = {},
     playingKey: String? = null,
     speakingKey: String? = null,
+    onReload: () -> Unit,
 ) {
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
@@ -568,9 +700,12 @@ private fun LearnFlow(
                     )
                 }
             } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("正在为你挑选新词…", style = MaterialTheme.typography.bodyMedium)
-                }
+                StudyEmpty(
+                    onReload = onReload,
+                    onScopeChange = onScopeChange,
+                    availableCurriculumTags = state.availableCurriculumTags,
+                    currentScope = state.scope,
+                )
             }
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
