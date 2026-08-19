@@ -2,7 +2,6 @@ package com.chloemlla.cdict.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -14,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -38,9 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Recommend
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
@@ -192,36 +190,27 @@ fun RecommendationScreen(
                                     onFilterPool = { poolFilter.value = it },
                                     currentPoolFilter = poolFilter.value,
                                 )
-                                // Filter current card by pool
-                                val filteredItems = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }
-                                if (filteredItems.isNotEmpty()) {
-                                    RecommendationCurrentCard(
-                                        state = state.copy(items = filteredItems),
-                                        phraseStates = phraseStates,
-                                        onTranslate = onTranslate,
-                                        onSpeak = onSpeak,
-                                        onMarkLearned = onMarkLearned,
-                                        onMarkMastered = onMarkMastered,
-                                        onDefer = onDefer,
-                                        onOpenWord = onOpenWord,
-                                        onPlayPronunciation = onPlayPronunciation,
-                                        playingKey = playingKey,
-                                        speakingKey = speakingKey,
-                                    )
-                                } else {
-                                    // No items match filter - show empty state
-                                    Text(
-                                        "当前筛选下无推荐词汇",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                                    )
-                                }
+                                // 当前卡永远是队列真实头部：底部操作走 ViewModel 的队首，
+                                // 若这里改用筛选后的头部，操作的词会与卡面显示的词不一致。
+                                RecommendationCurrentCard(
+                                    state = state,
+                                    phraseStates = phraseStates,
+                                    onTranslate = onTranslate,
+                                    onSpeak = onSpeak,
+                                    onMarkLearned = onMarkLearned,
+                                    onMarkMastered = onMarkMastered,
+                                    onDefer = onDefer,
+                                    onOpenWord = onOpenWord,
+                                    onPlayPronunciation = onPlayPronunciation,
+                                    playingKey = playingKey,
+                                    speakingKey = speakingKey,
+                                )
                             }
-                            // Upcoming list also filtered
+                            // 图例筛选只作用于「接下来」预览队列（只读，点击进词典详情）。
                             RecommendationUpcomingList(
-                                state = state.copy(items = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }),
+                                upcoming = state.items.drop(1)
+                                    .filter { poolFilter.value == null || it.pool == poolFilter.value },
+                                filtered = poolFilter.value != null,
                                 onOpenWord = onOpenWord,
                                 modifier = Modifier.weight(2f),
                             )
@@ -241,33 +230,24 @@ fun RecommendationScreen(
                                 onFilterPool = { poolFilter.value = it },
                                 currentPoolFilter = poolFilter.value,
                             )
-                            // Filter current card by pool
-                            val filteredItems = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }
-                            if (filteredItems.isNotEmpty()) {
-                                RecommendationCurrentCard(
-                                    state = state.copy(items = filteredItems),
-                                    phraseStates = phraseStates,
-                                    onTranslate = onTranslate,
-                                    onSpeak = onSpeak,
-                                    onMarkLearned = onMarkLearned,
-                                    onMarkMastered = onMarkMastered,
-                                    onDefer = onDefer,
-                                    onOpenWord = onOpenWord,
-                                    onPlayPronunciation = onPlayPronunciation,
-                                    playingKey = playingKey,
-                                    speakingKey = speakingKey,
-                                )
-                            } else {
-                                Text(
-                                    "当前筛选下无推荐词汇",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                                )
-                            }
+                            // 当前卡永远是队列真实头部（同宽屏分支的理由）。
+                            RecommendationCurrentCard(
+                                state = state,
+                                phraseStates = phraseStates,
+                                onTranslate = onTranslate,
+                                onSpeak = onSpeak,
+                                onMarkLearned = onMarkLearned,
+                                onMarkMastered = onMarkMastered,
+                                onDefer = onDefer,
+                                onOpenWord = onOpenWord,
+                                onPlayPronunciation = onPlayPronunciation,
+                                playingKey = playingKey,
+                                speakingKey = speakingKey,
+                            )
                             RecommendationUpcomingBlock(
-                                state = state.copy(items = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }),
+                                upcoming = state.items.drop(1)
+                                    .filter { poolFilter.value == null || it.pool == poolFilter.value },
+                                filtered = poolFilter.value != null,
                                 onOpenWord = onOpenWord,
                             )
                         }
@@ -403,9 +383,7 @@ private fun RecommendationHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .animateContentSize(),
-            color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
+                .clip(RoundedCornerShape(4.dp)),
         )
         if (isComplete) {
             Text(
@@ -415,29 +393,43 @@ private fun RecommendationHeader(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp)
-                    .animateContentSize(),
+                    .padding(top = 4.dp),
             )
         }
-        // Interactive legend pills - tap to filter
+        // 图例即筛选器：点击聚焦某一词池的「接下来」预览，再点取消。
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RecommendationLegendPill(
                 text = "核心 50%",
                 pool = RecommendationPool.CORE_NEW,
                 isSelected = currentPoolFilter == RecommendationPool.CORE_NEW,
-                onClick = { onFilterPool(if (currentPoolFilter == RecommendationPool.CORE_NEW) null else RecommendationPool.CORE_NEW) }
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onFilterPool(
+                        if (currentPoolFilter == RecommendationPool.CORE_NEW) null else RecommendationPool.CORE_NEW,
+                    )
+                },
             )
             RecommendationLegendPill(
                 text = "派生 30%",
                 pool = RecommendationPool.EXPANSION,
                 isSelected = currentPoolFilter == RecommendationPool.EXPANSION,
-                onClick = { onFilterPool(if (currentPoolFilter == RecommendationPool.EXPANSION) null else RecommendationPool.EXPANSION) }
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onFilterPool(
+                        if (currentPoolFilter == RecommendationPool.EXPANSION) null else RecommendationPool.EXPANSION,
+                    )
+                },
             )
             RecommendationLegendPill(
                 text = "过渡 20%",
                 pool = RecommendationPool.SIMPLE,
                 isSelected = currentPoolFilter == RecommendationPool.SIMPLE,
-                onClick = { onFilterPool(if (currentPoolFilter == RecommendationPool.SIMPLE) null else RecommendationPool.SIMPLE) }
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    onFilterPool(
+                        if (currentPoolFilter == RecommendationPool.SIMPLE) null else RecommendationPool.SIMPLE,
+                    )
+                },
             )
         }
     }
@@ -534,12 +526,17 @@ private fun RecommendationCurrentCard(
     }
 }
 
+/**
+ * 「接下来」队列预览。[upcoming] 由调用方算好（已去掉当前卡、并应用图例筛选），
+ * 这样筛选只影响预览列表，不会改变当前卡——当前卡必须始终是队列真实头部，
+ * 否则底部操作按钮（加入背词 / 已掌握 / 稍后再看）作用的词与卡面显示的词会不一致。
+ */
 @Composable
 private fun RecommendationUpcomingBlock(
-    state: RecommendationScreenState.Ready,
+    upcoming: List<RecommendationItemCard>,
+    filtered: Boolean,
     onOpenWord: (WordEntity) -> Unit,
 ) {
-    val upcoming = state.items.drop(1)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "接下来 · ${upcoming.size}",
@@ -549,7 +546,7 @@ private fun RecommendationUpcomingBlock(
         )
         if (upcoming.isEmpty()) {
             Text(
-                "今天的推荐已全部看完。",
+                text = if (filtered) "该类别下没有后续推荐，点击图例可取消筛选。" else "今天的推荐已全部看完。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -561,11 +558,11 @@ private fun RecommendationUpcomingBlock(
 
 @Composable
 private fun RecommendationUpcomingList(
-    state: RecommendationScreenState.Ready,
+    upcoming: List<RecommendationItemCard>,
+    filtered: Boolean,
     onOpenWord: (WordEntity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val upcoming = state.items.drop(1)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 4.dp),
@@ -581,7 +578,7 @@ private fun RecommendationUpcomingList(
         if (upcoming.isEmpty()) {
             item(key = "upcoming-empty") {
                 Text(
-                    "今天的推荐已全部看完。",
+                    text = if (filtered) "该类别下没有后续推荐，点击图例可取消筛选。" else "今天的推荐已全部看完。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -743,8 +740,9 @@ private fun RecommendationModePill(pool: RecommendationPool) {
 private fun RecommendationLegendPill(
     text: String,
     pool: RecommendationPool,
-    isSelected: Boolean = false,
-    onClick: (() -> Unit)? = null,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val (targetBg, targetFg) = poolColors(pool)
     val bg by animateColorAsState(targetValue = targetBg, animationSpec = tween(250), label = "legend-pill-bg")
@@ -752,35 +750,38 @@ private fun RecommendationLegendPill(
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else if (isSelected) 1.05f else 1f,
+        targetValue = if (pressed) 0.95f else 1f,
         animationSpec = tween(durationMillis = 120),
         label = "legend-pill-scale",
     )
     Surface(
-        color = if (isSelected) bg.copy(alpha = 1f) else bg.copy(alpha = 0.4f),
+        color = if (isSelected) bg else bg.copy(alpha = 0.4f),
         contentColor = if (isSelected) fg else fg.copy(alpha = 0.7f),
         shape = RoundedCornerShape(6.dp),
-        modifier = Modifier
-            .fillMaxWidth(0.3f)
+        border = if (isSelected) BorderStroke(1.5.dp, fg.copy(alpha = 0.5f)) else null,
+        modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(
-                onClick = onClick ?: {},
                 interactionSource = interactionSource,
                 indication = null,
+                onClick = onClick,
             )
             .semantics {
-                role = Role.Button
-                contentDescription = "筛选 ${text}，${if (isSelected) "已选中" else "未选中"}"
-                stateDescription = if (isSelected) "已选中，点击取消筛选" else "点击筛选此类别"
-            }
-            .padding(horizontal = 4.dp),
+                role = Role.Checkbox
+                contentDescription = "筛选 $text"
+                stateDescription = if (isSelected) "已选中，点击取消筛选" else "未选中，点击只看该类别"
+            },
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp).fillMaxWidth(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 6.dp),
         )
     }
 }

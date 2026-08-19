@@ -3,6 +3,7 @@ package com.chloemlla.cdict.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -40,7 +41,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -207,15 +207,13 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    // Quick swap button for bidirectional translation
-                    if (direction != TranslationDirection.AUTO_TO_ZH && direction != TranslationDirection.AUTO_TO_EN) {
+                    // 互换按钮只在存在反向方向时出现（auto→X 没有可互换的源语言）。
+                    if (direction.canSwap) {
                         IconButton(
                             onClick = { viewModel.onDirectionChange(direction.swapped()) },
-                            modifier = Modifier
-                                .semantics {
-                                    contentDescription = "交换源语言与目标语言"
-                                }
-                                .padding(end = 4.dp),
+                            modifier = Modifier.semantics {
+                                contentDescription = "互换翻译方向，改为${direction.swapped().label}"
+                            },
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.SwapHoriz,
@@ -402,7 +400,7 @@ private fun EmptyTranslationState() {
         initialValue = 0.6f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = { it }),
+            animation = tween(1200, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "empty-pulse",
@@ -649,62 +647,6 @@ private fun FailureState(
                 Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("再次尝试")
-            }
-        }
-    }
-}
-
-@Composable
-private fun StateCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconDescription: String,
-    title: String,
-    message: String,
-    showProgress: Boolean = false,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = CircleShape,
-            ) {
-                if (showProgress) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .padding(10.dp),
-                    )
-                } else {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = iconDescription,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(10.dp),
-                    )
-                }
-            }
-            Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }

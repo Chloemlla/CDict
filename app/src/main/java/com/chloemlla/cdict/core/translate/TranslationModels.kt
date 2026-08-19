@@ -23,6 +23,11 @@ enum class TranslationDirection(val from: String, val to: String, val label: Str
     DE_TO_ZH("de", "zh-CHS", "德→中"),
     ZH_TO_DE("zh-CHS", "de", "中→德");
 
+    /**
+     * 互换源 / 目标语言。`auto` 起点的方向没有可互换的源语言，返回自身表示「不可互换」，
+     * UI 据此隐藏互换按钮（见 [canSwap]）。这里不写 `else` 分支：when 覆盖全部枚举项，
+     * 将来新增方向时编译器会强制补齐映射。
+     */
     fun swapped(): TranslationDirection = when (this) {
         ZH_TO_EN -> EN_TO_ZH
         EN_TO_ZH -> ZH_TO_EN
@@ -39,8 +44,10 @@ enum class TranslationDirection(val from: String, val to: String, val label: Str
         ZH_TO_DE -> DE_TO_ZH
         DE_TO_ZH -> ZH_TO_DE
         AUTO_TO_ZH, AUTO_TO_EN, AUTO_TO_JA, AUTO_TO_KO, AUTO_TO_FR, AUTO_TO_ES, AUTO_TO_RU -> this
-        else -> this
     }
+
+    /** 是否存在真正的反向方向；为 false 时互换按钮应隐藏，避免出现点了没反应的按钮。 */
+    val canSwap: Boolean get() = swapped() != this
 }
 
 data class TranslationRequest(

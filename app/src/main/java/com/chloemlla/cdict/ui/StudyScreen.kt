@@ -4,15 +4,13 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.SystemClock
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,7 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -43,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
@@ -91,7 +87,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -568,7 +563,7 @@ private fun ReviewFlow(
         val feedback = state.feedback
         when {
             feedback != null && feedback.correct -> {
-                CorrectFeedbackBanner(onAdvance = onAdvance)
+                CorrectFeedbackBanner()
                 // Auto-advance to the next question after a brief green confirmation.
                 LaunchedEffect(feedback) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -664,27 +659,27 @@ private fun FeedbackBanner(text: String, fg: Color, bg: Color) {
     }
 }
 
+/**
+ * 答对反馈：绿色横幅 + 对勾一次性放大回弹和一圈扩散光环。用 [Animatable] 跑单次动画
+ * 而不是 infiniteRepeatable——横幅只存在约 650ms（随后自动进入下一题），持续循环的脉冲
+ * 在这么短的时间里只会呈现为抖动。
+ */
 @Composable
-private fun CorrectFeedbackBanner(onAdvance: () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "correct-celebration")
-    val pulse by transition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(400, delayMillis = 0, easing = { it }),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "celebration-pulse",
-    )
-    val sparkleAlpha by transition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(300),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "sparkle-alpha",
-    )
+private fun CorrectFeedbackBanner() {
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        pop.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 420, easing = LinearEasing),
+        )
+    }
+    // 0 → 1 的进度映射成「先冲到 1.25 倍再回落到 1 倍」的回弹，以及一圈向外扩散并淡出的光环。
+    val progress = pop.value
+    val iconScale = if (progress < 0.45f) {
+        1f + (progress / 0.45f) * 0.25f
+    } else {
+        1.25f - ((progress - 0.45f) / 0.55f) * 0.25f
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -697,38 +692,29 @@ private fun CorrectFeedbackBanner(onAdvance: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .graphicsLayer { scaleX = pulse; scaleY = pulse },
+                modifier = Modifier.size(32.dp),
                 contentAlignment = Alignment.Center,
             ) {
+                // 扩散光环：从对勾大小向外张到 32dp 并同步淡出。
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer {
+                            val ring = 0.7f + progress * 0.45f
+                            scaleX = ring
+                            scaleY = ring
+                            alpha = (1f - progress) * 0.45f
+                        }
+                        .background(CorrectGreen, RoundedCornerShape(percent = 50)),
+                )
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = "回答正确",
                     tint = CorrectGreen,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier
+                        .size(26.dp)
+                        .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
                 )
-                // Sparkle effect
-                repeat(3) { i ->
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .graphicsLayer {
-                                this.alpha = sparkleAlpha
-                                val angle = (i * 120f + (System.currentTimeMillis() / 10 % 360)).toFloat()
-                                this.rotationZ = angle
-                                this.scaleX = 0.4f + sparkleAlpha * 0.6f
-                                this.scaleY = 0.4f + sparkleAlpha * 0.6f
-                            },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = CorrectGreen.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
             }
             Text(
                 "回答正确，继续加油",
@@ -894,10 +880,10 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
     val fraction = if (state.dailyGoal > 0) state.todayDone.toFloat() / state.dailyGoal else 0f
     val animatedFraction by animateFloatAsState(
         targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 500, easing = { it }),
+        animationSpec = tween(durationMillis = 500, easing = LinearEasing),
         label = "progress-fraction",
     )
-    val isComplete = state.todayDone >= state.dailyGoal && state.dailyGoal > 0
+    val isComplete = state.dailyGoal > 0 && state.todayDone >= state.dailyGoal
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -907,6 +893,7 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
             Text(
                 text = "${state.todayDone} / ${state.dailyGoal}",
                 style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isComplete) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -915,9 +902,7 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .animateContentSize(),
-            color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
+                .clip(RoundedCornerShape(4.dp)),
         )
         if (isComplete) {
             Text(
@@ -925,10 +910,7 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-                    .animateContentSize(),
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }
