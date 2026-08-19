@@ -18,6 +18,16 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.Update,
+            title = "发布自动化加固",
+            subtitle = "正式版本发布改为幂等流程，重复发布同一提交时自动覆盖资产而不是失败，并保持最新版本标记正确。",
+            bullets = listOf(
+                "幂等发布：同一次提交重复发布时跳过重复建 tag，直接覆盖更新发布资产，不再因 tag 已存在而失败。",
+                "正式发布只发生在 main 分支推送或显式触发时，临时分支的构建不会再误生成公开正式版本。",
+            ),
+            tip = "发布行为：GitHub Actions → build → release job。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.Update,
             title = "应用内更新检测",
             subtitle = "新增 GitHub Release 更新检测，启动时自动检查新版本并支持应用内下载安装。",
             bullets = listOf(
@@ -27,16 +37,6 @@ object WhatsNewData {
                 "安全校验：下载完成后验证 APK 的 SHA256 指纹，确保与发布资产一致。",
             ),
             tip = "入口：关于页 → 检查更新；或启动时自动检测。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "修复词条按压阴影",
-            subtitle = "词典列表词条卡片在按压或长按时不再出现多余阴影，保持圆角卡片的扁平视觉。",
-            bullets = listOf(
-                "词条卡片默认、按压、聚焦、悬停、拖拽和禁用状态统一使用 0.dp elevation。",
-                "修复按压缩放与 Material3 默认阴影叠加后产生的阴影伪影。",
-            ),
-            tip = "入口：词典页 → 长按或按压任意词条。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
