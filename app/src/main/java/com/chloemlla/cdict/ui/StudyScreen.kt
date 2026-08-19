@@ -388,7 +388,7 @@ private fun StudyEmpty(
         ) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    imageVector = androidx.compose.material.icons.automirrored.filled.MenuBook,
+                    imageVector = androidx.compose.material.icons.filled.MenuBook,
                     contentDescription = "词典为空",
                     modifier = Modifier.size(56.dp),
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
