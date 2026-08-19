@@ -667,20 +667,22 @@ private fun ReviewOption(
         animationSpec = tween(durationMillis = 120),
         label = "option-press-scale",
     )
+    val optionShape = RoundedCornerShape(14.dp)
     Surface(
         color = bg,
         contentColor = fg,
-        shape = RoundedCornerShape(14.dp),
+        shape = optionShape,
         border = border,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(optionShape)
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
                 onClick = onClick,
             )
-            .graphicsLayer { scaleX = scale; scaleY = scale }
             .semantics {
                 role = Role.RadioButton
                 contentDescription = "选项 $optionLabel：$text"

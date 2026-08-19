@@ -475,6 +475,7 @@ private fun SectionCard(
 
 @Composable
 private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
+    val cardShape = MaterialTheme.shapes.medium
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -482,13 +483,14 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
             .then(
                 if (credit.url != null) {
                     Modifier
+                        .clip(cardShape)
                         .clickable(onClick = onClick)
                         .semantics { role = Role.Button }
                 } else {
                     Modifier
                 }
             ),
-        shape = MaterialTheme.shapes.medium,
+        shape = cardShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
         Column(Modifier.padding(14.dp)) {

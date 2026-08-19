@@ -746,19 +746,21 @@ private fun RecommendationUpcomingRow(
         animationSpec = tween(durationMillis = 150),
         label = "upcoming-row-press-scale",
     )
+    val rowShape = RoundedCornerShape(12.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(rowShape)
             .clickable(
                 interactionSource = interactionSource,
                 onClickLabel = "查看单词 ${card.word.word}",
                 role = Role.Button,
                 onClick = { onOpenWord(card.word) },
-            )
-            .graphicsLayer { scaleX = scale; scaleY = scale },
+            ),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = rowShape,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -918,14 +920,16 @@ private fun RecommendationLegendPill(
         animationSpec = tween(durationMillis = 150),
         label = "legend-pill-scale",
     )
+    val pillShape = RoundedCornerShape(6.dp)
     Surface(
         color = if (!filterActive || isSelected) bg else bg.copy(alpha = 0.4f),
         contentColor = if (!filterActive || isSelected) fg else fg.copy(alpha = 0.7f),
-        shape = RoundedCornerShape(6.dp),
+        shape = pillShape,
         border = if (isSelected) BorderStroke(1.5.dp, fg.copy(alpha = 0.5f)) else null,
         modifier = modifier
             .heightIn(min = 48.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(pillShape)
             .clickable(
                 interactionSource = interactionSource,
                 onClickLabel = if (isSelected) "取消${text}筛选" else "只显示$text",

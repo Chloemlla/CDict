@@ -945,16 +945,19 @@ private fun WordResultCard(
         label = "card-press-scale",
     )
 
+    val cardShape = CardDefaults.shape
     Card(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(cardShape)
             .clickable(
                 interactionSource = interactionSource,
                 onClickLabel = "查看单词 ${word.word}",
                 role = Role.Button,
                 onClick = { onSelect(word) },
             ),
+        shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),

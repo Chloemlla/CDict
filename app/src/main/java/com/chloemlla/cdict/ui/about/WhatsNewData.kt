@@ -17,6 +17,18 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "修复按压出现方形阴影",
+            subtitle = "圆角卡片、圆角选项与胶囊标签在按下时不再出现超出圆角的矩形水波纹。",
+            bullets = listOf(
+                "词典结果卡片、推荐「接下来」行、推荐类别图例、背词选项卡、开源致谢卡片：点击反馈裁剪到组件自身圆角，形状与视觉一致。",
+                "根因：点击修饰符位于圆角组件外层，水波纹绘制在未裁剪的矩形边界内，因此按下时溢出圆角。",
+                "关于浮层遮罩：点击空白关闭不再触发全屏矩形水波纹，改为无指示的静默关闭。",
+                "按压缩放与水波纹现在共处同一图层，缩放动画与点击反馈同步。",
+            ),
+            tip = "入口：词典搜索结果、推荐页图例与预览行、背词选项、关于页开源致谢。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "全应用交互与无障碍优化",
             subtitle = "围绕阅读、操作反馈、状态表达和大屏适配，系统优化词典、背词、翻译、推荐及关于页体验。",
             bullets = listOf(
@@ -63,19 +75,6 @@ object WhatsNewData {
                 "发布认证：使用仓库自动生成的令牌完成版本创建与资产上传，无需额外配置密钥。",
             ),
             tip = "发布行为：GitHub Actions → build → release job。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.Update,
-            title = "应用内更新检测",
-            subtitle = "新增 GitHub Release 更新检测，启动时自动检查新版本并支持应用内下载安装。",
-            bullets = listOf(
-                "自动检查：应用启动后自动请求 GitHub Releases API，发现新版本时弹窗提示。",
-                "手动检查：关于页新增「检查更新」入口，可随时手动触发版本检查。",
-                "应用内下载安装：匹配设备 ABI 选择最优 APK，下载时显示进度，校验 SHA256 后引导安装。",
-                "安全校验：下载完成后验证 APK 的 SHA256 指纹，确保与发布资产一致。",
-                "网络权限：补充网络状态读取权限，保证检查更新在系统上稳定运行。",
-            ),
-            tip = "入口：关于页 → 检查更新；或启动时自动检测。",
         ),
     )
 }

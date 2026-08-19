@@ -206,11 +206,17 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
             ) { current ->
                 if (current != null) {
                     val interactionSource = remember { MutableInteractionSource() }
+                    val scrimInteractionSource = remember { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
-                            .clickable(enabled = !current.forced, onClick = controller::pop),
+                            .clickable(
+                                enabled = !current.forced,
+                                interactionSource = scrimInteractionSource,
+                                indication = null,
+                                onClick = controller::pop,
+                            ),
                     ) {
                         ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
                             Surface(
