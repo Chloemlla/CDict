@@ -1,5 +1,10 @@
 package com.chloemlla.cdict.ui
 
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.SystemClock
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition

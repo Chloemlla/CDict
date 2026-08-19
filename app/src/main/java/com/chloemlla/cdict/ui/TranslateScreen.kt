@@ -366,7 +366,6 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                 }
             }
         }
-        }
     }
 }
 
