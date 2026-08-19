@@ -22,6 +22,25 @@ enum class TranslationDirection(val from: String, val to: String, val label: Str
     ZH_TO_ES("zh-CHS", "es", "中→西"),
     DE_TO_ZH("de", "zh-CHS", "德→中"),
     ZH_TO_DE("zh-CHS", "de", "中→德"),
+
+    fun swapped(): TranslationDirection = when (this) {
+        ZH_TO_EN -> EN_TO_ZH
+        EN_TO_ZH -> ZH_TO_EN
+        ZH_TO_JA -> JA_TO_ZH
+        JA_TO_ZH -> ZH_TO_JA
+        ZH_TO_KO -> KO_TO_ZH
+        KO_TO_ZH -> ZH_TO_KO
+        ZH_TO_FR -> FR_TO_ZH
+        FR_TO_ZH -> ZH_TO_FR
+        ZH_TO_RU -> RU_TO_ZH
+        RU_TO_ZH -> ZH_TO_RU
+        ZH_TO_ES -> ES_TO_ZH
+        ES_TO_ZH -> ZH_TO_ES
+        ZH_TO_DE -> DE_TO_ZH
+        DE_TO_ZH -> ZH_TO_DE
+        AUTO_TO_ZH, AUTO_TO_EN, AUTO_TO_JA, AUTO_TO_KO, AUTO_TO_FR, AUTO_TO_ES, AUTO_TO_RU -> this
+        else -> this
+    }
 }
 
 data class TranslationRequest(

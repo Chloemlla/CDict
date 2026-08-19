@@ -2,7 +2,6 @@ package com.chloemlla.cdict.ui.about
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -16,6 +15,19 @@ data class WhatsNewSlide(
 
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "全面优化交互体验",
+            subtitle = "翻译/背词/推荐/词典四页统一升级：翻译方向一键互换、背词答对庆祝动画、推荐图例可筛选、进度条平滑动画、空态插画化。",
+            bullets = listOf(
+                "翻译页：翻译方向选择器新增 ⇄ 互换按钮，中英/英中一键切换；空态新增脉冲插画与技巧提示。",
+                "背词页：答对题目新增检查图标脉冲庆祝动画；进度条新增平滑动画与达成提示。",
+                "推荐页：5:3:2 配比图例变为可点击筛选器，支持单类别聚焦；进度条同样新增平滑动画与达成提示。",
+                "词典页：搜索框尾部加载指示器更醒目，空态搜索建议交互更流畅。",
+                "通用：按压缩放反馈覆盖更多交互元素，无障碍标签补全，视觉层级更清晰。",
+            ),
+            tip = "入口：翻译方向选择器、背词复习反馈、推荐页顶部图例、词典搜索框、各页空态。",
+        ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "全面优化加载/错误/空态交互",
@@ -64,19 +76,6 @@ object WhatsNewData {
                 "翻译页：骨架屏、失败、加载、结果卡片统一无阴影，状态切换更平滑。",
             ),
             tip = "入口：词典/推荐/背词/翻译各页的错误、加载与完成状态卡片。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "全面优化动画体验",
-            subtitle = "词典、翻译、推荐三页新增流畅的过渡动画与微交互反馈，操作更顺滑自然。",
-            bullets = listOf(
-                "推荐卡片切换：当前卡片操作后新卡片以滑动+淡入过渡进入，不再生硬跳切。",
-                "翻译加载骨架屏：翻译等待时显示脉冲骨架占位，替代空白等待；失败时错误卡片轻微抖动提醒。",
-                "词典列表入场：词条列表加载/筛选/排序时以交错淡入+微滑动入场，搜索清除时交叉淡出过渡。",
-                "进度条与按钮反馈：推荐页进度条平滑动画，主要按钮按压时轻微缩放反馈。",
-                "词典详情动画：详情卡片内容变化时平滑过渡，加载底部提示淡入显示。",
-            ),
-            tip = "入口：词典页搜索与列表；翻译页翻译；推荐页卡片操作。",
         ),
     )
 }

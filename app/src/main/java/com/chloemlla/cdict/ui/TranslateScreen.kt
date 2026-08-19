@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Warning
@@ -180,25 +181,48 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(8.dp),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Translate,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(5.dp),
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Translate,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(5.dp),
+                            )
+                        }
+                        Text(
+                            "翻译方向",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
-                    Text(
-                        "翻译方向",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+                    // Quick swap button for bidirectional translation
+                    if (direction != TranslationDirection.AUTO_TO_ZH && direction != TranslationDirection.AUTO_TO_EN) {
+                        IconButton(
+                            onClick = { viewModel.onDirectionChange(direction.swapped()) },
+                            modifier = Modifier
+                                .semantics {
+                                    contentDescription = "交换源语言与目标语言"
+                                }
+                                .padding(end = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.SwapHoriz,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier
@@ -372,46 +396,96 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
 
 @Composable
 private fun EmptyTranslationState() {
-    val supportedLangs = listOf("en", "zh", "ja", "ko", "fr", "de", "es", "ru")
-    StateCard(
-        icon = Icons.Filled.Info,
-        iconDescription = "等待输入",
-        title = "准备开始",
-        message = "在上方输入文本并选择翻译方向，译文会显示在这里。",
-        showProgress = false,
-    )
-    // Helpful tips card
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+    val transition = rememberInfiniteTransition(label = "empty-state-pulse")
+    val pulse by transition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = { it }),
+            repeatMode = RepeatMode.Reverse,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+        label = "empty-pulse",
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Main illustration card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 24.dp, bottom = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Lightbulb,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .graphicsLayer { scaleX = pulse; scaleY = pulse },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Translate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(20.dp),
+                        )
+                    }
+                }
+                Text(
+                    "准备开始翻译",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
-                    text = "使用技巧",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    "在上方输入文本并选择翻译方向，译文会显示在这里。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center,
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TranslateTip("多行输入", "支持长文本、段落、整句翻译")
-                TranslateTip("自动检测语言", "选择「自动检测 → 目标语言」无需手动选源语言")
-                TranslateTip("朗读译文", "英语译文点击 🔊 可美式/英式发音")
-                TranslateTip("清除重输", "点击输入框右侧 ✕ 快速清空")
+        }
+        // Helpful tips card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lightbulb,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = "使用技巧",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TranslateTip("多行输入", "支持长文本、段落、整句翻译")
+                    TranslateTip("自动检测语言", "选择「自动检测 → 目标语言」无需手动选源语言")
+                    TranslateTip("朗读译文", "英语译文点击 🔊 可美式/英式发音")
+                    TranslateTip("清除重输", "点击输入框右侧 ✕ 快速清空")
+                    TranslateTip("交换语言", "点击翻译方向右侧 ⇄ 快速互译")
+                }
             }
         }
     }

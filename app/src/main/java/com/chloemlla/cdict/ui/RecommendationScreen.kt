@@ -114,6 +114,9 @@ fun RecommendationScreen(
     val onTranslate = phraseViewModel::translate
     val onSpeak = phraseViewModel::speak
 
+    // Pool filter state - persists across recompositions
+    var poolFilter by remember { mutableStateOf<RecommendationPool?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -179,23 +182,43 @@ fun RecommendationScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 // 宽屏同样显示目标 / 进度 / 图例，并让当前卡在低高度窗口下可滚动。
-                                RecommendationHeader(state, onSetGoal, onScopeChange)
-                                RecommendationCurrentCard(
+                                RecommendationHeader(
                                     state = state,
-                                    phraseStates = phraseStates,
-                                    onTranslate = onTranslate,
-                                    onSpeak = onSpeak,
-                                    onMarkLearned = onMarkLearned,
-                                    onMarkMastered = onMarkMastered,
-                                    onDefer = onDefer,
-                                    onOpenWord = onOpenWord,
-                                    onPlayPronunciation = onPlayPronunciation,
-                                    playingKey = playingKey,
-                                    speakingKey = speakingKey,
+                                    onSetGoal = onSetGoal,
+                                    onScopeChange = onScopeChange,
+                                    onFilterPool = { poolFilter = it },
+                                    currentPoolFilter = poolFilter,
                                 )
+                                // Filter current card by pool
+                                val filteredItems = state.items.filter { poolFilter == null || it.pool == poolFilter }
+                                if (filteredItems.isNotEmpty()) {
+                                    RecommendationCurrentCard(
+                                        state = state.copy(items = filteredItems),
+                                        phraseStates = phraseStates,
+                                        onTranslate = onTranslate,
+                                        onSpeak = onSpeak,
+                                        onMarkLearned = onMarkLearned,
+                                        onMarkMastered = onMarkMastered,
+                                        onDefer = onDefer,
+                                        onOpenWord = onOpenWord,
+                                        onPlayPronunciation = onPlayPronunciation,
+                                        playingKey = playingKey,
+                                        speakingKey = speakingKey,
+                                    )
+                                } else {
+                                    // No items match filter - show empty state
+                                    Text(
+                                        "当前筛选下无推荐词汇",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                    )
+                                }
                             }
+                            // Upcoming list also filtered
                             RecommendationUpcomingList(
-                                state = state,
+                                state = state.copy(items = state.items.filter { poolFilter == null || it.pool == poolFilter }),
                                 onOpenWord = onOpenWord,
                                 modifier = Modifier.weight(2f),
                             )
@@ -208,21 +231,42 @@ fun RecommendationScreen(
                                 .padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            RecommendationHeader(state, onSetGoal, onScopeChange)
-                            RecommendationCurrentCard(
+                            RecommendationHeader(
                                 state = state,
-                                phraseStates = phraseStates,
-                                onTranslate = onTranslate,
-                                onSpeak = onSpeak,
-                                onMarkLearned = onMarkLearned,
-                                onMarkMastered = onMarkMastered,
-                                onDefer = onDefer,
-                                onOpenWord = onOpenWord,
-                                onPlayPronunciation = onPlayPronunciation,
-                                playingKey = playingKey,
-                                speakingKey = speakingKey,
+                                onSetGoal = onSetGoal,
+                                onScopeChange = onScopeChange,
+                                onFilterPool = { poolFilter = it },
+                                currentPoolFilter = poolFilter,
                             )
-                            RecommendationUpcomingBlock(state, onOpenWord)
+                            // Filter current card by pool
+                            val filteredItems = state.items.filter { poolFilter == null || it.pool == poolFilter }
+                            if (filteredItems.isNotEmpty()) {
+                                RecommendationCurrentCard(
+                                    state = state.copy(items = filteredItems),
+                                    phraseStates = phraseStates,
+                                    onTranslate = onTranslate,
+                                    onSpeak = onSpeak,
+                                    onMarkLearned = onMarkLearned,
+                                    onMarkMastered = onMarkMastered,
+                                    onDefer = onDefer,
+                                    onOpenWord = onOpenWord,
+                                    onPlayPronunciation = onPlayPronunciation,
+                                    playingKey = playingKey,
+                                    speakingKey = speakingKey,
+                                )
+                            } else {
+                                Text(
+                                    "当前筛选下无推荐词汇",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                )
+                            }
+                            RecommendationUpcomingBlock(
+                                state = state.copy(items = state.items.filter { poolFilter == null || it.pool == poolFilter }),
+                                onOpenWord = onOpenWord,
+                            )
                         }
                     }
                 }
@@ -319,6 +363,8 @@ private fun RecommendationHeader(
     state: RecommendationScreenState.Ready,
     onSetGoal: (Int) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
+    onFilterPool: (RecommendationPool?) -> Unit = {},
+    currentPoolFilter: RecommendationPool? = null,
 ) {
     val rawFraction = if (state.dailyGoal > 0) state.handledToday.toFloat() / state.dailyGoal else 0f
     val fraction by animateFloatAsState(
@@ -326,6 +372,7 @@ private fun RecommendationHeader(
         animationSpec = tween(durationMillis = 250),
         label = "progress-fraction",
     )
+    val isComplete = state.handledToday >= state.dailyGoal && state.dailyGoal > 0
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ScopeFilterRow(
             scope = state.scope,
@@ -345,17 +392,50 @@ private fun RecommendationHeader(
             Text(
                 "${state.handledToday} / ${state.dailyGoal}",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         LinearProgressIndicator(
             progress = { fraction },
-            modifier = Modifier.fillMaxWidth().height(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .animateContentSize(),
+            color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
         )
+        if (isComplete) {
+            Text(
+                "今日推荐目标已达成！",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+                    .animateContentSize(),
+            )
+        }
+        // Interactive legend pills - tap to filter
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RecommendationLegendPill("核心 50%", RecommendationPool.CORE_NEW)
-            RecommendationLegendPill("派生 30%", RecommendationPool.EXPANSION)
-            RecommendationLegendPill("过渡 20%", RecommendationPool.SIMPLE)
+            RecommendationLegendPill(
+                text = "核心 50%",
+                pool = RecommendationPool.CORE_NEW,
+                isSelected = currentPoolFilter == RecommendationPool.CORE_NEW,
+                onClick = { onFilterPool(if (currentPoolFilter == RecommendationPool.CORE_NEW) null else RecommendationPool.CORE_NEW) }
+            )
+            RecommendationLegendPill(
+                text = "派生 30%",
+                pool = RecommendationPool.EXPANSION,
+                isSelected = currentPoolFilter == RecommendationPool.EXPANSION,
+                onClick = { onFilterPool(if (currentPoolFilter == RecommendationPool.EXPANSION) null else RecommendationPool.EXPANSION) }
+            )
+            RecommendationLegendPill(
+                text = "过渡 20%",
+                pool = RecommendationPool.SIMPLE,
+                isSelected = currentPoolFilter == RecommendationPool.SIMPLE,
+                onClick = { onFilterPool(if (currentPoolFilter == RecommendationPool.SIMPLE) null else RecommendationPool.SIMPLE) }
+            )
         }
     }
 }
@@ -657,15 +737,47 @@ private fun RecommendationModePill(pool: RecommendationPool) {
 }
 
 @Composable
-private fun RecommendationLegendPill(text: String, pool: RecommendationPool) {
+private fun RecommendationLegendPill(
+    text: String,
+    pool: RecommendationPool,
+    isSelected: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) {
     val (targetBg, targetFg) = poolColors(pool)
     val bg by animateColorAsState(targetValue = targetBg, animationSpec = tween(250), label = "legend-pill-bg")
     val fg by animateColorAsState(targetValue = targetFg, animationSpec = tween(250), label = "legend-pill-fg")
-    Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(6.dp)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else if (isSelected) 1.05f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "legend-pill-scale",
+    )
+    Surface(
+        color = if (isSelected) bg.copy(alpha = 1f) else bg.copy(alpha = 0.4f),
+        contentColor = if (isSelected) fg else fg.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier
+            .fillMaxWidth(0.3f)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(
+                onClick = onClick,
+                interactionSource = interactionSource,
+                indication = null,
+            )
+            .semantics {
+                role = Role.Button
+                contentDescription = "筛选 ${text}，${if (isSelected) "已选中" else "未选中"}"
+                stateDescription = if (isSelected) "已选中，点击取消筛选" else "点击筛选此类别"
+            }
+            .padding(horizontal = 4.dp),
+    ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp).fillMaxWidth(),
         )
     }
 }

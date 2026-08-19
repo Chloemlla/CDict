@@ -1,14 +1,11 @@
 package com.chloemlla.cdict.ui
 
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.os.SystemClock
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -562,7 +560,7 @@ private fun ReviewFlow(
         val feedback = state.feedback
         when {
             feedback != null && feedback.correct -> {
-                FeedbackBanner("回答正确，继续加油", CorrectGreen, CorrectGreenContainer)
+                CorrectFeedbackBanner(onAdvance = onAdvance)
                 // Auto-advance to the next question after a brief green confirmation.
                 LaunchedEffect(feedback) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -655,6 +653,82 @@ private fun FeedbackBanner(text: String, fg: Color, bg: Color) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Text(text, style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun CorrectFeedbackBanner(onAdvance: () -> Unit) {
+    val transition = rememberInfiniteTransition(label = "correct-celebration")
+    val pulse by transition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(400, delayMillis = 0, easing = { it }),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "celebration-pulse",
+    )
+    val sparkleAlpha by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(300),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "sparkle-alpha",
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CorrectGreenContainer, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .graphicsLayer { scaleX = pulse; scaleY = pulse },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "回答正确",
+                    tint = CorrectGreen,
+                    modifier = Modifier.size(28.dp),
+                )
+                // Sparkle effect
+                repeat(3) { i ->
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .graphicsLayer {
+                                this.alpha = sparkleAlpha
+                                val angle = (i * 120f + System.currentTimeMillis() / 10 % 360).toDouble()
+                                this.rotationZ = angle
+                                this.scaleX = 0.4f + sparkleAlpha * 0.6f
+                                this.scaleY = 0.4f + sparkleAlpha * 0.6f
+                            },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = CorrectGreen.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+            Text(
+                "回答正确，继续加油",
+                style = MaterialTheme.typography.bodyMedium,
+                color = CorrectGreen,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 
@@ -810,6 +884,12 @@ private fun LearnCard(
 @Composable
 private fun StudyProgressBar(state: StudyScreenState.Ready) {
     val fraction = if (state.dailyGoal > 0) state.todayDone.toFloat() / state.dailyGoal else 0f
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 500, easing = { it }),
+        label = "progress-fraction",
+    )
+    val isComplete = state.todayDone >= state.dailyGoal && state.dailyGoal > 0
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -819,13 +899,30 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
             Text(
                 text = "${state.todayDone} / ${state.dailyGoal}",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         LinearProgressIndicator(
-            progress = { fraction.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(6.dp),
+            progress = { animatedFraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .animateContentSize(),
+            color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
         )
+        if (isComplete) {
+            Text(
+                "今日目标已达成！",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+                    .animateContentSize(),
+            )
+        }
     }
 }
 
