@@ -12,9 +12,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chloemlla.cdict.ui.about.BuildInfo
 import com.chloemlla.cdict.ui.about.UrlOpener
@@ -34,6 +36,12 @@ sealed interface UpdateDialogState {
 }
 
 private val updateDialogTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+private fun formatUpdateBytes(bytes: Long): String = when {
+    bytes < 1024L -> "$bytes B"
+    bytes < 1024L * 1024L -> "${bytes / 1024L} KB"
+    else -> "${bytes / (1024L * 1024L)} MB"
+}
 
 @Composable
 fun UpdateDialog(
@@ -55,7 +63,10 @@ fun UpdateDialog(
             onDismissRequest = {},
             title = { Text("检查更新") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     CircularProgressIndicator()
                     Text("正在检查最新版本…")
                 }
@@ -92,8 +103,16 @@ fun UpdateDialog(
                         val publishTime = Instant.ofEpochMilli(release.publishedAtUtcMillis)
                             .atZone(ZoneOffset.UTC).format(updateDialogTimeFormatter)
                         Text("发布时间：$publishTime")
+                        targetAsset?.let { asset ->
+                            val size = asset.sizeBytes?.let(::formatUpdateBytes)
+                            Text("下载包：${asset.name}${size?.let { "（$it）" } ?: ""}")
+                        }
                         if (release.body.isNotBlank()) {
-                            Text(release.body)
+                            Text(
+                                text = release.body,
+                                maxLines = 8,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 },
@@ -121,8 +140,7 @@ fun UpdateDialog(
             )
         }
         is UpdateDialogState.Downloading -> {
-            val candidate = currentState.candidate
-            val release = candidate.release
+            val release = currentState.candidate.release
             AlertDialog(
                 onDismissRequest = {},
                 title = { Text("正在下载更新") },
@@ -132,16 +150,21 @@ fun UpdateDialog(
                         val progress = downloadProgressTotalBytes?.takeIf { it > 0 }?.let {
                             downloadProgressBytes.toFloat() / it.toFloat()
                         }
-                        LinearProgressIndicator(
-                            progress = { progress ?: 0f },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        if (progress != null) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
                         Text(
                             text = downloadProgressTotalBytes?.takeIf { it > 0 }?.let {
                                 val percent = ((downloadProgressBytes * 100) / it).coerceIn(0, 100)
-                                "$percent%"
-                            } ?: "下载中…",
+                                "$percent%（${formatUpdateBytes(downloadProgressBytes)} / ${formatUpdateBytes(it)}）"
+                            } ?: "正在连接并获取下载大小…",
                         )
+                        Text("下载完成后将提示安装，请保持应用打开。")
                     }
                 },
                 confirmButton = {},

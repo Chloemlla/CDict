@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,9 +71,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.PronunciationDiagnostics
+import com.chloemlla.cdict.ui.ResponsiveContentBox
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -94,23 +102,39 @@ private fun AboutRow(
                         .clip(MaterialTheme.shapes.small)
                         .combinedClickable(
                             onClick = onClick ?: {},
+                            onClickLabel = title,
+                            role = if (onClick != null) Role.Button else null,
                             onLongClick = onLongClick,
+                            onLongClickLabel = if (onLongClick != null) "长按复制" else null,
                         )
+                        .semantics {
+                            if (onClick != null || onLongClick != null) {
+                                role = Role.Button
+                            }
+                        }
                 } else {
                     Modifier
                 }
             )
-            .padding(horizontal = 4.dp, vertical = 14.dp),
+            .padding(horizontal = 4.dp, vertical = 14.dp)
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (subtitle != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -145,7 +169,7 @@ fun AboutScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("关于") },
+                title = { Text("关于", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -157,13 +181,17 @@ fun AboutScreen(
             )
         },
     ) { padding ->
-        Column(
+        ResponsiveContentBox(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(padding),
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
             Spacer(Modifier.height(32.dp))
             Image(
                 painter = painterResource(R.mipmap.ic_launcher),
@@ -198,19 +226,29 @@ fun AboutScreen(
                 )
                 HorizontalDivider()
                 AboutRow(
-                    title = "Build Time: ${BuildInfo.formatBuildTime()}\nCommit Hash: ${BuildInfo.commitHash}",
+                    title = "构建信息",
+                    subtitle = "构建于 ${BuildInfo.formatBuildTime()} · 长按复制提交哈希",
+                    trailing = {
+                        Text(
+                            BuildInfo.shortHash,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                     onClick = {
                         if (!BuildInfo.isDevBuild) {
                             UrlOpener.open(context, commitUrl)
                         }
                     },
                     onLongClick = {
-                        UrlOpener.copy(context, BuildInfo.commitHash, "已复制 Commit Hash")
+                        UrlOpener.copy(context, BuildInfo.commitHash, "已复制提交哈希")
                     },
                 )
                 HorizontalDivider()
                 AboutRow(
-                    title = "Source Code",
+                    title = "源码仓库",
                     subtitle = AboutData.sourceUrl,
                     onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
                 )
@@ -248,7 +286,15 @@ fun AboutScreen(
                 Button(
                     onClick = onCheckForUpdate,
                     enabled = updateCheckEnabled && !updateCheckInProgress,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            stateDescription = when {
+                                !updateCheckEnabled -> "当前版本不支持检查更新"
+                                updateCheckInProgress -> "正在检查更新"
+                                else -> "可检查更新"
+                            }
+                        },
                 ) {
                     Icon(Icons.Filled.Update, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -275,6 +321,7 @@ fun AboutScreen(
         }
     }
 }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -283,7 +330,7 @@ fun DeclarationsScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("应用声明") },
+                title = { Text("应用声明", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -295,13 +342,17 @@ fun DeclarationsScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(
+        ResponsiveContentBox(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(padding),
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+            ) {
             AboutRow(
                 title = "法律信息",
                 subtitle = "用户协议、隐私政策、开源协议",
@@ -322,6 +373,7 @@ fun DeclarationsScreen(onBack: () -> Unit) {
         }
     }
 }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -330,7 +382,7 @@ fun LegalInfoScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("法律信息") },
+                title = { Text("法律信息", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -362,17 +414,21 @@ fun LegalInfoScreen(onBack: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { UrlOpener.open(context, doc.url) }
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .semantics { role = Role.Button }
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .heightIn(min = 56.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         doc.title,
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "打开",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(18.dp),
                     )
@@ -408,6 +464,7 @@ private fun SectionCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = titleColor,
+                    modifier = Modifier.semantics { heading() },
                 )
             }
             Spacer(Modifier.height(12.dp))
@@ -421,9 +478,12 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .then(
                 if (credit.url != null) {
-                    Modifier.clickable(onClick = onClick)
+                    Modifier
+                        .clickable(onClick = onClick)
+                        .semantics { role = Role.Button }
                 } else {
                     Modifier
                 }
@@ -438,17 +498,21 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
                         credit.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         credit.author,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 if (credit.url != null) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "打开链接",
+                        contentDescription = null,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.outline,
                     )
@@ -458,6 +522,8 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
             Text(
                 credit.description,
                 style = MaterialTheme.typography.bodyMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(10.dp))
             Surface(
@@ -482,7 +548,7 @@ fun OssNoticeScreen(forced: Boolean, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("开源许可声明") },
+                title = { Text("开源许可声明", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     if (!forced) {
                         IconButton(onClick = onBack) {
@@ -518,15 +584,26 @@ fun OssNoticeScreen(forced: Boolean, onBack: () -> Unit) {
         ) {
             item(key = "source") {
                 SectionCard(icon = Icons.Filled.Code, title = "官方开源地址") {
-                    Text(AboutData.sourceUrl, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        AboutData.sourceUrl,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Spacer(Modifier.height(12.dp))
-                    Row {
-                        FilledTonalButton(onClick = { UrlOpener.open(context, AboutData.sourceUrl) }) {
-                            Text("打开仓库")
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        FilledTonalButton(
+                            onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("打开仓库", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Spacer(Modifier.width(12.dp))
-                        OutlinedButton(onClick = { UrlOpener.copy(context, AboutData.sourceUrl, "已复制仓库链接") }) {
-                            Text("复制链接")
+                        OutlinedButton(
+                            onClick = { UrlOpener.copy(context, AboutData.sourceUrl, "已复制仓库链接") },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("复制链接", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -596,7 +673,7 @@ fun AppPermissionsScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("应用权限") },
+                title = { Text("应用权限", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -678,13 +755,26 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (forced) {
+                    Spacer(Modifier.size(48.dp))
+                } else {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                        )
+                    }
+                }
                 Text(
                     "${currentPage + 1} / ${slides.size}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics {
+                        stateDescription = "当前第 ${currentPage + 1} 页，共 ${slides.size} 页"
+                    },
                 )
                 Spacer(Modifier.weight(1f))
                 if (currentPage < lastIndex) {
@@ -695,7 +785,10 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .semantics {
+                        stateDescription = "当前第 ${currentPage + 1} 页，共 ${slides.size} 页，可左右滑动浏览"
+                    },
             ) { page ->
                 val slide = slides[page]
                 Column(
@@ -734,6 +827,9 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -741,6 +837,8 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(20.dp))
                     slide.bullets.forEach { bullet ->
@@ -799,7 +897,12 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.semantics {
+                        stateDescription = "当前第 ${currentPage + 1} 页，共 ${slides.size} 页"
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     slides.indices.forEach { index ->
                         val selected = currentPage == index
                         val dotWidth by animateDpAsState(
@@ -825,18 +928,17 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (currentPage > 0) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch { pagerState.animateScrollToPage(currentPage - 1) }
-                            },
-                        ) {
-                            Text("上一页")
-                        }
-                        Spacer(Modifier.width(16.dp))
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch { pagerState.animateScrollToPage(currentPage - 1) }
+                        },
+                        enabled = currentPage > 0,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("上一页")
                     }
                     Button(
                         onClick = {
@@ -846,6 +948,7 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                                 onBack()
                             }
                         },
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(
                             when {

@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,6 +48,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -95,13 +97,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -317,8 +323,20 @@ private fun WordList(
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
 
-    // Track if a debounced search is in-flight (query changed but view model hasn't applied yet)
-    val isSearchPending = state.query != query && query.isNotBlank()
+    // 防抖查询完成后同步输入框，避免筛选或返回时保留旧文本。
+    LaunchedEffect(state.query) {
+        if (state.query != query) query = state.query
+    }
+
+    val clearSearch = {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+        query = ""
+        onQueryChanged("")
+    }
+
+    // 查询文本与已提交条件不一致时，避免展示上一轮结果造成误导。
+    val isSearchPending = state.query != query
 
     // Staggered entrance animation: re-trigger only on initial load, filter, sort, or query
     // change — not on every scroll. A keyed reset gives each list refresh its own fade+slide pass.
@@ -336,10 +354,7 @@ private fun WordList(
     // Key on the live text-field value, not the debounced committed query, so a search the
     // user just typed (but the view model hasn't yet applied) still clears on back.
     BackHandler(enabled = query.isNotBlank()) {
-        keyboardController?.hide()
-        focusManager.clearFocus()
-        query = ""
-        onQueryChanged("")
+        clearSearch()
     }
 
     // Jump back to the top whenever a fresh search, sort or filter change replaces the browse list.
@@ -407,7 +422,12 @@ private fun WordList(
             )
         },
     ) { padding ->
-        ResponsiveContentBox(modifier = Modifier.fillMaxSize().padding(padding)) {
+        ResponsiveContentBox(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .imePadding(),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize(),
@@ -423,6 +443,11 @@ private fun WordList(
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics {
                         contentDescription = "搜索英文、中文或定义"
+                        stateDescription = when {
+                            isSearchPending && query.isBlank() -> "正在恢复全部词条"
+                            isSearchPending -> "正在搜索"
+                            else -> "可输入搜索内容"
+                        }
                     },
                 label = { Text("搜索词典") },
                 placeholder = { Text("输入英文单词或中文翻译") },
@@ -437,22 +462,20 @@ private fun WordList(
                         ) {
                             if (isSearchPending) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .semantics { contentDescription = "正在搜索" },
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
-                            } else {
-                                IconButton(
-                                    onClick = {
-                                        query = ""
-                                        onQueryChanged("")
-                                    },
-                                    modifier = Modifier.semantics {
-                                        contentDescription = "清除搜索内容"
-                                    },
-                                ) {
-                                    Icon(Icons.Default.Clear, contentDescription = null)
-                                }
+                            }
+                            IconButton(
+                                onClick = clearSearch,
+                                modifier = Modifier.semantics {
+                                    contentDescription = "清除搜索内容"
+                                },
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = null)
                             }
                         }
                     }
@@ -485,6 +508,7 @@ private fun WordList(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     FilterDropdownMenu(
+                        description = "排序方式",
                         label = state.sortMode.label,
                         options = SortMode.entries.map { mode -> mode.label to mode },
                         selected = state.sortMode,
@@ -492,6 +516,7 @@ private fun WordList(
                         modifier = Modifier.weight(1f),
                     )
                     FilterDropdownMenu(
+                        description = "词条范围",
                         label = state.curriculumTag ?: "全部词条",
                         options = buildList {
                             add("全部词条" to null)
@@ -505,18 +530,16 @@ private fun WordList(
                 }
             }
 
-            if (state.words.isEmpty()) {
+            if (isSearchPending || state.words.isEmpty()) {
                 EmptySearchState(
                     query = query,
+                    isSearchPending = isSearchPending,
                     suggestion = state.suggestion,
                     onSuggestionClick = { suggestion ->
                         query = suggestion.word
                         onQueryChanged(suggestion.word)
                     },
-                    onClear = {
-                        query = ""
-                        onQueryChanged("")
-                    },
+                    onClear = clearSearch,
                     onCurriculumTagChanged = onCurriculumTagChanged,
                 )
             } else {
@@ -532,7 +555,9 @@ private fun WordList(
                             text = if (isSearching) "匹配词条" else "全部词条",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
+                            modifier = Modifier
+                                .padding(start = 20.dp, end = 16.dp, bottom = 8.dp)
+                                .semantics { heading() },
                         )
                         LazyColumn(
                             modifier = Modifier
@@ -625,6 +650,7 @@ private fun WordList(
 /** A labelled dropdown that selects one option from a menu, with the current choice on the trigger. */
 @Composable
 private fun <T> FilterDropdownMenu(
+    description: String,
     label: String,
     options: List<Pair<String, T>>,
     selected: T,
@@ -657,13 +683,23 @@ private fun <T> FilterDropdownMenu(
         if (active) {
             FilledTonalButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "$description：$label"
+                        stateDescription = "当前选择 $label"
+                    },
                 contentPadding = PaddingValues(horizontal = 12.dp),
             ) { trigger() }
         } else {
             OutlinedButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "$description：$label"
+                        stateDescription = "当前选择 $label"
+                    },
                 contentPadding = PaddingValues(horizontal = 12.dp),
             ) { trigger() }
         }
@@ -673,7 +709,13 @@ private fun <T> FilterDropdownMenu(
         ) {
             options.forEach { (optionLabel, option) ->
                 DropdownMenuItem(
-                    text = { Text(optionLabel) },
+                    text = {
+                        Text(
+                            text = optionLabel,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                     onClick = {
                         expanded = false
                         onSelect(option)
@@ -690,15 +732,52 @@ private fun <T> FilterDropdownMenu(
 @Composable
 private fun ColumnScope.EmptySearchState(
     query: String,
+    isSearchPending: Boolean,
     suggestion: WordEntity?,
     onSuggestionClick: (WordEntity) -> Unit,
     onClear: () -> Unit,
     onCurriculumTagChanged: (String?) -> Unit,
 ) {
+    if (isSearchPending) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(32.dp)
+                .semantics {
+                    contentDescription = if (query.isBlank()) "正在恢复全部词条" else "正在搜索 $query"
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(32.dp),
+                    strokeWidth = 3.dp,
+                )
+                Text(
+                    text = if (query.isBlank()) "正在恢复全部词条…" else "正在搜索“$query”…",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "搜索完成后会显示匹配词条",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        return
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .weight(1f)
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -716,6 +795,7 @@ private fun ColumnScope.EmptySearchState(
                 text = if (query.isBlank()) "词典中暂无词条" else "没有找到匹配词条",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
             )
             if (query.isNotBlank()) {
                 Text(
@@ -724,8 +804,8 @@ private fun ColumnScope.EmptySearchState(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
-                // "Did you mean?" (PRD §3.1): the closest headword within edit distance <= 2,
-                // shown because nothing matched the typed query.
+                // 没有匹配词时，展示编辑距离不超过 2 的接近词。
+                // 只在实际无结果时提供建议，避免干扰正常搜索。
                 if (suggestion != null) {
                     OutlinedCard(
                         onClick = { onSuggestionClick(suggestion) },
@@ -758,7 +838,7 @@ private fun ColumnScope.EmptySearchState(
                         }
                     }
                 } else {
-                    // No suggestion found — show helpful tips
+                    // 没有建议词时提供可操作的搜索示例。
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -842,6 +922,7 @@ private fun SearchTip(label: String, example: String) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WordResultCard(
     word: WordEntity,
@@ -935,9 +1016,10 @@ private fun WordResultCard(
             }
             val tags = parseCurriculumTags(word.curriculumTags)
             if (tags.isNotEmpty()) {
-                Row(
+                FlowRow(
                     modifier = Modifier.padding(top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     tags.take(3).forEach { tag -> CurriculumTagPill(tag) }
                 }
@@ -987,6 +1069,7 @@ private fun WordDetail(
     val headwordSummary = word.headwordSummary?.takeIf { it.isNotBlank() }
     val supplements = supplementedFields(word)
     val curriculumTags = parseCurriculumTags(word.curriculumTags)
+    val haptic = LocalHapticFeedback.current
     var togglingWordId by remember { mutableStateOf<Long?>(null) }
 
     // Clear toggling state when masteredIds updates (database operation completed).
@@ -1045,7 +1128,11 @@ private fun WordDetail(
                             text = word.word,
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 4.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .semantics { heading() },
                         )
                         if (phoneticUk != null || phoneticUs != null) {
                             Row(
@@ -1126,6 +1213,7 @@ private fun WordDetail(
                         val isToggling = togglingWordId == word.id
                         OutlinedButton(
                             onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 togglingWordId = word.id
                                 onToggleMastered(word)
                             },
@@ -1133,7 +1221,14 @@ private fun WordDetail(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 12.dp)
-                                .heightIn(min = 48.dp),
+                                .heightIn(min = 48.dp)
+                                .semantics {
+                                    stateDescription = when {
+                                        isToggling -> "正在更新背词计划"
+                                        mastered -> "已掌握，点击后移出背词计划"
+                                        else -> "未加入背词计划"
+                                    }
+                                },
                             contentPadding = ButtonDefaults.ContentPadding,
                         ) {
                             if (isToggling) {
@@ -1556,6 +1651,7 @@ private fun DetailSectionCard(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(10.dp))
             content()

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -23,6 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -33,6 +38,17 @@ data class StudyScope(
 )
 
 internal const val SCOPE_ALL_GROUPS_LABEL = "全部组"
+private const val SCOPE_ALL_WORDS_LABEL = "全部词表"
+private val SCOPE_FREQUENCY_OPTIONS: List<Pair<String, Int?>> = listOf(
+    SCOPE_ALL_GROUPS_LABEL to null,
+    "组 1" to 1,
+    "组 2" to 2,
+    "组 3" to 3,
+    "组 4" to 4,
+    "组 5" to 5,
+    "组 6" to 6,
+    "组 7" to 7,
+)
 
 /**
  * 背词 / 推荐页顶部的一排取样范围筛选：课程标签下拉 + 雅思频率组下拉。
@@ -45,16 +61,19 @@ fun ScopeFilterRow(
     onScopeChange: (StudyScope) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val curriculumOptions: List<Pair<String, String?>> = remember(availableCurriculumTags) {
+        buildList {
+            add(SCOPE_ALL_WORDS_LABEL to null)
+            availableCurriculumTags.forEach { add(it to it) }
+        }
+    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ScopeDropdown(
-            label = scope.curriculumTag ?: "全部词表",
-            options = buildList {
-                add("全部词表" to null)
-                availableCurriculumTags.forEach { add(it to it) }
-            },
+            label = scope.curriculumTag ?: SCOPE_ALL_WORDS_LABEL,
+            options = curriculumOptions,
             selected = scope.curriculumTag,
             onSelect = { tag -> onScopeChange(scope.copy(curriculumTag = tag)) },
             active = scope.curriculumTag != null,
@@ -62,10 +81,7 @@ fun ScopeFilterRow(
         )
         ScopeDropdown(
             label = scope.frequencyGroup?.let { "组 $it" } ?: SCOPE_ALL_GROUPS_LABEL,
-            options = buildList {
-                add(SCOPE_ALL_GROUPS_LABEL to null)
-                (1..7).forEach { add("组 $it" to it) }
-            },
+            options = SCOPE_FREQUENCY_OPTIONS,
             selected = scope.frequencyGroup,
             onSelect = { group ->
                 onScopeChange(scope.copy(frequencyGroup = group))
@@ -87,6 +103,15 @@ private fun <T> ScopeDropdown(
     active: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val filterState = if (active) "已筛选，当前为 $label" else "未筛选，当前为 $label"
+    val triggerModifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 48.dp)
+        .semantics {
+            contentDescription = "范围筛选：$label"
+            role = Role.Button
+            stateDescription = filterState
+        }
     Box(modifier = modifier) {
         val trigger: @Composable () -> Unit = {
             Row(
@@ -111,13 +136,13 @@ private fun <T> ScopeDropdown(
         if (active) {
             FilledTonalButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = triggerModifier,
                 contentPadding = PaddingValues(horizontal = 12.dp),
             ) { trigger() }
         } else {
             OutlinedButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = triggerModifier,
                 contentPadding = PaddingValues(horizontal = 12.dp),
             ) { trigger() }
         }
@@ -127,7 +152,13 @@ private fun <T> ScopeDropdown(
         ) {
             options.forEach { (optionLabel, option) ->
                 DropdownMenuItem(
-                    text = { Text(optionLabel) },
+                    text = {
+                        Text(
+                            text = optionLabel,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                     onClick = {
                         expanded = false
                         onSelect(option)

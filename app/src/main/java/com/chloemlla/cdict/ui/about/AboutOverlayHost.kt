@@ -1,6 +1,14 @@
 package com.chloemlla.cdict.ui.about
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -24,6 +34,7 @@ import com.chloemlla.cdict.core.update.UpdateChecker
 import com.chloemlla.cdict.core.update.UpdateDialog
 import com.chloemlla.cdict.core.update.UpdateDialogState
 import com.chloemlla.cdict.core.update.UpdateInstaller
+import com.chloemlla.cdict.ui.ResponsiveContentBox
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -177,7 +188,7 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
 
     val top = controller.current
     if (top?.forced == true) {
-        BackHandler { /* 强制页：拦截系统返回键 */ }
+        BackHandler { Unit }
     } else {
         BackHandler(enabled = controller.isOpen) { controller.pop() }
     }
@@ -185,30 +196,64 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalAboutController provides controller) {
         Box(Modifier.fillMaxSize()) {
             content()
-            val current = controller.current
-            if (current != null) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    when (current.route) {
-                        AboutScreenRoute.About -> AboutScreen(
-                            onBack = controller::pop,
-                            updateCheckEnabled = BuildInfo.updateCheckEnabled,
-                            updateCheckInProgress = updateDialogState is UpdateDialogState.Checking,
-                            onCheckForUpdate = { triggerUpdateCheck(manual = true) },
-                        )
-                        AboutScreenRoute.Declarations -> DeclarationsScreen(onBack = controller::pop)
-                        AboutScreenRoute.LegalInfo -> LegalInfoScreen(onBack = controller::pop)
-                        AboutScreenRoute.OssNotice -> OssNoticeScreen(
-                            forced = current.forced,
-                            onBack = controller::pop,
-                        )
-                        AboutScreenRoute.AppPermissions -> AppPermissionsScreen(onBack = controller::pop)
-                        AboutScreenRoute.WhatsNew -> WhatsNewScreen(
-                            forced = current.forced,
-                            onBack = controller::pop,
-                        )
+            AnimatedContent(
+                targetState = controller.current,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(180)) togetherWith
+                        fadeOut(animationSpec = tween(150))
+                },
+                label = "about-overlay",
+            ) { current ->
+                if (current != null) {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                            .clickable(enabled = !current.forced, onClick = controller::pop),
+                    ) {
+                        ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null,
+                                        onClick = {},
+                                    )
+                                    .semantics {
+                                        paneTitle = when (current.route) {
+                                            AboutScreenRoute.About -> "关于"
+                                            AboutScreenRoute.Declarations -> "应用声明"
+                                            AboutScreenRoute.LegalInfo -> "法律信息"
+                                            AboutScreenRoute.OssNotice -> "开源许可声明"
+                                            AboutScreenRoute.AppPermissions -> "应用权限"
+                                            AboutScreenRoute.WhatsNew -> "本次更新说明"
+                                        }
+                                    },
+                                color = MaterialTheme.colorScheme.surface,
+                            ) {
+                                when (current.route) {
+                                    AboutScreenRoute.About -> AboutScreen(
+                                        onBack = controller::pop,
+                                        updateCheckEnabled = BuildInfo.updateCheckEnabled,
+                                        updateCheckInProgress = updateDialogState is UpdateDialogState.Checking,
+                                        onCheckForUpdate = { triggerUpdateCheck(manual = true) },
+                                    )
+                                    AboutScreenRoute.Declarations -> DeclarationsScreen(onBack = controller::pop)
+                                    AboutScreenRoute.LegalInfo -> LegalInfoScreen(onBack = controller::pop)
+                                    AboutScreenRoute.OssNotice -> OssNoticeScreen(
+                                        forced = current.forced,
+                                        onBack = controller::pop,
+                                    )
+                                    AboutScreenRoute.AppPermissions -> AppPermissionsScreen(onBack = controller::pop)
+                                    AboutScreenRoute.WhatsNew -> WhatsNewScreen(
+                                        forced = current.forced,
+                                        onBack = controller::pop,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

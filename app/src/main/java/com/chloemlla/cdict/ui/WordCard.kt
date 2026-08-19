@@ -21,16 +21,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 
 /**
- * Shared UK/US pronunciation buttons. While a button's audio is playing it shows a stop
- * state; clicking it again stops playback. Playback state auto-clears when audio finishes.
- * Used by the dictionary detail, study learn card, and recommendation card.
+ * 共用英音/美音发音按钮；播放时显示停止状态，再次点击会停止播放。
+ * 音频结束后播放状态由调用方自动清除。
+ * 词典详情、背词学习卡与推荐卡共用。
  */
 @Composable
 fun PronunciationButtons(
@@ -49,7 +53,11 @@ fun PronunciationButtons(
             onClick = { onPlayPronunciation(word, Accent.UK) },
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 48.dp),
+                .heightIn(min = 48.dp)
+                .semantics {
+                    contentDescription = if (ukPlaying) "停止英式发音" else "播放英式发音"
+                    stateDescription = if (ukPlaying) "正在播放，再次点击停止" else "未播放"
+                },
             contentPadding = ButtonDefaults.ContentPadding,
         ) {
             if (ukPlaying) {
@@ -66,7 +74,11 @@ fun PronunciationButtons(
             onClick = { onPlayPronunciation(word, Accent.US) },
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 48.dp),
+                .heightIn(min = 48.dp)
+                .semantics {
+                    contentDescription = if (usPlaying) "停止美式发音" else "播放美式发音"
+                    stateDescription = if (usPlaying) "正在播放，再次点击停止" else "未播放"
+                },
             contentPadding = ButtonDefaults.ContentPadding,
         ) {
             if (usPlaying) {
@@ -83,9 +95,8 @@ fun PronunciationButtons(
 }
 
 /**
- * Shared word card content: word, part-of-speech badge, phonetics, translation, definition,
- * and pronunciation buttons. Intended to be placed inside a Card with page-specific extras
- * (pool badge, mastered toggle, frequency info, annotations, etc.).
+ * 共用词条内容：单词、词性标签、音标、翻译、释义和发音按钮。
+ * 调用方可在卡片中追加词表标签、掌握状态、词频和语感标注等内容。
  */
 @Composable
 fun WordCardContent(
@@ -120,6 +131,8 @@ fun WordCardContent(
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
         pos?.takeIf { it.isNotBlank() }?.let {
             Surface(
@@ -140,8 +153,10 @@ fun WordCardContent(
             Text(
                 text = phonetics.joinToString("  ·  "),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = if (pos != null) 10.dp else 6.dp),
             )
         }
@@ -150,6 +165,8 @@ fun WordCardContent(
                 text = it,
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 14.dp),
             )
         }
@@ -174,7 +191,7 @@ fun WordCardContent(
     }
 }
 
-/** Chinese label for a part-of-speech abbreviation. */
+/** 词性缩写对应的中文名称。 */
 fun partOfSpeechLabel(pos: String): String = when (pos) {
     "n" -> "名词"
     "v" -> "动词"

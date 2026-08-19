@@ -48,7 +48,9 @@ fun ResponsiveContentBox(
                 .fillMaxHeight()
                 .then(
                     if (maxWidth == Dp.Infinity) Modifier.fillMaxWidth()
-                    else Modifier.widthIn(max = maxWidth)
+                    else Modifier
+                        .widthIn(max = maxWidth)
+                        .fillMaxWidth()
                 ),
             content = content,
         )

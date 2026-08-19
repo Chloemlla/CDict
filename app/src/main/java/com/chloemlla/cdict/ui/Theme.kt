@@ -102,7 +102,31 @@ fun CdictTheme(
     val context = LocalContext.current
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            val dynamicScheme = if (darkTheme) {
+                dynamicDarkColorScheme(context)
+            } else {
+                dynamicLightColorScheme(context)
+            }
+            // 动态色保留系统中性色，同时锁定品牌主色，避免壁纸改变核心操作语义。
+            dynamicScheme.copy(
+                primary = if (darkTheme) CdictDarkColorScheme.primary else CdictLightColorScheme.primary,
+                onPrimary = if (darkTheme) CdictDarkColorScheme.onPrimary else CdictLightColorScheme.onPrimary,
+                primaryContainer = if (darkTheme) {
+                    CdictDarkColorScheme.primaryContainer
+                } else {
+                    CdictLightColorScheme.primaryContainer
+                },
+                onPrimaryContainer = if (darkTheme) {
+                    CdictDarkColorScheme.onPrimaryContainer
+                } else {
+                    CdictLightColorScheme.onPrimaryContainer
+                },
+                inversePrimary = if (darkTheme) {
+                    CdictDarkColorScheme.inversePrimary
+                } else {
+                    CdictLightColorScheme.inversePrimary
+                },
+            )
         }
         darkTheme -> CdictDarkColorScheme
         else -> CdictLightColorScheme

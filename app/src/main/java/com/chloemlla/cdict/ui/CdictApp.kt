@@ -53,10 +53,11 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
@@ -78,7 +79,7 @@ private enum class CdictDestination(
     Recommendation("推荐", "CDict 推荐", Icons.Filled.Recommend),
 }
 
-/** Saver for the tab visit-history stack so it survives configuration changes. */
+/** 标签访问历史的 Saver，使其可在配置变更后保留。 */
 private val IntListSaver = listSaver<List<Int>, Int>(
     save = { list -> list },
     restore = { it },
@@ -107,12 +108,9 @@ fun CdictApp(
     val studyState by studyViewModel.state.collectAsStateWithLifecycle()
     val masteredIds by studyViewModel.masteredIds.collectAsStateWithLifecycle()
     val recommendationState by recommendationViewModel.state.collectAsStateWithLifecycle()
-    // Visit-history stack for the bottom bar: system back returns to the tab the user actually
-    // came from (instead of walking the destination enum order toward Study). Empty stack means
-    // there is nowhere to go back to, so the default system-back exit applies.
+    // 记录实际访问过的标签；历史为空时交还系统处理返回并退出应用。
     var navStack by rememberSaveable(stateSaver = IntListSaver) { mutableStateOf<List<Int>>(emptyList()) }
-    // Non-null while the dictionary tab is showing a word that was jumped to from another tab
-    // (e.g. the recommendation feed), so back closes the detail and returns to the jump origin.
+    // 仅在从其他标签跳转到词典详情时记录来源，以便关闭详情后原路返回。
     var dictionaryJumpFrom by rememberSaveable { mutableStateOf<Int?>(null) }
     BackHandler(enabled = navStack.isNotEmpty()) {
         selectedTab = navStack.last()
@@ -133,10 +131,11 @@ fun CdictApp(
     val needsStatusBarPadding =
         selectedTab == CdictDestination.Dictionary.ordinal && dictionaryState !is DictionaryScreenState.Ready
 
-    // Manual tab switch records the tab being left so back can return to it. Tapping the
-    // dictionary tab explicitly starts a fresh dictionary session (clears any pending jump).
+    val haptic = LocalHapticFeedback.current
+    // 手动切换标签时保留访问历史，轻触反馈帮助用户确认当前标签已改变。
     val switchTab: (Int) -> Unit = { index ->
         if (index != selectedTab) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             navStack = navStack + selectedTab
             if (index == CdictDestination.Dictionary.ordinal) dictionaryJumpFrom = null
             selectedTab = index
@@ -151,9 +150,7 @@ fun CdictApp(
             selectedTab = CdictDestination.Dictionary.ordinal
         }
     }
-    // Dictionary detail back: a cross-tab jump returns to where the word was opened from;
-    // otherwise back walks the in-detail history (派生词「前往」) and only closes onto the
-    // browse list once that history is exhausted.
+    // 词典详情返回时，跨标签跳转回到来源标签；派生词详情则优先回退到上一层详情。
     val onDictionaryBackFromDetail: () -> Unit = {
         val stillInDetail = onDictionaryDeselect()
         if (!stillInDetail) {
@@ -166,21 +163,18 @@ fun CdictApp(
         }
     }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
-    // Shared playing key across all tabs so pronunciation buttons in study/recommendation
-    // pages also show the stop/playing state and auto-clear when audio finishes.
+    // 各标签共用播放状态，让发音按钮能同步显示播放或停止状态。
     val playingKey = (dictionaryState as? DictionaryScreenState.Ready)?.playingKey
-    // Keeps each tab's UI state (scroll position, search text, open detail) alive across tab
-    // switches so returning to a tab restores exactly where the user left off.
+    // 保留每个标签的滚动位置、输入内容和打开的详情，切回时不丢失上下文。
     val tabStateHolder = rememberSaveableStateHolder()
 
-    // Dictionary-update prompt: when the bundled asset's content signature differs from the
-    // installed dictionary DB, the user is asked to rebuild so the enriched content takes effect.
+    // 内置词库内容变更后，提示用户重建本地数据库以加载新版释义。
     if (dictionaryState is DictionaryScreenState.Ready && dictionaryState.updateNeeded) {
         AlertDialog(
             onDismissRequest = onDictionaryDismissUpdate,
             title = { Text("检测到词典已更新") },
             text = {
-                Text("本地词库需要重建以加载新版词典内容。重建不会影响你的背词进度。")
+                Text("本地词库需要重建以加载新版词典内容，通常只需几秒。重建期间暂不能查询，但不会影响背词进度。")
             },
             confirmButton = {
                 TextButton(onClick = onDictionaryRebuild) {
@@ -199,8 +193,7 @@ fun CdictApp(
         modifier = Modifier
             .fillMaxSize()
             .semantics { paneTitle = destination.paneTitle },
-        // Each destination owns its top app bar. The shell owns navigation, so consume its
-        // padding once before composing the nested destination scaffolds.
+        // 各页面自行处理顶栏 inset；外壳仅提供导航栏占用的空间，避免重复补白。
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (!useRail) {
@@ -324,22 +317,22 @@ private fun DestinationContent(
         transitionSpec = {
             val direction = if (targetState > initialState) 1 else -1
             (
-                fadeIn(animationSpec = tween(durationMillis = 220)) +
+                fadeIn(animationSpec = tween(durationMillis = 180)) +
                     slideInHorizontally(
-                        animationSpec = tween(durationMillis = 280),
-                        initialOffsetX = { fullWidth -> fullWidth / 5 * direction },
+                        animationSpec = tween(durationMillis = 260),
+                        initialOffsetX = { fullWidth -> fullWidth / 6 * direction },
                     )
                 ).togetherWith(
-                    fadeOut(animationSpec = tween(durationMillis = 140)) +
+                    fadeOut(animationSpec = tween(durationMillis = 150)) +
                         slideOutHorizontally(
                             animationSpec = tween(durationMillis = 220),
-                            targetOffsetX = { fullWidth -> -fullWidth / 8 * direction },
+                            targetOffsetX = { fullWidth -> -fullWidth / 10 * direction },
                         ),
                     ).using(SizeTransform(clip = true))
         },
         label = "Destination transition",
     ) { t ->
-        // Save/restore each tab's UI state across switches (scroll, text fields, open detail).
+        // 保留标签内状态，切换后可回到原来的滚动位置、输入内容与详情。
         stateHolder.SaveableStateProvider(key = t) {
         when (t) {
             0 -> StudyScreen(
@@ -421,24 +414,6 @@ private fun CdictNavigationBar(
                 paneTitle = "CDict 主导航，当前为 ${selectedDestination.label}"
             },
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "CDict",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = " · IELTS 词典与翻译",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             NavigationBar(
                 windowInsets = WindowInsets.navigationBars,
                 tonalElevation = 0.dp,

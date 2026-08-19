@@ -1,8 +1,10 @@
 package com.chloemlla.cdict.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Stop
@@ -15,8 +17,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -50,11 +55,24 @@ internal fun SpeakableEnglishText(
             Text(
                 text = en,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
+                color = if (speaking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = { onSpeak(en) })
+                    .semantics {
+                        contentDescription = if (speaking) "停止朗读 $en" else "朗读 $en"
+                        stateDescription = if (speaking) "正在朗读，再次点击停止" else "未朗读"
+                    },
             )
             IconButton(
                 onClick = { onSpeak(en) },
-                modifier = Modifier.semantics { contentDescription = "朗读 $en" },
+                modifier = Modifier.semantics {
+                    contentDescription = if (speaking) "停止朗读 $en" else "朗读 $en"
+                    stateDescription = if (speaking) "正在朗读，再次点击停止" else "未朗读"
+                },
             ) {
                 Icon(
                     imageVector = if (speaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
@@ -73,6 +91,8 @@ internal fun SpeakableEnglishText(
                 text = pinnedZh,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
             )
             ui is PhraseUiState.Loading -> Text(
                 text = "翻译中…",
@@ -83,6 +103,8 @@ internal fun SpeakableEnglishText(
                 text = ui.zh,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
             )
             ui is PhraseUiState.Error -> Row(
                 verticalAlignment = Alignment.CenterVertically,

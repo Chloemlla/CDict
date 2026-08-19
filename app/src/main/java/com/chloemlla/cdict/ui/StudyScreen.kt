@@ -3,7 +3,6 @@ package com.chloemlla.cdict.ui
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.SystemClock
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -12,6 +11,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -74,19 +74,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -98,12 +102,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 
-private val CorrectGreen = Color(0xFF2E7D32)
-private val CorrectGreenContainer = Color(0xFFC8E6C9)
-private val WrongRed = Color(0xFFC62828)
-private val WrongRedContainer = Color(0xFFFFCDD2)
-
-/** Secret that unlocks the five-tap developer panel (source-controlled for this project's devs). */
+/** 五次点击标题后解锁开发者测试面板。 */
 private const val DEVELOPER_KEY = "Chloemlla"
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -132,7 +131,7 @@ fun StudyScreen(
     )
     val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
     val speakingKey by phraseViewModel.speakingKey.collectAsStateWithLifecycle()
-    // Developer backdoor: five rapid taps on the 背词 title open the developer panel.
+    // 连点标题五次仅用于开发测试，避免干扰正常学习流程。
     var devTaps by remember { mutableIntStateOf(0) }
     var lastDevTap by remember { mutableLongStateOf(0L) }
     var showDevDialog by remember { mutableStateOf(false) }
@@ -155,7 +154,9 @@ fun StudyScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.pointerInput(Unit) { detectTapGestures { onTitleTap() } },
+                        modifier = Modifier
+                            .pointerInput(Unit) { detectTapGestures { onTitleTap() } }
+                            .semantics { heading() },
                     ) {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
@@ -350,7 +351,7 @@ private fun StudyError(message: String, onReload: () -> Unit) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Icon(
                     imageVector = Icons.Default.ErrorOutline,
-                    contentDescription = "词典加载失败",
+                    contentDescription = null,
                     modifier = Modifier.size(48.dp),
                 )
                 Text(
@@ -362,6 +363,8 @@ private fun StudyError(message: String, onReload: () -> Unit) {
                     text = message.takeIf { it.isNotBlank() } ?: "无法读取本地词典数据。",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Button(
                     onClick = onReload,
@@ -391,7 +394,7 @@ private fun StudyEmpty(
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
                     imageVector = Icons.Filled.MenuBook,
-                    contentDescription = "词典为空",
+                    contentDescription = null,
                     modifier = Modifier.size(56.dp),
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                 )
@@ -406,7 +409,7 @@ private fun StudyEmpty(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
-                // Show scope filter to help user adjust
+                // 保留筛选入口，让用户可直接放宽范围继续学习。
                 if (availableCurriculumTags.isNotEmpty()) {
                     ScopeFilterRow(
                         scope = currentScope,
@@ -438,7 +441,7 @@ private fun StudyEmpty(
     }
 }
 
-// ---- Review flow ---------------------------------------------------------------------
+// ---- 复习流程 ---------------------------------------------------------------------
 
 @Composable
 private fun ReviewFlow(
@@ -454,11 +457,9 @@ private fun ReviewFlow(
         }
         return
     }
-    // Error-Attribution hook: restart the hesitation clock each time the current question is
-    // shown (a new attempt, or a force-reveal card flipping over to the answer options).
-    // Keyed on wordId + attempt so advancing to a fresh word always re-arms the clock.
+    // 每次进入新题、重试或释义展示完毕后重置犹豫计时，供错因归因使用。
     LaunchedEffect(question.wordId, question.attempt) { onQuestionPresented() }
-    // 完全陌生 retries re-show the 释义 card for a moment before the options appear.
+    // 完全陌生的重试先展示释义，再显示作答选项。
     var reveal by remember(question.wordId, question.attempt, question.forceReveal) {
         mutableStateOf(!question.forceReveal)
     }
@@ -469,11 +470,9 @@ private fun ReviewFlow(
             onQuestionPresented()
         }
     }
-    // Short success tone when an answer is correct ("播放提示音"). Created and released
-    // together with the review screen so it never outlives the REVIEW phase.
+    // 提示音随复习界面释放，避免离开复习后仍占用音频资源。
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val view = LocalView.current
     val tone = remember(context) { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) }
     DisposableEffect(tone) {
         onDispose { tone.release() }
@@ -489,12 +488,32 @@ private fun ReviewFlow(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
         val header = if (state.isImmediateTest) "今日测试" else "昨日复习"
+        val currentNumber = (state.reviewTotal - state.reviewRemaining + 1)
+            .coerceIn(1, state.reviewTotal.coerceAtLeast(1))
         Text(
-            text = "$header  ${state.reviewTotal - state.reviewRemaining + 1} / ${state.reviewTotal}",
+            text = "$header  $currentNumber / ${state.reviewTotal}",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = "$header，第 $currentNumber 题，共 ${state.reviewTotal} 题，剩余 ${state.reviewRemaining} 题"
+                    liveRegion = LiveRegionMode.Polite
+                },
             textAlign = TextAlign.Center,
+        )
+        LinearProgressIndicator(
+            progress = {
+                if (state.reviewTotal > 0) currentNumber.toFloat() / state.reviewTotal else 0f
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .semantics {
+                    contentDescription = "复习进度"
+                    stateDescription = "已完成 $currentNumber 题，共 ${state.reviewTotal} 题"
+                },
         )
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -512,7 +531,12 @@ private fun ReviewFlow(
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 10.dp),
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .semantics {
+                            heading()
+                            contentDescription = "题目：${question.english}"
+                        },
                 )
                 question.phonetic?.let {
                     Text(
@@ -557,6 +581,7 @@ private fun ReviewFlow(
                 text = option,
                 enabled = state.feedback == null,
                 highlight = highlightOf(state.feedback, option, question.correctText),
+                isSelected = state.feedback?.chosenText == option,
                 onClick = { onAnswer(index) },
             )
         }
@@ -564,16 +589,16 @@ private fun ReviewFlow(
         when {
             feedback != null && feedback.correct -> {
                 CorrectFeedbackBanner()
-                // Auto-advance to the next question after a brief green confirmation.
+                // 答对后短暂停留，确保视觉和声音反馈都能被感知。
                 LaunchedEffect(feedback) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
                     kotlinx.coroutines.delay(650)
                     onAdvance()
                 }
             }
             feedback != null && !feedback.correct -> {
-                FeedbackBanner("答错了，正确答案：${feedback.correctText}", WrongRed, WrongRedContainer)
+                FeedbackBanner("答错了，正确答案：${feedback.correctText}")
                 LaunchedEffect(feedback) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
@@ -608,17 +633,37 @@ private fun ReviewOption(
     text: String,
     enabled: Boolean,
     highlight: ReviewOptionHighlight?,
+    isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val (bg, fg) = when (highlight) {
-        ReviewOptionHighlight.Correct -> CorrectGreenContainer to Color(0xFF1B5E20)
-        ReviewOptionHighlight.Wrong -> WrongRedContainer to WrongRed
-        null -> MaterialTheme.colorScheme.surfaceContainerLow to MaterialTheme.colorScheme.onSurface
+    val colorScheme = MaterialTheme.colorScheme
+    val (bg, fg, border) = when (highlight) {
+        ReviewOptionHighlight.Correct -> Triple(
+            colorScheme.tertiaryContainer,
+            colorScheme.onTertiaryContainer,
+            BorderStroke(1.dp, colorScheme.tertiary),
+        )
+        ReviewOptionHighlight.Wrong -> Triple(
+            colorScheme.errorContainer,
+            colorScheme.onErrorContainer,
+            BorderStroke(1.dp, colorScheme.error),
+        )
+        null -> Triple(
+            colorScheme.surfaceContainerLow,
+            colorScheme.onSurface,
+            BorderStroke(1.dp, colorScheme.outlineVariant),
+        )
+    }
+    val optionLabel = ('A' + index).toString()
+    val state = when (highlight) {
+        ReviewOptionHighlight.Correct -> if (isSelected) "已选，回答正确" else "正确答案"
+        ReviewOptionHighlight.Wrong -> "已选，回答错误"
+        null -> if (enabled) "未选" else "已锁定"
     }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed && enabled) 0.97f else 1f,
         animationSpec = tween(durationMillis = 120),
         label = "option-press-scale",
     )
@@ -626,46 +671,70 @@ private fun ReviewOption(
         color = bg,
         contentColor = fg,
         shape = RoundedCornerShape(14.dp),
+        border = border,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                onClick = onClick,
+            )
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .semantics {
-                role = Role.Button
-                contentDescription = "选项 ${('A' + index)}：$text"
+                role = Role.RadioButton
+                contentDescription = "选项 $optionLabel：$text"
+                stateDescription = state
             },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("${('A' + index)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(optionLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(14.dp))
-            Text(text, style = MaterialTheme.typography.bodyLarge, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
 
 @Composable
-private fun FeedbackBanner(text: String, fg: Color, bg: Color) {
+private fun FeedbackBanner(text: String) {
+    val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(bg, RoundedCornerShape(12.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .background(colorScheme.errorContainer, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .semantics {
+                contentDescription = text
+                liveRegion = LiveRegionMode.Assertive
+            },
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold)
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colorScheme.onErrorContainer,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 /**
- * 答对反馈：绿色横幅 + 对勾一次性放大回弹和一圈扩散光环。用 [Animatable] 跑单次动画
+ * 答对反馈：成功横幅 + 对勾一次性放大回弹和一圈扩散光环。用 [Animatable] 跑单次动画
  * 而不是 infiniteRepeatable——横幅只存在约 650ms（随后自动进入下一题），持续循环的脉冲
  * 在这么短的时间里只会呈现为抖动。
  */
 @Composable
 private fun CorrectFeedbackBanner() {
+    val colorScheme = MaterialTheme.colorScheme
     val pop = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         pop.animateTo(
@@ -683,8 +752,12 @@ private fun CorrectFeedbackBanner() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(CorrectGreenContainer, RoundedCornerShape(12.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .background(colorScheme.tertiaryContainer, RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .semantics {
+                contentDescription = "回答正确，正在进入下一题"
+                liveRegion = LiveRegionMode.Assertive
+            },
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -695,7 +768,7 @@ private fun CorrectFeedbackBanner() {
                 modifier = Modifier.size(32.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                // 扩散光环：从对勾大小向外张到 32dp 并同步淡出。
+                // 扩散光环在短暂反馈中强调成功，不干扰下一题阅读。
                 Box(
                     modifier = Modifier
                         .size(28.dp)
@@ -705,28 +778,28 @@ private fun CorrectFeedbackBanner() {
                             scaleY = ring
                             alpha = (1f - progress) * 0.45f
                         }
-                        .background(CorrectGreen, RoundedCornerShape(percent = 50)),
+                        .background(colorScheme.tertiary, RoundedCornerShape(percent = 50)),
                 )
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
-                    contentDescription = "回答正确",
-                    tint = CorrectGreen,
+                    contentDescription = null,
+                    tint = colorScheme.tertiary,
                     modifier = Modifier
                         .size(26.dp)
                         .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
                 )
             }
             Text(
-                "回答正确，继续加油",
+                "回答正确，正在进入下一题",
                 style = MaterialTheme.typography.bodyMedium,
-                color = CorrectGreen,
+                color = colorScheme.onTertiaryContainer,
                 fontWeight = FontWeight.SemiBold,
             )
         }
     }
 }
 
-// ---- Learning / free-flow ------------------------------------------------------------
+// ---- 学习 / 自由刷词 ----------------------------------------------------------------
 
 @Composable
 private fun LearnFlow(
@@ -748,6 +821,9 @@ private fun LearnFlow(
 ) {
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
+    val haptic = LocalHapticFeedback.current
+    val cardScrollState = rememberScrollState()
+    LaunchedEffect(card?.id) { cardScrollState.scrollTo(0) }
     ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -760,6 +836,17 @@ private fun LearnFlow(
         )
         GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
         StudyProgressBar(state)
+        if (!isFree && card != null) {
+            Text(
+                text = "本轮还剩 ${state.queueRemaining} 个新词",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().semantics {
+                    stateDescription = "学习队列剩余 ${state.queueRemaining} 个单词"
+                },
+                textAlign = TextAlign.Center,
+            )
+        }
         if (isFree) {
             Text(
                 text = "自由刷词中 · 不计入今日进度与明日复习",
@@ -773,7 +860,7 @@ private fun LearnFlow(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (card != null) {
                 Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxSize().verticalScroll(cardScrollState),
                 ) {
                     LearnCard(
                         word = card,
@@ -803,7 +890,10 @@ private fun LearnFlow(
                 Text("稍后再看")
             }
             Button(
-                onClick = onMarkLearned,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onMarkLearned()
+                },
                 enabled = card != null,
                 modifier = Modifier.weight(1f).heightIn(min = 52.dp),
             ) {
@@ -902,7 +992,19 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
+                .clip(RoundedCornerShape(4.dp))
+                .semantics {
+                    contentDescription = "今日学习进度"
+                    stateDescription = if (isComplete) {
+                        "今日目标已达成，已背会 ${state.todayDone} 个单词"
+                    } else {
+                        "已背会 ${state.todayDone} 个单词，距目标还差 ${(state.dailyGoal - state.todayDone).coerceAtLeast(0)} 个"
+                    }
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        current = animatedFraction,
+                        range = 0f..1f,
+                    )
+                },
         )
         if (isComplete) {
             Text(
@@ -919,24 +1021,38 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
 @Composable
 private fun GoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "每日背词量设置"
+                stateDescription = "当前每日背词量 $goal 个"
+            },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        IconButton(onClick = { if (goal > DAILY_GOAL_MIN) onSetGoal(goal - DAILY_GOAL_STEP) }) {
+        IconButton(
+            onClick = { onSetGoal(goal - DAILY_GOAL_STEP) },
+            enabled = goal > DAILY_GOAL_MIN,
+        ) {
             Icon(Icons.Filled.Remove, contentDescription = "减少每日背词量")
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        ) {
             Text("每日背词量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("$goal", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
-        IconButton(onClick = { if (goal < DAILY_GOAL_MAX) onSetGoal(goal + DAILY_GOAL_STEP) }) {
+        IconButton(
+            onClick = { onSetGoal(goal + DAILY_GOAL_STEP) },
+            enabled = goal < DAILY_GOAL_MAX,
+        ) {
             Icon(Icons.Filled.Add, contentDescription = "增加每日背词量")
         }
     }
 }
 
-// ---- Done / summary ------------------------------------------------------------------
+// ---- 完成 / 总结 --------------------------------------------------------------------
 
 @Composable
 private fun DoneFlow(
@@ -970,7 +1086,13 @@ private fun DoneFlow(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("今日学习已达标", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(
+                        "今日学习已达标",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.semantics { heading() },
+                    )
                     Text(
                         text = "已背会 ${state.todayDone} 个单词，明天将安排复习。",
                         style = MaterialTheme.typography.bodyMedium,
@@ -995,7 +1117,12 @@ private fun DoneFlow(
         }
         if (state.learnedToday.isNotEmpty()) {
             item(key = "learned-title") {
-                Text("今日已学清单 · ${state.learnedToday.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                Text(
+                    "今日已学清单 · ${state.learnedToday.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp).semantics { heading() },
+                )
             }
             items(state.learnedToday, key = { it.id }) { word ->
                 LearnedWordRow(word)

@@ -3,7 +3,6 @@ package com.chloemlla.cdict.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -36,10 +35,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
@@ -68,28 +71,37 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.audio.PronunciationPlayer
 import com.chloemlla.cdict.core.translate.TranslationDirection
 import com.chloemlla.cdict.core.translate.TranslationResult
+
+private const val MAX_QUERY_LENGTH = 2_000
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,6 +111,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
     val direction by viewModel.direction.collectAsStateWithLifecycle()
     val supportedLanguages by viewModel.supportedLanguages.collectAsStateWithLifecycle()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val haptic = LocalHapticFeedback.current
     val canTranslate = query.isNotBlank() && state !is TranslationUiState.Translating
 
     val buttonInteractionSource = remember { MutableInteractionSource() }
@@ -167,6 +180,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                     "即时翻译",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.semantics { heading() },
                 )
                 Text(
                     "把想表达的内容交给我们。",
@@ -205,14 +219,19 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                             "翻译方向",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.semantics { heading() },
                         )
                     }
                     // 互换按钮只在存在反向方向时出现（auto→X 没有可互换的源语言）。
                     if (direction.canSwap) {
                         IconButton(
-                            onClick = { viewModel.onDirectionChange(direction.swapped()) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.onDirectionChange(direction.swapped())
+                            },
                             modifier = Modifier.semantics {
                                 contentDescription = "互换翻译方向，改为${direction.swapped().label}"
+                                stateDescription = "当前方向：${direction.label}"
                             },
                         ) {
                             Icon(
@@ -248,6 +267,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                             modifier = Modifier.semantics {
                                 role = Role.RadioButton
                                 contentDescription = "翻译方向：${item.label}"
+                                stateDescription = if (item == direction) "已选择" else "未选择"
                             },
                         )
                     }
@@ -256,7 +276,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
 
             OutlinedTextField(
                 value = query,
-                onValueChange = viewModel::onQueryChange,
+                onValueChange = { viewModel.onQueryChange(it.take(MAX_QUERY_LENGTH)) },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("原文") },
                 placeholder = { Text("输入要翻译的文本") },
@@ -293,14 +313,27 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("支持多行输入")
+                        Text("支持多行输入，最多 $MAX_QUERY_LENGTH 字符")
                         Spacer(Modifier.weight(1f))
-                        Text("${query.length} 字符")
+                        Text(
+                            "${query.length}/$MAX_QUERY_LENGTH",
+                            color = if (query.length == MAX_QUERY_LENGTH) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
                     }
                 },
                 minLines = 4,
                 maxLines = 8,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        keyboardController?.hide()
+                        if (canTranslate) viewModel.translate()
+                    },
+                ),
             )
 
             Button(
@@ -359,6 +392,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                     TranslationUiState.Translating -> ShimmerSkeleton()
                     is TranslationUiState.Success -> TranslationResultBlock(
                         result = currentState.result,
+                        originalText = query,
                         onSpeak = { translation -> pronunciationPlayer.play(translation, Accent.US) },
                     )
                     is TranslationUiState.Failure -> FailureState(
@@ -395,18 +429,8 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
 
 @Composable
 private fun EmptyTranslationState() {
-    val transition = rememberInfiniteTransition(label = "empty-state-pulse")
-    val pulse by transition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "empty-pulse",
-    )
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Main illustration card
+        // 主插图卡片保持静态，避免空态被持续动效打扰。
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -422,9 +446,7 @@ private fun EmptyTranslationState() {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .graphicsLayer { scaleX = pulse; scaleY = pulse },
+                    modifier = Modifier.size(80.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Surface(
@@ -453,7 +475,7 @@ private fun EmptyTranslationState() {
                 )
             }
         }
-        // Helpful tips card
+        // 使用提示卡片
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -476,6 +498,7 @@ private fun EmptyTranslationState() {
                         text = "使用技巧",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.semantics { heading() },
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -655,8 +678,13 @@ private fun FailureState(
 @Composable
 private fun TranslationResultBlock(
     result: TranslationResult,
+    originalText: String,
     onSpeak: (String) -> Unit,
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
+    val copyText = result.translations.joinToString("\n")
+    var copied by remember(result) { mutableStateOf(false) }
     val metadata = buildList {
         if (result.from.isNotEmpty()) add("来源语言" to result.from)
         if (result.to.isNotEmpty()) add("目标语言" to result.to)
@@ -684,22 +712,61 @@ private fun TranslationResultBlock(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Check,
-                        contentDescription = "翻译成功",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.padding(8.dp),
                     )
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "翻译结果",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.semantics { heading() },
                     )
                     Text(
-                        "已完成",
+                        if (copied) "已复制到剪贴板" else "已完成",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
                     )
+                }
+                if (copyText.isNotBlank()) {
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(copyText))
+                            copied = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (copied) "已复制译文" else "复制译文"
+                            stateDescription = if (copied) "已复制" else "未复制"
+                        },
+                    ) {
+                        Icon(
+                            imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
+            }
+
+            if (originalText.isNotBlank()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "原文",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                    )
+                    SelectionContainer {
+                        Text(
+                            originalText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 
@@ -714,29 +781,38 @@ private fun TranslationResultBlock(
             } else {
                 val speakable = result.to.equals("en", ignoreCase = true)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    result.translations.forEach { translation ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Text(
-                                translation,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (speakable) {
-                                IconButton(
-                                    onClick = { onSpeak(translation) },
-                                    modifier = Modifier.semantics {
-                                        contentDescription = "朗读 $translation"
-                                    },
+                    Text(
+                        "译文",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
+                    )
+                    SelectionContainer {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            result.translations.forEach { translation ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    Text(
+                                        translation,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.weight(1f),
                                     )
+                                    if (speakable) {
+                                        IconButton(
+                                            onClick = { onSpeak(translation) },
+                                            modifier = Modifier.semantics {
+                                                contentDescription = "朗读 $translation"
+                                            },
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

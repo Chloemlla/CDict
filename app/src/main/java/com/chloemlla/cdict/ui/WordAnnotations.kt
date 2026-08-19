@@ -19,21 +19,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.chloemlla.cdict.core.data.WordEntity
 
-// Emotion-color palette. Kept theme-independent (like StudyScreen's green/red pairs) so the
-// badges read identically in light and dark; register and collocation chips use theme tokens.
-private val PositiveBg = Color(0xFFC8E6C9)
-private val PositiveFg = Color(0xFF1B5E20)
-private val NegativeBg = Color(0xFFFFCDD2)
-private val NegativeFg = Color(0xFFB71C1C)
-private val NeutralBg = Color(0xFFBBDEFB)
-private val NeutralFg = Color(0xFF0D47A1)
-private val ContextBg = Color(0xFFFFE0B2)
-private val ContextFg = Color(0xFFE65100)
+/** 情感标注使用语义化主题色，确保深浅色模式下都有足够对比度。 */
+@Composable
+private fun emotionColors(value: String?): Pair<Color, Color>? = when (value?.trim()?.lowercase()) {
+    "positive" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+    "negative" -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+    "neutral" -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+    "context_dependent" -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+    else -> null
+}
 
-/** emotion_color enum value -> Chinese label; null when absent or unrecognized. */
+/** emotion_color 枚举值对应的中文标签；缺失或无法识别时返回 null。 */
 fun emotionColorLabel(value: String?): String? = when (value?.trim()?.lowercase()) {
     "positive" -> "褒义"
     "negative" -> "贬义"
@@ -42,7 +42,7 @@ fun emotionColorLabel(value: String?): String? = when (value?.trim()?.lowercase(
     else -> null
 }
 
-/** register enum value -> Chinese label; falls back to the raw value when unrecognized. */
+/** register 枚举值对应的中文标签；无法识别时保留原始值。 */
 fun registerLabel(value: String?): String? = value?.trim()?.lowercase()?.let {
     when (it) {
         "academic" -> "学术"
@@ -55,33 +55,21 @@ fun registerLabel(value: String?): String? = value?.trim()?.lowercase()?.let {
     }
 }
 
-private fun emotionColors(value: String?): Pair<Color, Color>? = when (value?.trim()?.lowercase()) {
-    "positive" -> PositiveBg to PositiveFg
-    "negative" -> NegativeBg to NegativeFg
-    "neutral" -> NeutralBg to NeutralFg
-    "context_dependent" -> ContextBg to ContextFg
-    else -> null
-}
-
-/** collocations column is a "；"-joined list (pipeline convention); comma forms tolerated too. */
+/** collocations 按“；”连接；同时兼容常见的逗号分隔形式。 */
 fun parseCollocations(value: String?): List<String> =
     value?.split("；", ";", "、", ",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 
-/**
- * Parse the comma-separated aiSupplemented column into the set of fields that were
- * enriched from the distribution merge (phoneticUk / phoneticUs / mnemonic / derived /
- * sentences). Returns an empty set when the word carries no AI-supplemented content.
- */
+/** 解析逗号分隔的 aiSupplemented 字段，返回由补充分发流程写入的字段集合。 */
 fun supplementedFields(word: WordEntity): Set<String> =
     word.aiSupplemented?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
 
-/** True when any of the word's displayed fields was added by the AI enrichment merge. */
+/** 词条存在由补充分发流程写入的展示字段时返回 true。 */
 fun wordHasAiSupplement(word: WordEntity): Boolean = supplementedFields(word).isNotEmpty()
 
-/** True when the given merge field was supplemented by the AI enrichment for this word. */
+/** 指定字段由补充分发流程写入时返回 true。 */
 fun fieldSupplemented(word: WordEntity, field: String): Boolean = field in supplementedFields(word)
 
-/** True when any annotation field carries content worth rendering. */
+/** 任一标注字段有可展示内容时返回 true。 */
 fun wordHasAnnotations(word: WordEntity): Boolean =
     word.emotionColor?.isNotBlank() == true ||
         word.register?.isNotBlank() == true ||
@@ -96,12 +84,14 @@ private fun AnnotationPill(text: String, bg: Color, fg: Color) {
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
         )
     }
 }
 
-/** curriculumTags column is a delimiter-joined list of labels written by dictionary workflows. */
+/** curriculumTags 是词典流程写入的分隔标签列表。 */
 fun parseCurriculumTags(value: String?): List<String> =
     value?.split("；", ";", ",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
 
@@ -117,16 +107,14 @@ fun CurriculumTagPill(text: String, modifier: Modifier = Modifier) {
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
         )
     }
 }
 
-/**
- * Small "AI 补充" badge marking content that was enriched by the AI distribution merge
- * (phonetics, mnemonic, derived terms, sentences). Rendered next to the section that
- * carries supplemented content.
- */
+/** “AI 补充”标签标识由补充分发流程写入的内容。 */
 @Composable
 fun AiSupplementPill(modifier: Modifier = Modifier) {
     Surface(
@@ -144,11 +132,7 @@ fun AiSupplementPill(modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Places the "AI 补充" pill at the trailing edge of a section's content, i.e. right
- * after the distribution-supplemented data it marks. Renders nothing when [show]
- * is false.
- */
+/** 在段落末尾显示“AI 补充”标签；[show] 为 false 时不渲染。 */
 @Composable
 fun AiSupplementTrailing(show: Boolean, modifier: Modifier = Modifier) {
     if (show) {
@@ -161,14 +145,18 @@ fun AiSupplementTrailing(show: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-/** Emotion-color and register tags for a word; renders nothing when both are absent. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WordAnnotationBadges(word: WordEntity, modifier: Modifier = Modifier) {
     val emotion = emotionColors(word.emotionColor)
     val emotionLabel = emotionColorLabel(word.emotionColor)
     val register = registerLabel(word.register)
     if (emotion == null && register == null) return
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         if (emotion != null && emotionLabel != null) {
             AnnotationPill(text = emotionLabel, bg = emotion.first, fg = emotion.second)
         }
@@ -182,11 +170,8 @@ fun WordAnnotationBadges(word: WordEntity, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * The full AI annotation block: badges, nuance description, collocations and the
- * highlighted usage-warning box. Shared by the word detail page and the study card.
- * When [onTranslate]/[onSpeak] are supplied, each collocation renders as a speakable,
- * auto-translated row; otherwise it renders as a static chip.
+/** 完整的 AI 标注区：标签、语感、搭配与高亮用法提醒。
+ * 提供 [onTranslate] 和 [onSpeak] 时，搭配项可朗读并自动翻译；否则显示为静态标签。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -206,7 +191,13 @@ fun WordAnnotationSection(
         WordAnnotationBadges(word)
         nuance?.let {
             SectionLabel("语感")
-            Text(it, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         if (collocations.isNotEmpty()) {
             SectionLabel("常见搭配")
@@ -225,7 +216,10 @@ fun WordAnnotationSection(
                     }
                 }
             } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     collocations.forEach { collocation ->
                         AnnotationPill(
                             text = collocation,
@@ -252,7 +246,13 @@ fun WordAnnotationSection(
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                     )
-                    Text(warning, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = warning,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
