@@ -118,7 +118,7 @@ fun RecommendationScreen(
     val onSpeak = phraseViewModel::speak
 
     // Pool filter state - persists across recompositions
-    var poolFilter by remember { mutableStateOf<RecommendationPool?>(null) }
+    var poolFilter: RecommendationPool? by remember { mutableStateOf<RecommendationPool?>(null) }
 
     Scaffold(
         topBar = {
