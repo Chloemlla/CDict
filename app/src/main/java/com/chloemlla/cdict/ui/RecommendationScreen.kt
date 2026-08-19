@@ -3,6 +3,9 @@ package com.chloemlla.cdict.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Recommend
 import androidx.compose.material.icons.filled.Refresh
@@ -557,6 +561,7 @@ private fun RecommendationUpcomingRow(
 private fun RecommendationEmpty(
     state: RecommendationScreenState.Ready,
     onContinueMore: () -> Unit,
+    onReload: () -> Unit,
     onSetGoal: (Int) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
 ) {
