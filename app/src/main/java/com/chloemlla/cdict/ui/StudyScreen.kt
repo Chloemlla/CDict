@@ -288,7 +288,10 @@ private fun StudyLoading() {
 @Composable
 private fun StudyError(message: String) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("无法打开词典", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(message, style = MaterialTheme.typography.bodyMedium)
@@ -358,6 +361,7 @@ private fun ReviewFlow(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -385,7 +389,11 @@ private fun ReviewFlow(
         }
         if (question.forceReveal && !reveal) {
             // 识记卡片：陌生词的释义先亮出，再进入作答。
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            ) {
                 Text(
                     text = question.correctText,
                     style = MaterialTheme.typography.titleMedium,
@@ -715,6 +723,7 @@ private fun DoneFlow(
             Card(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(24.dp),

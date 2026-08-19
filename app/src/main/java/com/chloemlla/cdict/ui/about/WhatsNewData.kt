@@ -1,10 +1,9 @@
 package com.chloemlla.cdict.ui.about
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class WhatsNewSlide(
@@ -17,6 +16,29 @@ data class WhatsNewSlide(
 
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "修复卡片阴影伪影",
+            subtitle = "词典、推荐、背词、翻译四页的扁平状态卡片显式置零 elevation，移除 Material3 默认阴影在圆角外形成的矩形伪影。",
+            bullets = listOf(
+                "词典页：加载失败、详情加载中卡片不再投射多余阴影。",
+                "推荐/背词页：无法打开词典、已学完、达标、识记等状态卡片阴影移除。",
+                "翻译页：骨架屏、失败、加载、结果卡片统一无阴影，状态切换更平滑。",
+            ),
+            tip = "入口：词典/推荐/背词/翻译各页的错误、加载与完成状态卡片。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "应用内更新检测",
+            subtitle = "新增 GitHub Release 更新检测，启动时自动检查新版本并支持应用内下载安装。",
+            bullets = listOf(
+                "自动检查：应用启动后自动请求 GitHub Releases API，发现新版本时弹窗提示。",
+                "手动检查：关于页新增「检查更新」入口，可随时手动触发版本检查。",
+                "应用内下载安装：匹配设备 ABI 选择最优 APK，下载时显示进度，校验 SHA256 后引导安装。",
+                "安全校验：下载完成后验证 APK 的 SHA256 指纹，确保与发布资产一致。",
+            ),
+            tip = "入口：关于页 → 检查更新；或启动时自动检测。",
+        ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "全面优化动画体验",
@@ -53,29 +75,6 @@ object WhatsNewData {
                 "修复后选择「高中短语」等课程标签可正常生成推荐流，不再错误显示「已学完」。",
             ),
             tip = "入口：推荐页 → 顶部筛选 → 选择课程标签。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "朗读按钮支持停止切换与状态反馈",
-            subtitle = "词典、推荐、背词三页共用一套朗读组件；释义 / 句子 / 搭配等小喇叭按钮同样支持播放中停止并显示「停止」图标。",
-            bullets = listOf(
-                "共用组件：词典详情、推荐卡片、背词卡片统一使用同一套英音/美音按钮，一处维护、三页同步。",
-                "停止与状态反馈：播放中英音/美音按钮显示「停止」图标与文字，点击即可停止播放。",
-                "释义朗读停止：词条释义、真题句子、常见搭配等英文段落的小喇叭按钮在播放中显示「停止」图标，点击可停止播放。",
-                "状态自动更新：朗读播放完成后按钮状态自动复位，不会残留错误的播放状态。",
-            ),
-            tip = "入口：词典词详情 → 朗读；推荐页 / 背词页卡片上的英音美音按钮；释义 / 例句 / 搭配的小喇叭按钮。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "优化复习体验与按钮反馈",
-            subtitle = "缩短复习识记卡延迟、增加触觉反馈、背词按钮加入加载状态。",
-            bullets = listOf(
-                "识记卡延迟优化：复习模式下完全陌生词的释义展示延迟从 3 秒缩短至 1.5 秒，减少等待时间。",
-                "触觉反馈：复习答题正确时轻触反馈、错误时重触提醒，配合提示音强化学习体感。",
-                "按钮加载状态：词典详情页的「加入背词计划」按钮在操作执行期间显示加载动画，防止重复点击。",
-            ),
-            tip = "入口：背词标签页 → 复习识记卡；词典页 → 词详情 → 背词计划按钮。",
         ),
     )
 }

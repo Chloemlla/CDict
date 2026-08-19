@@ -275,6 +275,7 @@ private fun ErrorScreen(message: String) {
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
             ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -1141,6 +1142,7 @@ private fun WordDetail(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                         ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     ) {
                         if (detailError != null) {
                             Column(
