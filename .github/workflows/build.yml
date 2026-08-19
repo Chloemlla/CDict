@@ -316,7 +316,7 @@ jobs:
           tag="v${CDICT_VERSION_NAME}-${CDICT_SHORT_HASH}"
           body="$(printf '## CDict %s-%s\n\nRelease for commit %s.' \
             "${CDICT_VERSION_NAME}" "${CDICT_SHORT_HASH}" "${GITHUB_SHA}")"
-          release_id="$(gh api \
+          if gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
             /repos/${GITHUB_REPOSITORY}/releases \
@@ -326,12 +326,14 @@ jobs:
             -f target_commitish="${GITHUB_SHA}" \
             -F draft=false \
             -F prerelease=false \
-            -F make_latest=true \
-            --jq '.id' || true)"
-          if [ -n "${release_id}" ]; then
-            echo "Created release ${release_id} for ${tag}"
-          else
+            -f make_latest=true \
+            --jq '.id' >/dev/null; then
+            echo "Created release ${tag}"
+          elif gh release view "${tag}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; skipping creation"
+          else
+            echo "::error::Failed to create release ${tag}"
+            exit 1
           fi
           gh release upload "${tag}" release-assets/* --clobber
       - name: Remove temporary signing material
