@@ -118,7 +118,7 @@ fun RecommendationScreen(
     val onSpeak = phraseViewModel::speak
 
     // Pool filter state - persists across recompositions
-    var poolFilter: RecommendationPool? by remember { mutableStateOf<RecommendationPool?>(null) }
+    val poolFilter = remember { mutableStateOf<RecommendationPool?>(null) }
 
     Scaffold(
         topBar = {
@@ -189,11 +189,11 @@ fun RecommendationScreen(
                                     state = state,
                                     onSetGoal = onSetGoal,
                                     onScopeChange = onScopeChange,
-                                    onFilterPool = { poolFilter = it },
-                                    currentPoolFilter = poolFilter,
+                                    onFilterPool = { poolFilter.value = it },
+                                    currentPoolFilter = poolFilter.value,
                                 )
                                 // Filter current card by pool
-                                val filteredItems = state.items.filter { poolFilter == null || it.pool == poolFilter }
+                                val filteredItems = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }
                                 if (filteredItems.isNotEmpty()) {
                                     RecommendationCurrentCard(
                                         state = state.copy(items = filteredItems),
@@ -221,7 +221,7 @@ fun RecommendationScreen(
                             }
                             // Upcoming list also filtered
                             RecommendationUpcomingList(
-                                state = state.copy(items = state.items.filter { poolFilter == null || it.pool == poolFilter }),
+                                state = state.copy(items = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }),
                                 onOpenWord = onOpenWord,
                                 modifier = Modifier.weight(2f),
                             )
@@ -238,11 +238,11 @@ fun RecommendationScreen(
                                 state = state,
                                 onSetGoal = onSetGoal,
                                 onScopeChange = onScopeChange,
-                                onFilterPool = { poolFilter = it },
-                                currentPoolFilter = poolFilter,
+                                onFilterPool = { poolFilter.value = it },
+                                currentPoolFilter = poolFilter.value,
                             )
                             // Filter current card by pool
-                            val filteredItems = state.items.filter { poolFilter == null || it.pool == poolFilter }
+                            val filteredItems = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }
                             if (filteredItems.isNotEmpty()) {
                                 RecommendationCurrentCard(
                                     state = state.copy(items = filteredItems),
@@ -267,7 +267,7 @@ fun RecommendationScreen(
                                 )
                             }
                             RecommendationUpcomingBlock(
-                                state = state.copy(items = state.items.filter { poolFilter == null || it.pool == poolFilter }),
+                                state = state.copy(items = state.items.filter { poolFilter.value == null || it.pool == poolFilter.value }),
                                 onOpenWord = onOpenWord,
                             )
                         }
