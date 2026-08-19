@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
@@ -130,7 +131,12 @@ private fun AboutRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(
+    onBack: () -> Unit,
+    updateCheckEnabled: Boolean,
+    updateCheckInProgress: Boolean,
+    onCheckForUpdate: () -> Unit,
+) {
     val context = LocalContext.current
     val aboutStore = remember { AboutStore(context) }
     var youdaoFirst by remember { mutableStateOf(aboutStore.youdaoFirst) }
@@ -239,6 +245,16 @@ fun AboutScreen(onBack: () -> Unit) {
                     onClick = { controller.push(AboutScreenRoute.WhatsNew) },
                 )
                 HorizontalDivider()
+                Button(
+                    onClick = onCheckForUpdate,
+                    enabled = updateCheckEnabled && !updateCheckInProgress,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Filled.Update, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (updateCheckInProgress) "检查中…" else "检查更新")
+                }
+                Spacer(Modifier.height(4.dp))
                 val pronunciationDiag by PronunciationDiagnostics.lastFallback.collectAsState()
                 AboutRow(
                     title = "朗读诊断",

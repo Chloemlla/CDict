@@ -140,6 +140,8 @@ jobs:
           echo "CDICT_COMMIT_HASH=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "CDICT_BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
           echo "CDICT_VERSION_CODE=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+          echo "CDICT_SHORT_HASH=${GITHUB_SHA::8}" >> "$GITHUB_ENV"
+          echo "CDICT_BUILD_TIME_UTC_MILLIS=$(date -u +%s)000" >> "$GITHUB_ENV"
       - name: Build debug APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
@@ -156,7 +158,9 @@ jobs:
     name: Build signed release
     permissions:
       contents: write
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish == true)
     needs: verify
     runs-on: ubuntu-latest
     env:
@@ -235,6 +239,8 @@ jobs:
           echo "CDICT_COMMIT_HASH=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "CDICT_BUILD_TIME=$(date +%s)" >> "$GITHUB_ENV"
           echo "CDICT_VERSION_CODE=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+          echo "CDICT_SHORT_HASH=${GITHUB_SHA::8}" >> "$GITHUB_ENV"
+          echo "CDICT_BUILD_TIME_UTC_MILLIS=$(date -u +%s)000" >> "$GITHUB_ENV"
       - name: Build signed APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
@@ -242,6 +248,8 @@ jobs:
           ./gradlew :app:assembleRelease
           -PCDICT_COMMIT_HASH="${{ env.CDICT_COMMIT_HASH }}"
           -PCDICT_BUILD_TIME="${{ env.CDICT_BUILD_TIME }}"
+          -PCDICT_SHORT_HASH="${{ env.CDICT_SHORT_HASH }}"
+          -PCDICT_BUILD_TIME_UTC_MILLIS="${{ env.CDICT_BUILD_TIME_UTC_MILLIS }}"
           --no-daemon --stacktrace
       - name: Locate Android SDK apksigner
         id: locate-apksigner

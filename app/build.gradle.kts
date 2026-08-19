@@ -21,6 +21,13 @@ val cdictBuildTimeSeconds: Long =
 val cdictVersionCode: Int =
     propertyOrEnvironment("CDICT_VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 } ?: 1
 
+// Short commit hash (first 7+ chars) and build time in UTC milliseconds, injected by CI for
+// the update checker to compare local vs. remote release versions. Local builds fall back to
+// N/A / 0.
+val cdictShortHash: String = propertyOrEnvironment("CDICT_SHORT_HASH") ?: "N/A"
+val cdictBuildTimeUtcMillis: Long =
+    propertyOrEnvironment("CDICT_BUILD_TIME_UTC_MILLIS")?.toLongOrNull()?.takeIf { it > 0 } ?: 0L
+
 // CI materializes the lumen-crash SDK via scripts/fetch-lumen-crash-sdk.py and writes the
 // resolved version to lumen-crash.resolved.version; gradle.properties is a local fallback.
 val lumenCrashSdkVersion: String =
@@ -55,6 +62,9 @@ android {
         versionName = "1.1.0"
         buildConfigField("String", "COMMIT_HASH", "\"${cdictCommitHash.replace("\"", "\\\"")}\"")
         buildConfigField("long", "BUILD_TIME", "${cdictBuildTimeSeconds}L")
+        buildConfigField("String", "SHORT_HASH", "\"${cdictShortHash}\"")
+        buildConfigField("long", "BUILD_TIME_UTC_MILLIS", "${cdictBuildTimeUtcMillis}L")
+        buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "true")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         androidResources.localeFilters += listOf("zh", "en")
@@ -76,6 +86,7 @@ android {
             // Distinct applicationId so a debug build can be sideloaded alongside
             // the installed official app without conflicting package names.
             applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "false")
             // Sign the debug build with the release keystore in CI so the emitted
             // debug APK carries a trusted, reproducible signature (not the random
             // default debug key). Locally (no secrets) it falls back to the debug key.

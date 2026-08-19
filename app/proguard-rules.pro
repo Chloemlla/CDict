@@ -5,6 +5,10 @@
 # Entry point referenced from AndroidManifest.
 -keep public class com.chloemlla.cdict.MainActivity { *; }
 
+# FileProvider for in-app update APK installation.
+-keep class androidx.core.content.FileProvider { *; }
+-keep class com.chloemlla.cdict.core.update.** { *; }
+
 # Room reflection plumbing: entity/DAO/database accessors are reached through
 # generated *_Impl classes at runtime, so they must survive obfuscation.
 -keep @androidx.room.Entity class * { *; }

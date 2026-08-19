@@ -17,6 +17,18 @@ data class WhatsNewSlide(
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
+            icon = Icons.Filled.Update,
+            title = "应用内更新检测",
+            subtitle = "新增 GitHub Release 更新检测，启动时自动检查新版本并支持应用内下载安装。",
+            bullets = listOf(
+                "自动检查：应用启动后自动请求 GitHub Releases API，发现新版本时弹窗提示。",
+                "手动检查：关于页新增「检查更新」入口，可随时手动触发版本检查。",
+                "应用内下载安装：匹配设备 ABI 选择最优 APK，下载时显示进度，校验 SHA256 后引导安装。",
+                "安全校验：下载完成后验证 APK 的 SHA256 指纹，确保与发布资产一致。",
+            ),
+            tip = "入口：关于页 → 检查更新；或启动时自动检测。",
+        ),
+        WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "修复词条按压阴影",
             subtitle = "词典列表词条卡片在按压或长按时不再出现多余阴影，保持圆角卡片的扁平视觉。",
@@ -36,18 +48,6 @@ object WhatsNewData {
                 "翻译页：骨架屏、失败、加载、结果卡片统一无阴影，状态切换更平滑。",
             ),
             tip = "入口：词典/推荐/背词/翻译各页的错误、加载与完成状态卡片。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "应用内更新检测",
-            subtitle = "新增 GitHub Release 更新检测，启动时自动检查新版本并支持应用内下载安装。",
-            bullets = listOf(
-                "自动检查：应用启动后自动请求 GitHub Releases API，发现新版本时弹窗提示。",
-                "手动检查：关于页新增「检查更新」入口，可随时手动触发版本检查。",
-                "应用内下载安装：匹配设备 ABI 选择最优 APK，下载时显示进度，校验 SHA256 后引导安装。",
-                "安全校验：下载完成后验证 APK 的 SHA256 指纹，确保与发布资产一致。",
-            ),
-            tip = "入口：关于页 → 检查更新；或启动时自动检测。",
         ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
