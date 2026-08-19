@@ -2,7 +2,6 @@ package com.chloemlla.cdict.ui.about
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.Update
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class WhatsNewSlide(
@@ -15,6 +14,18 @@ data class WhatsNewSlide(
 
 object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
+            title = "文本可长按选中复制",
+            subtitle = "词典详情、背词、推荐、翻译、关于与更新弹窗中的说明性文字均支持长按选中并复制。",
+            bullets = listOf(
+                "词典详情：单词、音标、翻译、释义与全部 12 个信息板块（概览、语感标注、词频、记忆提示、词根、派生词、词间关系、词形变化、词源、笔记、年份频率、真题句子）可直接选中复制。",
+                "背词与推荐：学习卡词条、复习题目与答案、已学词条、即将到来的预览行、错误提示文字均可选中。",
+                "关于与更新：应用简介、版本号、权限说明、法务与开源鸣谢、更新日志与更新弹窗正文可选中。",
+                "保留原有交互：按钮、输入框与「长按复制提交哈希」等长按动作不放入选区容器，列表滚动与长按手势不冲突。",
+            ),
+            tip = "用法：在文字上长按出现选择手柄后拖动，再点击「复制」。",
+        ),
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
             title = "修复按压出现方形阴影",
@@ -64,17 +75,6 @@ object WhatsNewData {
                 "无障碍增强：交互元素统一补充 contentDescription、Role.Button 与 stateDescription，屏幕阅读器友好。",
             ),
             tip = "入口：词典搜索/列表；背词队列/空态；推荐卡片/空态；翻译输入/结果。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.Update,
-            title = "发布自动化加固",
-            subtitle = "正式版本发布改为幂等且稳定的脚本流程，重复发布同一提交时自动覆盖资产而不是失败，并保持最新版本标记正确。",
-            bullets = listOf(
-                "幂等发布：同一次提交重复发布时跳过重复建 tag，直接覆盖更新发布资产，不再因 tag 已存在而失败，并正确标记最新版本。",
-                "正式发布只发生在 main 分支推送或显式触发时，临时分支的构建不会再误生成公开正式版本。",
-                "发布认证：使用仓库自动生成的令牌完成版本创建与资产上传，无需额外配置密钥。",
-            ),
-            tip = "发布行为：GitHub Actions → build → release job。",
         ),
     )
 }

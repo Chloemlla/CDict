@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Stop
@@ -125,61 +126,68 @@ fun WordCardContent(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = word.word,
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        pos?.takeIf { it.isNotBlank() }?.let {
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.padding(top = 8.dp),
+        SelectionContainer {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    partOfSpeechLabel(it),
-                    style = MaterialTheme.typography.labelSmall,
+                    text = word.word,
+                    style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                pos?.takeIf { it.isNotBlank() }?.let {
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Text(
+                            partOfSpeechLabel(it),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    }
+                }
+                if (phonetics.isNotEmpty()) {
+                    Text(
+                        text = phonetics.joinToString("  ·  "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = if (pos != null) 10.dp else 6.dp),
+                    )
+                }
+                translation?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 14.dp),
+                    )
+                }
+                definition?.let { def ->
+                    SpeakableEnglishText(
+                        en = def,
+                        pinnedZh = null,
+                        ui = phraseStates[def],
+                        onTranslate = onTranslate,
+                        onSpeak = onSpeak,
+                        speakingKey = speakingKey,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    )
+                }
             }
-        }
-        if (phonetics.isNotEmpty()) {
-            Text(
-                text = phonetics.joinToString("  ·  "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = if (pos != null) 10.dp else 6.dp),
-            )
-        }
-        translation?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 14.dp),
-            )
-        }
-        definition?.let { def ->
-            SpeakableEnglishText(
-                en = def,
-                pinnedZh = null,
-                ui = phraseStates[def],
-                onTranslate = onTranslate,
-                onSpeak = onSpeak,
-                speakingKey = speakingKey,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
         }
         bottomContent?.invoke()
         PronunciationButtons(

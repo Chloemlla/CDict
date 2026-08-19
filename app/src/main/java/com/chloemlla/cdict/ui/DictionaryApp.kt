@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -1127,77 +1128,81 @@ private fun WordDetail(
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Text(
-                            text = word.word,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .padding(top = 4.dp)
-                                .semantics { heading() },
-                        )
-                        if (phoneticUk != null || phoneticUs != null) {
-                            Row(
-                                modifier = Modifier.padding(top = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                                ) {
-                                    phoneticUk?.let {
-                                        Text(
-                                            text = "英式  $it",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                    phoneticUs?.let {
-                                        Text(
-                                            text = "美式  $it",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
-                                if ("phoneticUk" in supplements || "phoneticUs" in supplements) {
-                                    AiSupplementPill()
-                                }
-                            }
-                        }
-                        translation?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(top = 14.dp),
-                            )
-                        }
-                        if (curriculumTags.isNotEmpty()) {
-                            FlowRow(
-                                modifier = Modifier.padding(top = 10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                curriculumTags.forEach { tag -> CurriculumTagPill(tag) }
-                            }
-                        }
-                        definition?.let {
-                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                        SelectionContainer {
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "释义",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = word.word,
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .padding(top = 4.dp)
+                                        .semantics { heading() },
                                 )
-                                SpeakableEnglishText(
-                                    en = it,
-                                    pinnedZh = null,
-                                    ui = phraseStates[it],
-                                    onTranslate = onPhraseTranslate,
-                                    onSpeak = onPhraseSpeak,
-                                    speakingKey = speakingKey,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
+                                if (phoneticUk != null || phoneticUs != null) {
+                                    Row(
+                                        modifier = Modifier.padding(top = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            phoneticUk?.let {
+                                                Text(
+                                                    text = "英式  $it",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                            phoneticUs?.let {
+                                                Text(
+                                                    text = "美式  $it",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                        }
+                                        if ("phoneticUk" in supplements || "phoneticUs" in supplements) {
+                                            AiSupplementPill()
+                                        }
+                                    }
+                                }
+                                translation?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        modifier = Modifier.padding(top = 14.dp),
+                                    )
+                                }
+                                if (curriculumTags.isNotEmpty()) {
+                                    FlowRow(
+                                        modifier = Modifier.padding(top = 10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        curriculumTags.forEach { tag -> CurriculumTagPill(tag) }
+                                    }
+                                }
+                                definition?.let {
+                                    Column(modifier = Modifier.padding(top = 12.dp)) {
+                                        Text(
+                                            text = "释义",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        SpeakableEnglishText(
+                                            en = it,
+                                            pinnedZh = null,
+                                            ui = phraseStates[it],
+                                            onTranslate = onPhraseTranslate,
+                                            onSpeak = onPhraseSpeak,
+                                            speakingKey = speakingKey,
+                                            modifier = Modifier.padding(top = 4.dp),
+                                        )
+                                    }
+                                }
                             }
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
@@ -1657,7 +1662,9 @@ private fun DetailSectionCard(
                 modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(10.dp))
-            content()
+            SelectionContainer {
+                Column(modifier = Modifier.fillMaxWidth(), content = content)
+            }
         }
     }
 }

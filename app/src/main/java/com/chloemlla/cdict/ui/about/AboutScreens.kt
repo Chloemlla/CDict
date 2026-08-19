@@ -28,6 +28,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -199,15 +200,19 @@ fun AboutScreen(
                 modifier = Modifier.size(96.dp),
             )
             Spacer(Modifier.height(16.dp))
-            Text(AboutData.appName, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                AboutData.appDescription,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
+            SelectionContainer {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(AboutData.appName, style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        AboutData.appDescription,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+            }
             Spacer(Modifier.height(28.dp))
             Column(
                 modifier = Modifier
@@ -217,11 +222,13 @@ fun AboutScreen(
                 AboutRow(
                     title = "当前版本",
                     trailing = {
-                        Text(
-                            BuildInfo.versionLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        SelectionContainer {
+                            Text(
+                                BuildInfo.versionLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     },
                 )
                 HorizontalDivider()
@@ -401,12 +408,14 @@ fun LegalInfoScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
             item {
-                Text(
-                    "以下为应用提供的法律文件。点击条目在浏览器中打开对应页面。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                )
+                SelectionContainer {
+                    Text(
+                        "以下为应用提供的法律文件。点击条目在浏览器中打开对应页面。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
+                }
             }
             items(AboutData.legalDocs) { doc ->
                 HorizontalDivider(Modifier.padding(horizontal = 20.dp))
@@ -468,7 +477,11 @@ private fun SectionCard(
                 )
             }
             Spacer(Modifier.height(12.dp))
-            content()
+            SelectionContainer {
+                Column(Modifier.fillMaxWidth()) {
+                    content()
+                }
+            }
         }
     }
 }
@@ -640,18 +653,20 @@ fun OssNoticeScreen(forced: Boolean, onBack: () -> Unit) {
                 }
             }
             item(key = "creditsHeading") {
-                Column {
-                    Text(
-                        "第三方依赖鸣谢",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "以下为本应用使用到的第三方开源项目、数据来源与接口。点击条目可打开对应链接。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                SelectionContainer {
+                    Column {
+                        Text(
+                            "第三方依赖鸣谢",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "以下为本应用使用到的第三方开源项目、数据来源与接口。点击条目可打开对应链接。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             items(AboutData.credits) { credit ->
@@ -694,12 +709,14 @@ fun AppPermissionsScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
             item {
-                Text(
-                    "以下为应用声明使用的系统权限及其用途。权限仅在对应功能首次使用时请求，未授权不会影响其余功能。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                )
+                SelectionContainer {
+                    Text(
+                        "以下为应用声明使用的系统权限及其用途。权限仅在对应功能首次使用时请求，未授权不会影响其余功能。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
+                }
             }
             items(AboutData.appPermissions) { permission ->
                 HorizontalDivider(Modifier.padding(horizontal = 20.dp))
@@ -715,24 +732,26 @@ fun AppPermissionsScreen(onBack: () -> Unit) {
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(permission.name, style = MaterialTheme.typography.titleMedium)
-                            permission.scope?.let { scope ->
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    scope,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.outline,
-                                )
+                    SelectionContainer(modifier = Modifier.weight(1f)) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(permission.name, style = MaterialTheme.typography.titleMedium)
+                                permission.scope?.let { scope ->
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        scope,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
                             }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                permission.purpose,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            permission.purpose,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     }
                 }
             }
@@ -824,44 +843,52 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(24.dp))
-                    Text(
-                        slide.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        slide.subtitle,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    slide.bullets.forEach { bullet ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.width(10.dp))
+                    SelectionContainer {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                bullet,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f),
+                                slide.title,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.semantics { heading() },
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                slide.subtitle,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    SelectionContainer {
+                        Column(Modifier.fillMaxWidth()) {
+                            slide.bullets.forEach { bullet ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        bullet,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
                         }
                     }
                     slide.tip?.let { tip ->
@@ -882,11 +909,13 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(Modifier.width(10.dp))
-                                Text(
-                                    tip,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                SelectionContainer {
+                                    Text(
+                                        tip,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }

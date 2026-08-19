@@ -3,6 +3,7 @@ package com.chloemlla.cdict.core.update
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.AlertDialog
@@ -84,7 +85,7 @@ fun UpdateDialog(
         is UpdateDialogState.Error -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("检查失败") },
-            text = { Text(currentState.message) },
+            text = { SelectionContainer { Text(currentState.message) } },
             confirmButton = {
                 OutlinedButton(onClick = onDismiss) { Text("确定") }
             },
@@ -97,22 +98,24 @@ fun UpdateDialog(
                 onDismissRequest = onDismiss,
                 title = { Text(release.tagName) },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("发现新版本：${release.tagName}")
-                        Text("当前版本：${BuildInfo.versionName} (${BuildInfo.shortHash})")
-                        val publishTime = Instant.ofEpochMilli(release.publishedAtUtcMillis)
-                            .atZone(ZoneOffset.UTC).format(updateDialogTimeFormatter)
-                        Text("发布时间：$publishTime")
-                        targetAsset?.let { asset ->
-                            val size = asset.sizeBytes?.let(::formatUpdateBytes)
-                            Text("下载包：${asset.name}${size?.let { "（$it）" } ?: ""}")
-                        }
-                        if (release.body.isNotBlank()) {
-                            Text(
-                                text = release.body,
-                                maxLines = 8,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                    SelectionContainer {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("发现新版本：${release.tagName}")
+                            Text("当前版本：${BuildInfo.versionName} (${BuildInfo.shortHash})")
+                            val publishTime = Instant.ofEpochMilli(release.publishedAtUtcMillis)
+                                .atZone(ZoneOffset.UTC).format(updateDialogTimeFormatter)
+                            Text("发布时间：$publishTime")
+                            targetAsset?.let { asset ->
+                                val size = asset.sizeBytes?.let(::formatUpdateBytes)
+                                Text("下载包：${asset.name}${size?.let { "（$it）" } ?: ""}")
+                            }
+                            if (release.body.isNotBlank()) {
+                                Text(
+                                    text = release.body,
+                                    maxLines = 8,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 },

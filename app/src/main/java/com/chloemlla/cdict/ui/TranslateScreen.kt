@@ -415,11 +415,13 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(14.dp),
                     )
-                    Text(
-                        "支持语种：${supportedLanguages.joinToString(" ")} 等",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    SelectionContainer {
+                        Text(
+                            "支持语种：${supportedLanguages.joinToString(" ")} 等",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -653,11 +655,13 @@ private fun FailureState(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
+                    SelectionContainer {
+                        Text(
+                            message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
                 }
             }
             Button(
@@ -822,20 +826,22 @@ private fun TranslationResultBlock(
 
             if (metadata.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    metadata.forEach { (label, value) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            MetaPill(text = label)
-                            Text(
-                                value,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        metadata.forEach { (label, value) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                MetaPill(text = label)
+                                Text(
+                                    value,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
                         }
                     }
                 }
