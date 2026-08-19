@@ -366,6 +366,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                 }
             }
         }
+        }
     }
 }
 
@@ -434,7 +435,7 @@ private fun TranslateTip(title: String, desc: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.weight(1f),
         )
-    )
+    }
 }
 
 @Composable
