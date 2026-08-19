@@ -18,6 +18,16 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "修复词条按压阴影",
+            subtitle = "词典列表词条卡片在按压或长按时不再出现多余阴影，保持圆角卡片的扁平视觉。",
+            bullets = listOf(
+                "词条卡片默认、按压、聚焦、悬停、拖拽和禁用状态统一使用 0.dp elevation。",
+                "修复按压缩放与 Material3 默认阴影叠加后产生的阴影伪影。",
+            ),
+            tip = "入口：词典页 → 长按或按压任意词条。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "修复卡片阴影伪影",
             subtitle = "词典、推荐、背词、翻译四页的扁平状态卡片显式置零 elevation，移除 Material3 默认阴影在圆角外形成的矩形伪影。",
             bullets = listOf(
@@ -65,16 +75,6 @@ object WhatsNewData {
                 "内存泄漏修复：短语朗读 ViewModel 改用 ApplicationContext，避免 Activity 被长生命周期组件持有导致泄漏。",
             ),
             tip = "入口：推荐页 / 背词页的卡片操作；词典页搜索与翻页。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "修复推荐页课程标签冷启动",
-            subtitle = "修复在推荐页选择「高中短语」等课程标签时，冷启动状态直接显示「已学完」且无法刷新的问题。",
-            bullets = listOf(
-                "修复推荐引擎冷启动路径：课程标签下的词不在标准雅思频率组 1-7 时，通过全域随机抽样兜底，确保 feed 不为空。",
-                "修复后选择「高中短语」等课程标签可正常生成推荐流，不再错误显示「已学完」。",
-            ),
-            tip = "入口：推荐页 → 顶部筛选 → 选择课程标签。",
         ),
     )
 }
