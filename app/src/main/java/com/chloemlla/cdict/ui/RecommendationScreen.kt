@@ -928,7 +928,7 @@ private fun RecommendationLegendPill(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(
                 interactionSource = interactionSource,
-                onClickLabel = if (isSelected) "取消$text筛选" else "只显示$text",
+                onClickLabel = if (isSelected) "取消${text}筛选" else "只显示$text",
                 onClick = onClick,
             )
             .semantics {
