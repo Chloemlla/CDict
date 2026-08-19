@@ -1,5 +1,12 @@
 package com.chloemlla.cdict.ui
 
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.SystemClock
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -34,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.MenuBook
@@ -707,7 +715,7 @@ private fun CorrectFeedbackBanner(onAdvance: () -> Unit) {
                             .size(28.dp)
                             .graphicsLayer {
                                 this.alpha = sparkleAlpha
-                                val angle = (i * 120f + System.currentTimeMillis() / 10 % 360).toDouble()
+                                val angle = (i * 120f + (System.currentTimeMillis() / 10 % 360)).toFloat()
                                 this.rotationZ = angle
                                 this.scaleX = 0.4f + sparkleAlpha * 0.6f
                                 this.scaleY = 0.4f + sparkleAlpha * 0.6f

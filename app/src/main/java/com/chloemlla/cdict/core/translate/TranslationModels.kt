@@ -21,7 +21,7 @@ enum class TranslationDirection(val from: String, val to: String, val label: Str
     ES_TO_ZH("es", "zh-CHS", "西→中"),
     ZH_TO_ES("zh-CHS", "es", "中→西"),
     DE_TO_ZH("de", "zh-CHS", "德→中"),
-    ZH_TO_DE("zh-CHS", "de", "中→德"),
+    ZH_TO_DE("zh-CHS", "de", "中→德");
 
     fun swapped(): TranslationDirection = when (this) {
         ZH_TO_EN -> EN_TO_ZH
