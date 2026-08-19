@@ -23,6 +23,7 @@ object WhatsNewData {
             bullets = listOf(
                 "幂等发布：同一次提交重复发布时跳过重复建 tag，直接覆盖更新发布资产，不再因 tag 已存在而失败。",
                 "正式发布只发生在 main 分支推送或显式触发时，临时分支的构建不会再误生成公开正式版本。",
+                "发布认证：使用仓库自动生成的令牌完成版本创建与资产上传，无需额外配置密钥。",
             ),
             tip = "发布行为：GitHub Actions → build → release job。",
         ),
