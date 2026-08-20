@@ -171,8 +171,6 @@ fun WordCardContent(
                         text = it,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 14.dp),
                     )
                 }

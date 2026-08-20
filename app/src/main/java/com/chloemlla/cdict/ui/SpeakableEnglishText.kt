@@ -21,7 +21,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -56,8 +55,6 @@ internal fun SpeakableEnglishText(
                 text = en,
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (speaking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 48.dp)
@@ -91,8 +88,6 @@ internal fun SpeakableEnglishText(
                 text = pinnedZh,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
             )
             ui is PhraseUiState.Loading -> Text(
                 text = "翻译中…",
@@ -103,8 +98,6 @@ internal fun SpeakableEnglishText(
                 text = ui.zh,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
             )
             ui is PhraseUiState.Error -> Row(
                 verticalAlignment = Alignment.CenterVertically,
