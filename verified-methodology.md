@@ -17,7 +17,7 @@
 | 2 | **并行 subagent 分组审查，各组可修改文件两两不相交** | 避免并发冲突；每组一个 subagent，只允许编辑指定文件 |
 | 3 | **收到每个 subagent 结果后逐份核查 `git diff` 才采信** | 曾发生 agent 报告"完成"但实际未落盘任何修改；也发生过"改完但带编译错误" |
 | 4 | **直接修改代码，不做 diff 预览** | 用户明确纠正过：要真实编辑，不是贴改动预览 |
-| 5 | **修完自动生成 commit message 并 commit + push** | 仓库 CLAUDE.md 硬性要求；GPG 签名可省略 |
+| 5 | **修完自动生成 commit message 并 commit + push** | 仓库 CLAUDE.md 硬性要求；**优先 GPG 签名提交**（`git commit -S`），仅当签名失败或 pinentry 卡住时才退回 `--no-gpg-sign` |
 | 6 | **静态命令检查为主，最终正确性以 CI 为准** | 静态检查抓不到运行时/编译问题，GitHub Actions 才是唯一裁决者 |
 | 7 | **每次提交必须同步更新 whats-new 记录** | 应用内「本次更新说明」靠显式条目展示本次构建的有意变更；不更新则用户看不到本次改动，或与已展示内容脱节。记录文件：`app/src/main/java/com/chloemlla/cdict/ui/about/WhatsNewData.kt` |
 
@@ -55,7 +55,9 @@
 # 0. 每次提交前先更新 whats-new 记录（WhatsNewData.kt），见核心原则 7
 # 1. 提交并推送（凭证见 §三）
 git add <file...>   # 显式列文件，不用 git add -A
-git commit --no-gpg-sign -m "<conventional message>"
+git commit -S -m "<conventional message>"          # 优先签名提交
+# 签名失败/卡住时才退回：git commit --no-gpg-sign -m "<conventional message>"
+git log --show-signature -1 | head -5              # 确认出现 "Good signature"
 GIT_TERMINAL_PROMPT=0 git push origin <branch>
 
 # 2. 找新运行的 run id
@@ -80,7 +82,16 @@ gh run view <RUN_ID> --log-failed | grep -aE "FAILED|Syntax error|Location:|Exce
 ## 三、Git 与凭证（Windows 已验证）
 
 - **push 必须**：`GIT_TERMINAL_PROMPT=0` + `gh auth setup-git`，否则 push 会挂起/超时。
-- **commit 偶发卡死**：gpg 可能在非交互终端等 pinentry。仓库允许时直接 `git commit --no-gpg-sign`。
+- **提交优先签名**：默认 `git commit -S`，提交后用 `git log --show-signature -1` 确认 `Good signature`。
+- **签名可用性预检**（避免 pinentry 卡死，非交互下失败而不挂起）：
+  ```bash
+  timeout 25 "$(git config --get gpg.program)" --batch --yes --pinentry-mode error \
+    --local-user "$(git config --get user.signingkey)" --detach-sign -o /dev/null <<< probe
+  # exit 0 → 签名可用，直接 git commit -S
+  # 非 0 / 超时 → 本次退回 git commit --no-gpg-sign，并把原因写进总结
+  ```
+- **仅在预检失败时**才用 `git commit --no-gpg-sign`：gpg 可能在非交互终端等 pinentry 而卡死。
+- **不要为了签名去改 git config**：签名密钥/格式由用户维护；预检失败就如实报告（例如 `user.signingkey` 指向不可签名的密钥），由用户决定是否调整。
 - **推荐显式列文件** `git add <file...>`，避免 `-A` 带入敏感文件。
 - **严禁** `git rebase -i` / `git add -i` 等交互命令。
 
@@ -122,6 +133,7 @@ gh run view <RUN_ID> --log-failed | grep -aE "FAILED|Syntax error|Location:|Exce
 7. **`--log-failed` 偶发抓空**：网络抖动时输出 0 行，重试即可。
 8. **注释里的 `/*` 会开启未闭合块注释**：KDoc 中写 `audio/*` 之类措辞，Kotlin 把其中的 `/*` 当作块注释起始，外层 `/**` 永不闭合，编译器报 `Syntax error: Missing '}'` + `Unclosed comment`（错误往往在文件另一处），且静态花括号平衡检查查不出。写注释时避免裸 `/*`，用"audio 类型"等说法。
 9. **在自身初始化表达式内引用变量是未解析引用**：`val media = MediaPlayer().apply { ... player === media ... }` 与 `val tts = TextToSpeech(ctx) { ... tts ... }` 中引用同名变量会报 `Unresolved reference 'media'/'tts'`。修复：apply 块内用 `this`（接收者即实例）；异步回调捕获自身用先声明后赋值的 `var`。
+10. **默认加 `--no-gpg-sign` 掩盖了签名本可用**（2026-08 CDict 验证）：仓库 `commit.gpgsign=true` 且 gpg 代理已缓存口令，非交互签名预检 exit 0，直接 `git commit -S` 即可产出 `Good signature`。`user.signingkey` 填的是加密子钥 ID（`[E]`）也无妨——gpg 会回溯到同一主钥的签名子钥。另外 Windows GnuPG 会打印 `gpg: Warning: Enabling DEP failed`，**无害**，不要据此判断签名失败，只看退出码与 `--show-signature` 输出。
 
 ---
 
