@@ -170,7 +170,7 @@ class VivoTranslationClientTest {
         assertTrue(body.contains("to=zh-CHS"))
         assertTrue(body.contains("appId=9023957766"))
         assertTrue(body.contains("app=com.vivo.translator"))
-        assertTrue(capturedHeaders!!.containsKey("X-AI-GATEWAY-APP-ID").not())
+        assertTrue(capturedHeaders.containsKey("X-AI-GATEWAY-APP-ID").not())
     }
 
     @Test
