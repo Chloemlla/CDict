@@ -291,14 +291,66 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk release-assets/CDict-arm64-v8a.apk
-          cp app/build/outputs/apk/release/app-armeabi-v7a-release.apk release-assets/CDict-armeabi-v7a.apk
-          cp app/build/outputs/apk/release/app-x86-release.apk release-assets/CDict-x86.apk
-          cp app/build/outputs/apk/release/app-x86_64-release.apk release-assets/CDict-x86_64.apk
-          cp app/build/outputs/apk/release/app-universal-release.apk release-assets/CDict.apk
+          base="CDict_android_${CDICT_VERSION_NAME}-${CDICT_SHORT_HASH}"
+          cp app/build/outputs/apk/release/app-universal-release.apk "release-assets/${base}.apk"
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            cp "app/build/outputs/apk/release/app-${abi}-release.apk" "release-assets/${base}_${abi}.apk"
+          done
           cp app/src/main/assets/dict.db.br release-assets/CDict-dict.db.br
           cp app/src/main/assets/dict.signature release-assets/dict.signature
-          (cd release-assets && sha256sum CDict.apk CDict-arm64-v8a.apk CDict-armeabi-v7a.apk CDict-x86.apk CDict-x86_64.apk CDict-dict.db.br dict.signature > checksums.txt)
+          (cd release-assets && sha256sum *.apk CDict-dict.db.br dict.signature > checksums.txt)
+          cat release-assets/checksums.txt
+      - name: Write release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["CDICT_VERSION_NAME"]
+          short = os.environ["CDICT_SHORT_HASH"]
+          base = f"CDict_android_{version}-{short}"
+          names = {f"{base}.apk": "universal"}
+          for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64"):
+              names[f"{base}_{abi}.apk"] = abi
+
+          def digest(path):
+              sha = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1 << 20), b""):
+                      sha.update(chunk)
+              return sha.hexdigest()
+
+          out = Path("release-assets")
+          assets = [
+              {
+                  "name": name,
+                  "abi": abi,
+                  "sizeBytes": (out / name).stat().st_size,
+                  "sha256": digest(out / name),
+              }
+              for name, abi in names.items()
+          ]
+          manifest = {
+              "application": "CDict",
+              "platform": "android",
+              "tag": f"v{version}-{short}",
+              "versionName": version,
+              "versionCode": int(os.environ["CDICT_VERSION_CODE"]),
+              "commit": os.environ["CDICT_COMMIT_HASH"],
+              "shortCommit": short,
+              "buildTimeUtcMillis": int(os.environ["CDICT_BUILD_TIME_UTC_MILLIS"]),
+              "assets": assets,
+          }
+          (out / "release-manifest.json").write_text(
+              json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          cat release-assets/release-manifest.json
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
