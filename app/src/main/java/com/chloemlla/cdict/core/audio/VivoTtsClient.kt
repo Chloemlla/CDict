@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.core.audio
 
 import com.chloemlla.cdict.core.net.CDictBackend
+import com.chloemlla.cdict.core.net.CDictRequestSigner
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -14,7 +15,7 @@ class TtsHttpResponse(val status: Int, val bytes: ByteArray, val contentType: St
 /**
  * 在线语音合成客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端完成实际合成。
  *
- * 凭据与签名全部留在服务端，安装包内不含任何密钥。
+ * 上游凭据与嵌套签名仍全部留在服务端；客户端只带可轮换的官方请求签名，用于服务端限流分层。
  * 服务端成功时返回 audio 类型字节，失败时返回 JSON 诊断。
  */
 class VivoTtsClient(
@@ -71,6 +72,7 @@ private suspend fun httpGetAudio(url: String): TtsHttpResponse = withContext(Dis
         connectTimeout = 30_000
         readTimeout = 30_000
         setRequestProperty("Accept", "audio/*, application/json")
+        CDictRequestSigner.sign(this, "GET", url)
     }
     try {
         val status = connection.responseCode

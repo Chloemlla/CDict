@@ -28,6 +28,11 @@ val cdictShortHash: String = propertyOrEnvironment("CDICT_SHORT_HASH") ?: "N/A"
 val cdictBuildTimeUtcMillis: Long =
     propertyOrEnvironment("CDICT_BUILD_TIME_UTC_MILLIS")?.toLongOrNull()?.takeIf { it > 0 } ?: 0L
 
+// Shared request-signing secret injected by CI. Empty keeps local builds on the
+// backend's legacy IP-limited tier without embedding a placeholder credential.
+val cdictAppSignSecret: String = propertyOrEnvironment("CDICT_APP_SIGN_SECRET") ?: ""
+val cdictAppSignSecretLiteral = cdictAppSignSecret.replace("\\", "\\\\").replace("\"", "\\\"")
+
 // CI materializes the lumen-crash SDK via scripts/fetch-lumen-crash-sdk.py and writes the
 // resolved version to lumen-crash.resolved.version; gradle.properties is a local fallback.
 val lumenCrashSdkVersion: String =
@@ -64,6 +69,7 @@ android {
         buildConfigField("long", "BUILD_TIME", "${cdictBuildTimeSeconds}L")
         buildConfigField("String", "SHORT_HASH", "\"${cdictShortHash}\"")
         buildConfigField("long", "BUILD_TIME_UTC_MILLIS", "${cdictBuildTimeUtcMillis}L")
+        buildConfigField("String", "CDICT_APP_SIGN_SECRET", "\"$cdictAppSignSecretLiteral\"")
         buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "true")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

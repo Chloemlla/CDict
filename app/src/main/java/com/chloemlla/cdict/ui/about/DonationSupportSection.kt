@@ -276,7 +276,8 @@ private fun ClaimForm(
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "只上传交易号与称呼两项，不采集设备信息；同一交易号重复提交不会重复排队。" +
+                "请求内容只有交易号与称呼；随官方客户端签名附带的随机安装标识只用于短期限流分桶，" +
+                    "不读取硬件标识。同一交易号重复提交不会重复排队。" +
                     "为防误触，两次提交至少间隔 ${DonationClaimQuota.MIN_INTERVAL_MILLIS / 1000} 秒，" +
                     "一小时内最多 ${DonationClaimQuota.MAX_PER_WINDOW} 次。",
                 style = MaterialTheme.typography.labelSmall,

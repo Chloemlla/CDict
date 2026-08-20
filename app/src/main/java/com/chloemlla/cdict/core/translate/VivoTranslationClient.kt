@@ -1,6 +1,7 @@
 package com.chloemlla.cdict.core.translate
 
 import com.chloemlla.cdict.core.net.CDictBackend
+import com.chloemlla.cdict.core.net.CDictRequestSigner
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -13,7 +14,7 @@ import org.json.JSONObject
 /**
  * 在线翻译客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端完成实际翻译。
  *
- * 凭据与签名全部留在服务端，安装包内不含任何密钥；
+ * 上游凭据与嵌套签名仍全部留在服务端；客户端只带可轮换的官方请求签名，用于服务端限流分层。
  * 响应结构（retcode/code/data.translation）保持不变，因此解析逻辑与之前一致。
  */
 data class HttpResponse(val status: Int, val body: String)
@@ -67,6 +68,7 @@ private suspend fun httpPost(url: String, headers: Map<String, String>, body: St
             readTimeout = 30_000
             doOutput = true
             headers.forEach { (k, v) -> setRequestProperty(k, v) }
+            CDictRequestSigner.sign(this, "POST", url, body)
         }
         try {
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -85,6 +87,7 @@ private suspend fun httpGet(url: String): HttpResponse =
             requestMethod = "GET"
             connectTimeout = 30_000
             readTimeout = 30_000
+            CDictRequestSigner.sign(this, "GET", url)
         }
         try {
             val status = connection.responseCode

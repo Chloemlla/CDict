@@ -85,6 +85,7 @@ jobs:
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      CDICT_APP_SIGN_SECRET: ${{ secrets.CDICT_APP_SIGN_SECRET }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -168,6 +169,7 @@ jobs:
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      CDICT_APP_SIGN_SECRET: ${{ secrets.CDICT_APP_SIGN_SECRET }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

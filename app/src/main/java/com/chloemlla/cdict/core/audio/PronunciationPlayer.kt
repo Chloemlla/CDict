@@ -6,6 +6,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.chloemlla.cdict.core.net.CDictBackend
+import com.chloemlla.cdict.core.net.CDictRequestSigner
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -251,9 +252,11 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         val url = CDictBackend.BASE_URL + CDictBackend.TTS_PATH +
             "?source=${CDictBackend.SOURCE_YOUDAO}&text=${word.encodeUrl()}&type=${accent.youdaoType}"
         val conn = URL(url).openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
         conn.setRequestProperty("Accept", "audio/*, application/json")
+        CDictRequestSigner.sign(conn, "GET", url)
         try {
             if (conn.responseCode != 200) return YoudaoFetch(null, "HTTP ${conn.responseCode}")
             val type = conn.contentType

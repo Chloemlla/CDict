@@ -69,7 +69,7 @@ class DonationClient(
         baseUrl + CDictBackend.DONATE_PATH + "/" + channelId
 
     /**
-     * 提交署名申请：只上传交易号与希望展示的称呼两项，不带任何设备信息。
+     * 提交署名申请：请求体只包含交易号与希望展示的称呼；签名头里的随机安装标识仅用于限流分桶。
      *
      * 同一交易号重复提交是幂等的，后端会回 [DonationClaimOutcome.Accepted] 且 duplicated=true。
      */
@@ -173,19 +173,35 @@ private fun isSafeTransactionId(id: String): Boolean =
 class DonationHttpResponse(val status: Int, val bytes: ByteArray)
 
 private suspend fun httpGet(url: String): DonationHttpResponse = withContext(Dispatchers.IO) {
+    executeGet(url, redirectsRemaining = 3)
+}
+
+private fun executeGet(url: String, redirectsRemaining: Int): DonationHttpResponse {
     val connection = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
         connectTimeout = 15_000
         readTimeout = 15_000
+        instanceFollowRedirects = false
         setRequestProperty("Accept", "application/json, image/*")
+        CDictRequestSigner.sign(this, "GET", url)
     }
+    var redirectUrl: String? = null
+    var response: DonationHttpResponse? = null
     try {
         val status = connection.responseCode
-        val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-        DonationHttpResponse(status, stream?.use { it.readBytes() } ?: ByteArray(0))
+        val location = connection.getHeaderField("Location")
+        if (status in 300..399 && location != null && redirectsRemaining > 0) {
+            redirectUrl = URL(URL(url), location).takeIf { it.protocol == "https" }?.toString()
+        }
+        if (redirectUrl == null) {
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            response = DonationHttpResponse(status, stream?.use { it.readBytes() } ?: ByteArray(0))
+        }
     } finally {
         connection.disconnect()
     }
+    return redirectUrl?.let { executeGet(it, redirectsRemaining - 1) }
+        ?: requireNotNull(response)
 }
 
 private suspend fun httpPostJson(url: String, body: String): DonationHttpResponse = withContext(Dispatchers.IO) {
@@ -196,6 +212,7 @@ private suspend fun httpPostJson(url: String, body: String): DonationHttpRespons
         doOutput = true
         setRequestProperty("Accept", "application/json")
         setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        CDictRequestSigner.sign(this, "POST", url, body)
     }
     try {
         connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }

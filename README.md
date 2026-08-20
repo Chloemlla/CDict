@@ -50,7 +50,7 @@
 | 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
 | 🤖 **AI word annotations** | AI-generated 语感 annotations — emotion color, register, nuance, usage warnings, and speakable / auto-translated collocations. |
 | 📅 **Daily recommendations** | A fully offline daily exploration feed mixing core-new, root-expansion, and high-frequency transition words in a **5:3:2 ratio** (review stays in the Study tab). |
-| 🔒 **Privacy** | Data is entirely local; only `INTERNET` is requested, and nothing is collected or uploaded. |
+| 🔒 **Privacy** | Dictionary and study data stay local. Optional online requests carry the content they need plus a random install ID used only to distinguish request quotas; no hardware identifier is read. |
 | 🛡 **Crash reporting** | Integrated **Lumen Crash SDK** capture with an in-app Compose report screen. |
 
 ---
@@ -151,7 +151,7 @@ The app is **free forever** — nothing is paywalled, and donating **unlocks not
 - **No payment details in the APK**: the donation page fetches everything at view time from the project's own backend — `GET https://tts.chloemlla.com/api/cdict/donate` for channels, copy and the thank-you list, `GET /api/cdict/donate/<channel-id>` for the QR code. Codes, wording and the list can all change without shipping a release.
 - **The configured image URL is served verbatim**: when an image URL is set in the admin panel, `/api/cdict/donate/<channel-id>` answers `302` pointing straight at that URL — the backend never downloads, caches or rewrites the image bytes, so fetching the QR is a direct hop to that image host. Only when the URL is left blank does the backend return its bundled image. The client still ignores any absolute URL in the response body and always rebuilds the request as `CDictBackend.BASE_URL + /api/cdict/donate/<id>`, with channel ids validated against `[a-z0-9-]{1,32}`.
 - **Credited if you want to be**: put the name you'd like shown in the transfer memo; once the developer verifies it, the name is added to the server-side list and the in-app thank-you list on the donation page updates immediately. No memo means an anonymous donation.
-- **Ask to be credited from inside the app**: the form at the bottom of the donation page submits a transaction id plus the name you'd like shown (`POST /api/cdict/donate/claim`); only those two fields are uploaded, no device info is collected, and the same transaction id is idempotent. A successful submit rains 🎉 across the screen.
+- **Ask to be credited from inside the app**: the form at the bottom of the donation page submits a transaction id plus the name you'd like shown (`POST /api/cdict/donate/claim`). The request body contains only those two fields; requests also carry a random install ID used only to distinguish request quotas, without reading a hardware identifier. The same transaction id is idempotent. A successful submit rains 🎉 across the screen.
 - **Two layers of rate limiting**: the client's own `DonationClaimQuota` requires at least 30 s between submits and caps them at 5 per hour (kept only in local prefs `claim_window_start` / `claim_window_count` / `claim_last_millis`); the backend independently limits the endpoint to 10 per IP per hour.
 - **The list shows up in two places**: the bottom of the donation page and a dedicated section on the open-source notice screen render the same list as rounded chips. The forced first-launch reading of that notice never goes online for it.
 - **Prompted at most once**: `MainActivity`'s `onResume` / `onPause` accumulate foreground time with `SystemClock.elapsedRealtime()` into `AboutStore`. Once the total reaches 30 minutes *and* at least one review round has been completed, the gate is evaluated once on returning to a main tab and shows a single entry on the study summary plus one bottom tip bar. Opening it or dismissing it both stop it from ever appearing again.
@@ -194,7 +194,7 @@ CDict is a registered **partner app** of [Clash Meta for Android](https://github
 ### 🔒 Permissions & Privacy
 
 - Only **`INTERNET`** is requested, for optional online translation and pronunciation.
-- Dictionary data is entirely local; **no personal information is collected or uploaded**.
+- Dictionary and study data stay local. Optional features such as online translation, pronunciation, and the donation page send the content required to complete each request, plus a random install ID used only to distinguish request quotas; no hardware identifier is read or linked to an account or phone number.
 
 ---
 
