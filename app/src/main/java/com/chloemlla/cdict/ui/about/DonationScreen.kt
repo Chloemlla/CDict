@@ -1,6 +1,10 @@
 package com.chloemlla.cdict.ui.about
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,13 +41,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +58,7 @@ import com.chloemlla.cdict.core.net.DonationClient
 import com.chloemlla.cdict.core.net.DonationInfo
 import com.chloemlla.cdict.core.net.DonationOutcome
 import com.chloemlla.cdict.ui.ResponsiveContentBox
+import kotlinx.coroutines.launch
 
 private sealed interface DonationUiState {
     data object Loading : DonationUiState
@@ -125,12 +132,39 @@ fun DonationScreen(onBack: () -> Unit) {
 
 @Composable
 private fun DonationChannelCard(client: DonationClient, channel: DonationChannel) {
-    var image by remember(channel.id) { mutableStateOf<ImageBitmap?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var source by remember(channel.id) { mutableStateOf<Bitmap?>(null) }
     var failed by remember(channel.id) { mutableStateOf(false) }
+    var saving by remember(channel.id) { mutableStateOf(false) }
     LaunchedEffect(channel.id) {
         val bytes = client.fetchImage(channel.id)
         val bitmap = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-        if (bitmap == null) failed = true else image = bitmap.asImageBitmap()
+        if (bitmap == null) failed = true else source = bitmap
+    }
+    val save: () -> Unit = {
+        val bitmap = source
+        if (bitmap != null && !saving) {
+            saving = true
+            scope.launch {
+                val saved = GallerySaver.savePng(context, bitmap, "CDict-${channel.id}")
+                saving = false
+                Toast.makeText(
+                    context,
+                    if (saved) "已保存到相册 Pictures/CDict" else "保存失败，请检查存储空间后重试",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            save()
+        } else {
+            Toast.makeText(context, "没有存储权限，无法保存到相册", Toast.LENGTH_LONG).show()
+        }
     }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -159,10 +193,11 @@ private fun DonationChannelCard(client: DonationClient, channel: DonationChannel
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
-            val bitmap = image
+            val bitmap = source
+            val image = remember(bitmap) { bitmap?.asImageBitmap() }
             when {
-                bitmap != null -> Image(
-                    bitmap = bitmap,
+                image != null -> Image(
+                    bitmap = image,
                     contentDescription = "${channel.name}收款码",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -173,6 +208,24 @@ private fun DonationChannelCard(client: DonationClient, channel: DonationChannel
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 else -> CircularProgressIndicator()
+            }
+        }
+        if (source != null) {
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = {
+                    if (GallerySaver.hasStoragePermission(context)) {
+                        save()
+                    } else {
+                        permissionLauncher.launch(GallerySaver.STORAGE_PERMISSION)
+                    }
+                },
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Download, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(if (saving) "正在保存…" else "保存${channel.name}收款码到相册")
             }
         }
     }

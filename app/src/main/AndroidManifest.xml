@@ -2,6 +2,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 仅用于把赞赏页的收款码保存到相册：Android 9 及以下 MediaStore 只能按绝对路径写入，
+         Android 10 起改走 MediaStore RELATIVE_PATH，不再需要任何存储权限。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- 伙伴应用（Clash Meta for Android）可见性：Android 11+ 下若不声明，
          检测安装状态与读取只读 partnerStatus 都会被包可见性过滤挡住。 -->
     <queries>
