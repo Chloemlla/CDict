@@ -2,6 +2,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 伙伴应用（Clash Meta for Android）可见性：Android 11+ 下若不声明，
+         检测安装状态与读取只读 partnerStatus 都会被包可见性过滤挡住。 -->
+    <queries>
+        <package android:name="com.github.metacubex.clash" />
+        <package android:name="com.github.metacubex.clash.alpha" />
+        <package android:name="com.github.metacubex.clash.meta" />
+        <package android:name="com.github.kr328.clash" />
+    </queries>
     <application
         android:name=".CDictApplication"
         android:allowBackup="true"
@@ -12,6 +20,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CDict">
+        <!-- 向 Clash Meta for Android 声明伙伴身份：被其 PartnerApps 注册表识别后，
+             CDict 会自动纳入 VPN 访问控制，并可读取只读的 partnerStatus。 -->
+        <meta-data
+            android:name="com.github.kr328.clash.partner"
+            android:value="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true">

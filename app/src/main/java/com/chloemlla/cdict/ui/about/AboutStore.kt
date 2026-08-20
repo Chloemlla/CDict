@@ -38,4 +38,11 @@ class AboutStore(context: Context) {
         set(value) {
             prefs.edit { putBoolean("auto_check_update", value) }
         }
+
+    /** 检测到伙伴应用 Clash 时，是否让联网请求跟随其本地代理。默认开启。 */
+    var clashProxyAdapt: Boolean
+        get() = prefs.getBoolean("clash_proxy_adapt", true)
+        set(value) {
+            prefs.edit { putBoolean("clash_proxy_adapt", value) }
+        }
 }

@@ -2,6 +2,8 @@ package com.chloemlla.cdict
 
 import android.app.Application
 import android.util.Log
+import com.chloemlla.cdict.core.net.ClashPartner
+import com.chloemlla.cdict.ui.about.AboutStore
 import com.chloemlla.lumen.crash.LumenCrash
 
 /**
@@ -15,6 +17,7 @@ class CDictApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         installCrashSdk()
+        ClashPartner.start(this) { AboutStore(this).clashProxyAdapt }
     }
 
     private fun installCrashSdk() {

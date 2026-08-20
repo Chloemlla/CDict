@@ -166,9 +166,18 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 - 每日目标可配置:调高会追加新的 5:3:2 切片,调低则从队尾裁剪。
 - 进度按天持久化,跨启动保持稳定。
 
+### 🤝 伙伴应用(Clash Meta for Android)
+
+CDict 是 [Clash Meta for Android](https://github.com/MetaCubeX/ClashMetaForAndroid) 登记在册的**伙伴应用**,双向都只读:
+
+- CDict 在 `<application>` 内声明 `com.github.kr328.clash.partner` 标记,并在 `<queries>` 中列出 Clash 的包名;被其 `PartnerApps` 注册表识别后会自动纳入 VPN 访问控制。
+- CDict 只*读取* Clash 导出的 `partnerStatus`(内核是否运行 / 隧道状态 / 配置名称),不会启动、停止或切换 VPN,也不会读取订阅与密钥。
+- 当 Clash 内核在跑但**未开隧道**时,在线翻译 / 朗读 / 更新检查改走其本地混合端口 `127.0.0.1:7890`;隧道已连接或该端口连不上时立即回退直连,适配本身不会把联网功能弄坏。
+- 「关于 → 伙伴应用」可查看实时状态,也可以随时关掉跟随。
+
 ### 🔒 权限与隐私
 
-- 仅申请 **`INTERNET`** 权限,用于在线翻译与发音(vivo 合成 / 有道)。
+- 仅申请 **`INTERNET`** 权限,用于在线翻译与发音。
 - 词典数据完全本地;**不收集、不上传任何个人信息**。
 
 ---

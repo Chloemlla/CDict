@@ -166,9 +166,18 @@ The **Recommendation** tab builds a **fully offline** daily exploration feed (�
 - The daily goal is configurable; raising it appends new 5:3:2 slices and lowering it trims from the tail.
 - Progress is persisted per-day so the feed stays stable across app launches.
 
+### 🤝 Partner App (Clash Meta for Android)
+
+CDict is a registered **partner app** of [Clash Meta for Android](https://github.com/MetaCubeX/ClashMetaForAndroid) — the integration is read-only in both directions:
+
+- CDict declares the `com.github.kr328.clash.partner` meta-data flag and lists the Clash package IDs in `<queries>`, so Clash's `PartnerApps` registry recognizes it and keeps CDict inside VPN access control automatically.
+- CDict only *reads* the exported `partnerStatus` provider (core running / tunnel state / profile name). It never starts, stops, or toggles the VPN, and never reads subscriptions or keys.
+- When the Clash core is running **outside** the tunnel, online translation / pronunciation / update checks are routed through its local mixed port `127.0.0.1:7890`. With the tunnel connected — or if that port is unreachable — requests fall back to direct, so networking can never be bricked by the adaptation.
+- *About → 伙伴应用* shows the live status and lets you turn the adaptation off.
+
 ### 🔒 Permissions & Privacy
 
-- Only **`INTERNET`** is requested, for optional online translation and pronunciation (vivo / Youdao).
+- Only **`INTERNET`** is requested, for optional online translation and pronunciation.
 - Dictionary data is entirely local; **no personal information is collected or uploaded**.
 
 ---

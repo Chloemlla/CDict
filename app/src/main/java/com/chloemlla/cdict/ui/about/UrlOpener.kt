@@ -21,4 +21,18 @@ object UrlOpener {
         clipboard.setPrimaryClip(ClipData.newPlainText(null, text))
         Toast.makeText(context, toastText ?: "已复制", Toast.LENGTH_SHORT).show()
     }
+
+    /** 打开已安装的伙伴应用；没有启动入口或被包可见性挡住时给出提示。 */
+    fun openApp(context: Context, packageName: String, appLabel: String) {
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+        if (intent == null) {
+            Toast.makeText(context, "无法打开 $appLabel", Toast.LENGTH_LONG).show()
+            return
+        }
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "无法打开 $appLabel", Toast.LENGTH_LONG).show()
+        }
+    }
 }

@@ -58,6 +58,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +82,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.PronunciationDiagnostics
+import com.chloemlla.cdict.core.net.ClashPartner
+import com.chloemlla.cdict.core.net.summary
 import com.chloemlla.cdict.ui.ResponsiveContentBox
 import kotlinx.coroutines.launch
 
@@ -236,6 +239,13 @@ fun AboutScreen(
     val aboutStore = remember { AboutStore(context) }
     var youdaoFirst by remember { mutableStateOf(aboutStore.youdaoFirst) }
     var autoCheckUpdate by remember { mutableStateOf(aboutStore.autoCheckUpdate) }
+    var clashAdapt by remember { mutableStateOf(aboutStore.clashProxyAdapt) }
+    val clashState by ClashPartner.state.collectAsState()
+    // 进入关于页时重新拉一次伙伴状态：用户可能刚在 Clash 里启停内核。
+    LaunchedEffect(Unit) { ClashPartner.refresh() }
+    val openClashApp: (() -> Unit)? = clashState.installedPackage?.let { pkg ->
+        ({ UrlOpener.openApp(context, pkg, "Clash Meta for Android") })
+    }
     val controller = LocalAboutController.current
     val commitUrl = "${AboutData.sourceUrl}/commit/${BuildInfo.commitHash}"
     // 开发构建没有真实提交哈希，此时整行不可点击，避免打开无效链接。
@@ -401,6 +411,29 @@ fun AboutScreen(
                             null -> "暂无回退记录：先在词详情页点喇叭朗读一次"
                             else -> "在线合成: ${d.vivoReason ?: "—"} · 有道: ${d.youdaoReason}"
                         },
+                    )
+
+                    AboutSectionLabel("伙伴应用")
+                    AboutSwitchRow(
+                        title = "跟随 Clash 代理",
+                        subtitle = if (clashAdapt) {
+                            "Clash 内核在跑且未开隧道时，在线翻译 / 朗读 / 更新检查改走其本地代理"
+                        } else {
+                            "已关闭，联网请求始终直连"
+                        },
+                        checked = clashAdapt,
+                        stateText = if (clashAdapt) "跟随 Clash 代理已开启" else "跟随 Clash 代理已关闭",
+                        onCheckedChange = { checked ->
+                            clashAdapt = checked
+                            aboutStore.clashProxyAdapt = checked
+                            ClashPartner.setAdaptEnabled(checked)
+                        },
+                    )
+                    HorizontalDivider()
+                    AboutRow(
+                        title = "Clash Meta for Android",
+                        subtitle = clashState.summary(),
+                        onClick = openClashApp,
                     )
 
                     AboutSectionLabel("更多信息")
