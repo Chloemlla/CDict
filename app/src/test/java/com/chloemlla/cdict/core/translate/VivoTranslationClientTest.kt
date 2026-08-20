@@ -1,5 +1,6 @@
 package com.chloemlla.cdict.core.translate
 
+import com.chloemlla.cdict.core.net.CDictBackend
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,33 +36,15 @@ class VivoTranslationClientTest {
     }
 
     @Test
-    fun `signature matches translate js vector`() {
-        val signature = vivoSignature(
-            appKey = "eORMflYNZwgqlvua",
-            appId = "9023957766",
-            path = "/translation/query",
-            timestamp = "1755200000",
-            nonce = "a1b2c3d4e5",
-        )
-        assertEquals("2F8aNDYFE5s3iybNvChm/GrlaDNMz3T/BkYIXHOSDMo=", signature)
-    }
-
-    @Test
-    fun `build form contains expected fields`() {
+    fun `build form only carries business fields`() {
         val form = buildTranslationForm(
             texts = listOf("你好", "世界"),
             direction = TranslationDirection.ZH_TO_EN,
-            appId = "9023957766",
-            userId = "com.vivo.translator",
         )
         assertEquals("你好\n世界", form["text"])
         assertEquals("zh-CHS", form["from"])
         assertEquals("en", form["to"])
-        assertEquals("9023957766", form["appId"])
-        assertEquals("com.vivo.translator", form["app"])
-        assertEquals("com.vivo.translator", form["user_id"])
-        assertEquals("00000000000000", form["em"])
-        assertTrue(form.containsKey("requestId"))
+        assertEquals(setOf("text", "from", "to"), form.keys)
         assertEquals(TranslationDirection.ZH_TO_EN.label, "中文→英文")
     }
 
@@ -150,7 +133,18 @@ class VivoTranslationClientTest {
     }
 
     @Test
-    fun `translate posts encoded form and parses response`() = runTest {
+    fun `non 2xx without non-zero code is a failure not an empty success`() {
+        // 网关/限流的错误体形如 {"error":…}，若只看 code 会被当成"成功但无译文"而静默显示空结果。
+        val waf = parseTranslationResponse(HttpResponse(400, """{"error":"请求内容包含非法字符"}"""))
+        assertTrue((waf as TranslationOutcome.Failure).message.contains("请求内容包含非法字符"))
+        val limited = parseTranslationResponse(HttpResponse(429, """{"message":"请求过于频繁"}"""))
+        assertTrue((limited as TranslationOutcome.Failure).message.contains("429"))
+        val html = parseTranslationResponse(HttpResponse(502, "<html>Bad Gateway</html>"))
+        assertTrue((html as TranslationOutcome.Failure).message.contains("502"))
+    }
+
+    @Test
+    fun `translate posts encoded form to own backend only`() = runTest {
         var capturedUrl: String? = null
         var capturedHeaders: Map<String, String>? = null
         var capturedBody: String? = null
@@ -169,38 +163,16 @@ class VivoTranslationClientTest {
             TranslationRequest(listOf("hello", "world"), TranslationDirection.EN_TO_ZH)
         ) as TranslationOutcome.Success
         assertEquals(listOf("你好", "世界"), outcome.result.translations)
-        assertEquals("https://vivotrans.vivo.com/translation/query", capturedUrl)
+        assertEquals(CDictBackend.BASE_URL + CDictBackend.TRANSLATE_PATH, capturedUrl)
+        assertTrue(capturedUrl!!.startsWith("https://tts.chloemlla.com/"))
         assertTrue(capturedHeaders!!.containsKey("Content-Type"))
         val body = capturedBody!!
         assertTrue(body.contains("text=hello%0Aworld"))
         assertTrue(body.contains("from=en"))
         assertTrue(body.contains("to=zh-CHS"))
-        assertTrue(body.contains("appId=9023957766"))
-        assertTrue(body.contains("app=com.vivo.translator"))
-        assertTrue(capturedHeaders.containsKey("X-AI-GATEWAY-APP-ID").not())
-    }
-
-    @Test
-    fun `signed request adds X-AI-GATEWAY headers`() = runTest {
-        var capturedHeaders: Map<String, String>? = null
-        val client = VivoTranslationClient(
-            sign = true,
-            transport = { _, headers, _ ->
-                capturedHeaders = headers
-                HttpResponse(200, """{"retcode":0,"code":0,"data":{"translation":"ok"}}""")
-            },
-        )
-        val outcome = client.translate(TranslationRequest(listOf("hi"), TranslationDirection.AUTO_TO_ZH))
-        assertTrue(outcome is TranslationOutcome.Success)
-        val headers = capturedHeaders!!
-        assertEquals("9023957766", headers["X-AI-GATEWAY-APP-ID"])
-        assertTrue(headers.containsKey("X-AI-GATEWAY-TIMESTAMP"))
-        assertTrue(headers.containsKey("X-AI-GATEWAY-NONCE"))
-        assertEquals(
-            "x-ai-gateway-app-id;x-ai-gateway-timestamp;x-ai-gateway-nonce",
-            headers["X-AI-GATEWAY-SIGNED-HEADERS"],
-        )
-        assertTrue(headers["X-AI-GATEWAY-SIGNATURE"].isNullOrEmpty().not())
+        assertFalse(body.contains("appId"))
+        assertFalse(body.contains("user_id"))
+        capturedHeaders!!.keys.forEach { assertFalse(it.startsWith("X-AI-GATEWAY")) }
     }
 
     @Test
@@ -215,7 +187,7 @@ class VivoTranslationClientTest {
     @Test
     fun `fetchLanguages parses top-level string array shape`() = runTest {
         val client = VivoTranslationClient(getTransport = { url ->
-            assertTrue(url.startsWith("https://vivotrans.vivo.com/translation/lang/list?"))
+            assertEquals(CDictBackend.BASE_URL + CDictBackend.LANGUAGES_PATH, url)
             HttpResponse(200, """["zh-CHS","EN","ja","ko"]""")
         })
         val outcome = client.fetchLanguages() as LanguageListOutcome.Success

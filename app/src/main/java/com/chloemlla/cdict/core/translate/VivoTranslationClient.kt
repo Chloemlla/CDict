@@ -1,12 +1,9 @@
 package com.chloemlla.cdict.core.translate
 
+import com.chloemlla.cdict.core.net.CDictBackend
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Base64
-import java.util.UUID
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,40 +11,25 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * vivo 翻译机文本翻译网关客户端（逆向，对应 translate.js）。
+ * 在线翻译客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端代理到上游翻译网关。
  *
- * V2 无签名直连 https://vivotrans.vivo.com/translation/query 为默认路径；
- * V3 云校验（translate.vivo.com + X-AI-GATEWAY 签名）仅当 [sign] 为 true 时使用，
- * 本 appId 未开通云校验能力，默认关闭。
+ * 上游地址、appId/appKey 与网关签名全部留在服务端，安装包内不含任何第三方凭据；
+ * 服务端沿用上游的响应结构（retcode/code/data.translation），因此解析逻辑与之前一致。
  */
 data class HttpResponse(val status: Int, val body: String)
 
 class VivoTranslationClient(
-    private val serverUrl: String = "https://vivotrans.vivo.com",
-    private val appId: String = "9023957766",
-    private val appKey: String = "eORMflYNZwgqlvua",
-    private val userId: String = "com.vivo.translator",
-    private val sign: Boolean = false,
+    private val serverUrl: String = CDictBackend.BASE_URL,
     private val transport: suspend (url: String, headers: Map<String, String>, body: String) -> HttpResponse = ::httpPost,
     private val getTransport: suspend (url: String) -> HttpResponse = ::httpGet,
 ) {
     suspend fun translate(request: TranslationRequest): TranslationOutcome {
-        val body = encodeForm(buildTranslationForm(request.texts, request.direction, appId, userId))
-        val timestamp = (System.currentTimeMillis() / 1000).toString()
-        val headers = mutableMapOf(
+        val body = encodeForm(buildTranslationForm(request.texts, request.direction))
+        val headers = mapOf(
             "Content-Type" to "application/x-www-form-urlencoded",
-            "User-Agent" to "okhttp/4.9.1",
+            "Accept" to "application/json",
             "Content-Length" to body.toByteArray(Charsets.UTF_8).size.toString(),
         )
-        if (sign) {
-            val nonce = vivoNonce()
-            headers["X-AI-GATEWAY-APP-ID"] = appId
-            headers["X-AI-GATEWAY-TIMESTAMP"] = timestamp
-            headers["X-AI-GATEWAY-NONCE"] = nonce
-            headers["X-AI-GATEWAY-SIGNED-HEADERS"] =
-                "x-ai-gateway-app-id;x-ai-gateway-timestamp;x-ai-gateway-nonce"
-            headers["X-AI-GATEWAY-SIGNATURE"] = vivoSignature(appKey, appId, PATH, timestamp, nonce)
-        }
         val response = try {
             transport(serverUrl + PATH, headers, body)
         } catch (e: CancellationException) {
@@ -58,10 +40,9 @@ class VivoTranslationClient(
         return parseTranslationResponse(response)
     }
 
-    /** GET 语言列表（文档 §4）。设备参数走查询串；异常→Failure，非 200→Failure，结构未知时稳健解析兜底为空集 Success。 */
+    /** GET 语言列表：服务端透传上游支持的语言集合；异常→Failure，非 200→Failure，结构未知时兜底为空集 Success。 */
     suspend fun fetchLanguages(): LanguageListOutcome {
-        val query = encodeForm(deviceParams())
-        val url = serverUrl + LANG_LIST_PATH + "?" + query
+        val url = serverUrl + LANG_LIST_PATH
         val response = try {
             getTransport(url)
         } catch (e: CancellationException) {
@@ -73,8 +54,8 @@ class VivoTranslationClient(
     }
 
     companion object {
-        private const val PATH = "/translation/query"
-        private const val LANG_LIST_PATH = "/translation/lang/list"
+        private const val PATH = CDictBackend.TRANSLATE_PATH
+        private const val LANG_LIST_PATH = CDictBackend.LANGUAGES_PATH
     }
 }
 
@@ -162,70 +143,28 @@ internal fun parseLanguageListResponse(resp: HttpResponse): LanguageListOutcome 
 /** 与 java.net.URLEncoder 语义一致：空格 -> '+', 安全字符 A-Za-z0-9.-*_ 不编码，其余 UTF-8 大写百分号编码。 */
 internal fun javaUrlEncode(s: String): String = URLEncoder.encode(s, Charsets.UTF_8.name())
 
-/** 10 位十六进制随机 nonce，对应 unifiedauth 的 b.d(10)。 */
-internal fun vivoNonce(): String = buildString {
-    repeat(10) { append(kotlin.random.Random.nextInt(16).toString(16)) }
-}
-
-/** X-AI-GATEWAY 签名：Base64(HmacSHA256(appKey, canonical 六行))，canonical 的 query 为空（参数在表单体）。 */
-internal fun vivoSignature(appKey: String, appId: String, path: String, timestamp: String, nonce: String): String {
-    val canonical = listOf(
-        "POST",
-        path,
-        "",
-        appId,
-        timestamp,
-        "x-ai-gateway-app-id:$appId\nx-ai-gateway-timestamp:$timestamp\nx-ai-gateway-nonce:$nonce",
-    ).joinToString("\n")
-    val mac = Mac.getInstance("HmacSHA256")
-    mac.init(SecretKeySpec(appKey.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-    return Base64.getEncoder().encodeToString(mac.doFinal(canonical.toByteArray(Charsets.UTF_8)))
-}
-
+/** 请求体只保留业务字段：原文、源语言、目标语言；appId/设备参数/签名由服务端补全。 */
 internal fun buildTranslationForm(
     texts: List<String>,
     direction: TranslationDirection,
-    appId: String,
-    userId: String,
-): LinkedHashMap<String, String> {
-    val fields = linkedMapOf(
-        "text" to texts.joinToString("\n"),
-        "from" to direction.from,
-        "to" to direction.to,
-        "requestId" to UUID.randomUUID().toString(),
-        "appId" to appId,
-        "app" to "com.vivo.translator",
-        "user_id" to userId,
-    )
-    fields.putAll(deviceParams())
-    return fields
-}
+): LinkedHashMap<String, String> = linkedMapOf(
+    "text" to texts.joinToString("\n"),
+    "from" to direction.from,
+    "to" to direction.to,
+)
 
 internal fun encodeForm(fields: Map<String, String>): String =
     fields.entries.joinToString("&") { (k, v) -> "${javaUrlEncode(k)}=${javaUrlEncode(v)}" }
 
-/** 设备/SDK 参数：服务器主要校验 appId/签名，device 参数值不强制匹配。 */
-private fun deviceParams(): Map<String, String> = linkedMapOf(
-    "em" to "00000000000000",
-    "model" to "V2309A",
-    "product" to "PD2243",
-    "deviceType" to "mobile",
-    "elapsedtime" to "0",
-    "av" to "1",
-    "an" to "1.0.0",
-    "cs" to "0",
-    "sysVer" to "14",
-    "appVersion" to "1",
-    "appVer" to "1.0.0",
-    "appPkgName" to "com.vivo.translator",
-    "netType" to "2",
-    "screensize" to "1080x2400",
-    "oaid" to "",
-    "vaid" to "00000000000000",
-)
-
 internal fun parseTranslationResponse(resp: HttpResponse): TranslationOutcome {
-    if (resp.status == 401) return TranslationOutcome.Failure("HTTP 401 云校验失败（签名无效）")
+    // 非 2xx 必须先拦：网关或限流的错误体只有 {"error":…} 而没有非零 code，
+    // 落到下面的 code == 0 分支会被当成"成功但无译文"，界面静默显示空结果。
+    if (resp.status !in 200..299) {
+        val detail = runCatching { JSONObject(resp.body) }.getOrNull()
+            ?.let { j -> listOf("error", "message", "msg").firstNotNullOfOrNull { k -> j.optString(k).takeIf { it.isNotEmpty() } } }
+            ?: resp.body.take(200)
+        return TranslationOutcome.Failure("HTTP ${resp.status} $detail".trim())
+    }
     val json = try {
         JSONObject(resp.body)
     } catch (e: Exception) {

@@ -45,8 +45,8 @@
 | 🗂 **Offline-first** | 49,213 words + 高中短语手札 (1,262 phrase entries, 11 categories) across 7 IELTS frequency groups, bundled into the APK and copied into a Room database on first launch. |
 | 🔍 **Smart search** | English full-text search (SQLite FTS5) over word / translation / definition, Chinese substring search, plus **Levenshtein typo suggestions** ("Did you mean …"). |
 | 🏷 **Curriculum tags** | Filter the dictionary by curriculum label (e.g. 高中 3500 词, 高中短语) with a dropdown menu; tagged entries show pills in word detail. |
-| 🔊 **Pronunciation** | Three-tier fallback (Youdao → vivo TTS → system TTS by default; selectable in About) with on-disk audio caching — no audio files shipped. |
-| 🌐 **Online translation** | Built-in translation engine backed by the vivo gateway, with a **three-layer cache**. |
+| 🔊 **Pronunciation** | Three-tier fallback (dictionary audio → online synthesis → system TTS by default; selectable in About) with on-disk audio caching — no audio files shipped. |
+| 🌐 **Online translation** | Built-in translation engine served by the project's own backend, with a **three-layer cache**. |
 | 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
 | 🤖 **AI word annotations** | AI-generated 语感 annotations — emotion color, register, nuance, usage warnings, and speakable / auto-translated collocations. |
 | 📅 **Daily recommendations** | A fully offline daily exploration feed mixing core-new, root-expansion, and high-frequency transition words in a **5:3:2 ratio** (review stays in the Study tab). |
@@ -102,21 +102,21 @@ Tapping an entry opens a detail page showing:
 
 ### 🔊 Pronunciation
 
-The detail page provides **UK / US** pronunciation buttons. Speech uses **Youdao static pronunciation** by default and falls back through three tiers — no audio files are packaged. The preferred online source can be changed in **About → Pronunciation priority**:
+The detail page provides **UK / US** pronunciation buttons. Speech uses **dictionary static audio** by default and falls back through three tiers — no audio files are packaged. The preferred online source can be changed in **About → Pronunciation priority**:
 
 ```
-Youdao static pronunciation (dict.youdao.com/dictvoice; word / sentence)
-  → vivo TTS synthesis (POST https://vivotrans.vivo.com.cn/fy/tts)
+Dictionary static audio (GET https://tts.chloemlla.com/api/cdict/tts?source=youdao)
+  → Online speech synthesis (GET https://tts.chloemlla.com/api/cdict/tts?source=engine)
   → Android system TextToSpeech
 ```
 
-Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The About-page switch can reverse the two online tiers when vivo TTS is preferred. Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
+Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The About-page switch can reverse the two online tiers when online synthesis is preferred. Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
 
-`VivoTtsClient` (reverse-engineered from `com.vivo.translator`):
+**Both online tiers only ever talk to this project's own backend** (`CDictBackend`, `https://tts.chloemlla.com`), which proxies to the upstream services. The APK ships **no third-party credentials**: upstream URLs, `appId` / `appKey` and the nested signature all live server-side.
 
-- Request body is **JSON** (not a form), with `auf=audio/L16;rate=16000`. Responses may be MP3 or container-less PCM; the format is detected before playback and PCM is wrapped in a WAV header. A `{"errorResult":{...}}` response is treated as an explicit error, not audio.
-- **Nested signature** `MD5(HMAC-SHA256(appKey, sortedParams) + "&key=" + appKey)` reverse-engineered from `libspeech_sec.so`; headers carry `product/model/sysVer/appVer` client fingerprints.
-- Uses credentials **independent from the translation engine**: `appId=1336541186` / `appKey=9925f42b…`; UK accent `langType=en-GBR`, US accent `en-USA`.
+- `VivoTtsClient` issues a plain `GET /api/cdict/tts?source=engine&text=…&langType=…` and accepts an `audio/*` response; a JSON body is treated as an explicit error, not audio.
+- Responses may be MP3 or container-less PCM (`audio/L16; rate=16000`); the format is detected before playback and PCM is wrapped in a WAV header.
+- UK accent maps to `langType=en-GBR`, US accent to `en-USA`; the dictionary tier uses `type=1` (UK) / `type=2` (US).
 
 **Audio caching.** Pronounced audio is cached on disk so repeated lookups are instant and offline-friendly:
 
@@ -124,22 +124,21 @@ Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) aut
 - A **50 MB LRU** budget evicts least-recently-used files.
 - The detail page **pre-fetches** pronunciation ahead of use.
 
-> ⚠️ **Disclaimer:** The vivo TTS endpoint is a private interface; `appId` / `appKey` are client-side constants and may stop working or change at any time. Pronunciation is a convenience feature, not a core dependency — the dictionary itself is fully offline.
+> ⚠️ **Disclaimer:** Online pronunciation depends on the project's backend and the upstream services behind it, either of which may stop working or change at any time. Pronunciation is a convenience feature, not a core dependency — the dictionary itself is fully offline.
 
 ### 🌐 Online Translation
 
 A **Translation** tab runs an embedded online translation engine:
 
-- Backed by the **vivo translation gateway** (reverse-engineered from `com.vivo.translator` 4.5.9.0, same source as `fanyiji-rev/translate.js`).
-- **Keyless direct access**: V2 signature-free channel `POST https://vivotrans.vivo.com/translation/query`.
-- **Language directions**: auto→Chinese, auto→English, Chinese→English, English→Chinese (full vivo direction set).
+- Served by the project's **own backend**: `POST https://tts.chloemlla.com/api/cdict/translate` (language list: `GET /api/cdict/languages`). The request body carries only `text` / `from` / `to`; the backend adds the upstream credentials, device parameters and signature.
+- **Language directions**: auto→Chinese, auto→English, Chinese→English, English→Chinese (21 directions in total).
 - **Batch translation**: multiple lines are merged on `\n` into a single request and split back line-by-line.
 - **Response extras**: echoes the source / target language and phonetics.
-- **Phrase speech**: English content can be read aloud (vivo TTS) alongside the Chinese translation, with a read-aloud icon next to the result.
+- **Phrase speech**: English content can be read aloud (online synthesis) alongside the Chinese translation, with a read-aloud icon next to the result.
 
 **Three-layer cache.** Translation results are served from a layered cache (memory LRU → Room-persisted disk → network) with a custom in-memory `MemoryLruCache<string, TranslationResult>` in addition to a Room-backed `RoomTranslationCache`, so repeated translations are instant and offline-after-first-use.
 
-> ⚠️ **Disclaimer:** The gateway is a private interface; its credentials are client-side constants and may change. Translation is a convenience feature, not a hard dependency — the dictionary core is fully offline.
+> ⚠️ **Disclaimer:** Translation depends on the project's backend and the upstream gateway behind it, either of which may change. Translation is a convenience feature, not a hard dependency — the dictionary core is fully offline.
 
 ### 🧠 Study Mode (spaced repetition)
 
@@ -204,14 +203,15 @@ A single `:app` module, organized by responsibility:
 com.chloemlla.cdict
 ├── core
 │   ├── data        # Room: Entities / DAO / Database / Repository
-│   ├── audio       # PronunciationPlayer + VivoTtsClient (vivo → Youdao → TTS fallback)
+│   ├── audio       # PronunciationPlayer + VivoTtsClient (dictionary audio → online synthesis → system TTS)
+│   ├── net         # CDictBackend: the single backend host every network call goes through
 │   ├── search      # SearchEngine: relevance ranking + Levenshtein typo suggestions
-│   └── translate   # vivo translation-gateway client + models (embedded translation engine)
+│   └── translate   # Own-backend translation client + models (embedded translation engine)
 └── ui             # Compose: CdictApp (4-tab nav) / Study* / Dictionary* / Translate* / Recommendation*
 ```
 
 - The data layer loads the bundled dictionary from a Brotli-compressed asset (`dict.db.br`), decompresses it on first launch, and opens it with Room. A loading/error state is exposed so a missing asset never silently degrades to fake data.
-- The translation engine `core/translate` faithfully reproduces `translate.js`'s form encoding, batch splitting, and (optional) X-AI-GATEWAY signature, with unit tests.
+- The translation engine `core/translate` handles form encoding and batch splitting and posts only `text` / `from` / `to` to the project's own backend, with unit tests asserting that no upstream credential ever leaves the client.
 - The search layer `core/search` re-ranks FTS results and provides Levenshtein "did you mean" suggestions.
 
 ---

@@ -1,54 +1,93 @@
 package com.chloemlla.cdict.core.audio
 
+import com.chloemlla.cdict.core.net.CDictBackend
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VivoTtsClientTest {
 
     @Test
-    fun `signature is 32 lowercase hex md5 of hmac sha256`() {
-        val hmac = VivoTtsClient.hmacSha256Hex(
-            key = "9925f42b456c96de8e424ddc7c06d5d9",
-            data = "appId=1336541186&deviceid=00000000000000&nonce_str=AbCdEf1234567890&taskid=t1&text=dGVzdA==",
+    fun `request url targets own backend engine endpoint only`() {
+        val url = VivoTtsClient().buildUrl("hello world", "en-USA")
+        assertEquals(
+            CDictBackend.BASE_URL + CDictBackend.TTS_PATH +
+                "?source=engine&text=hello+world&langType=en-USA",
+            url,
         )
-        assertEquals(64, hmac.length)
-        val sign = VivoTtsClient.md5Hex("$hmac&key=9925f42b456c96de8e424ddc7c06d5d9")
-        assertEquals(32, sign.length)
-        assertTrue(sign.all { it in '0'..'9' || it in 'a'..'f' })
+        assertTrue(url.startsWith("https://tts.chloemlla.com/"))
     }
 
     @Test
-    fun `signature matches offline oracle vector`() {
-        val hmac = VivoTtsClient.hmacSha256Hex(
-            key = "9925f42b456c96de8e424ddc7c06d5d9",
-            data = "appId=1336541186&deviceid=00000000000000&nonce_str=AbCdEf1234567890&taskid=t1&text=dGVzdA==",
-        )
-        assertEquals("1547db4e608d4e732c7574e1b839a421f023b29ac48c51aa288e472bc820ac53", hmac)
-        val sign = VivoTtsClient.md5Hex("$hmac&key=9925f42b456c96de8e424ddc7c06d5d9")
-        assertEquals("891f06f2fcaf97b386feff7bf4f870bb", sign)
+    fun `request url carries no upstream credential or signature`() {
+        val url = VivoTtsClient().buildUrl("测试", "zh-CHS")
+        assertTrue(url.contains("text=%E6%B5%8B%E8%AF%95"))
+        listOf("appId", "appKey", "sign", "nonce_str", "taskid", "deviceid").forEach {
+            assertFalse("credential leaked: $it", url.contains(it, ignoreCase = true))
+        }
     }
 
     @Test
-    fun `byte array formats to lowercase hex`() {
-        val bytes = byteArrayOf(0x00, 0x0f, 0x10.toByte(), 0xff.toByte(), 1)
-        assertEquals("000f10ff01", bytes.toHex())
-    }
-
-    @Test
-    fun `error result json is detected with code and message`() {
+    fun `upstream error result json is surfaced with code and message`() {
         val client = VivoTtsClient()
         val body = """{"errorResult":{"errorCode":10101,"errorMsg":"文本过长，无法合成"}}"""
-        val err = client.parseErrorResult(body.toByteArray(Charsets.UTF_8))
-        assertEquals("在线合成拒绝 errorCode=10101 errorMsg=文本过长，无法合成", err)
+        assertEquals(
+            "在线合成拒绝 errorCode=10101 errorMsg=文本过长，无法合成",
+            client.parseErrorResult(body.toByteArray(Charsets.UTF_8)),
+        )
+    }
+
+    @Test
+    fun `backend failure json is surfaced with its message`() {
+        val client = VivoTtsClient()
+        val body = """{"success":false,"code":502,"error":"上游语音合成请求失败","message":"上游语音合成请求失败"}"""
+        assertEquals("在线合成拒绝 上游语音合成请求失败", client.parseErrorResult(body.toByteArray(Charsets.UTF_8)))
     }
 
     @Test
     fun `audio response is not mistaken for error`() {
         val client = VivoTtsClient()
-        assertEquals(null, client.parseErrorResult(
-            byteArrayOf(0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00),
-        ))
+        assertEquals(
+            null,
+            client.parseErrorResult(byteArrayOf(0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00)),
+        )
+    }
+
+    @Test
+    fun `audio content type yields audio result`() = runTest {
+        val client = VivoTtsClient(
+            transport = { TtsHttpResponse(200, byteArrayOf(1, 2, 3), "audio/L16; rate=16000") },
+        )
+        val result = client.synthesize("hi") as VivoTtsResult.Audio
+        assertEquals(3, result.bytes.size)
+    }
+
+    @Test
+    fun `json content type on 200 yields error result`() = runTest {
+        val client = VivoTtsClient(
+            transport = {
+                TtsHttpResponse(
+                    200,
+                    """{"error":"缺少待合成文本"}""".toByteArray(Charsets.UTF_8),
+                    "application/json",
+                )
+            },
+        )
+        assertEquals("在线合成拒绝 缺少待合成文本", (client.synthesize("hi") as VivoTtsResult.Error).message)
+    }
+
+    @Test
+    fun `non 2xx status yields error result`() = runTest {
+        val client = VivoTtsClient(transport = { TtsHttpResponse(429, ByteArray(0), null) })
+        assertEquals("HTTP 429", (client.synthesize("hi") as VivoTtsResult.Error).message)
+    }
+
+    @Test
+    fun `transport exception yields network error result`() = runTest {
+        val client = VivoTtsClient(transport = { throw RuntimeException("boom") })
+        assertTrue((client.synthesize("hi") as VivoTtsResult.Error).message.contains("网络请求失败"))
     }
 
     @Test
@@ -57,13 +96,5 @@ class VivoTtsClientTest {
         assertEquals("en-USA", Accent.US.ttsLangType)
         assertEquals(1, Accent.UK.youdaoType)
         assertEquals(2, Accent.US.youdaoType)
-    }
-
-    @Test
-    fun `default device id is a canonical decimal without leading zeros`() {
-        // vivo 把 deviceid 当数值解析，冗余前导零会被拒(HTTP 400 "Leading zeroes not allowed")。
-        // "0" 合法，但 "0000"、"0123" 这类非法。规范十进制往返需等于自身。
-        val id = VivoTtsClient.DEFAULT_DEVICE_ID
-        assertEquals(id, id.toLongOrNull()?.toString())
     }
 }

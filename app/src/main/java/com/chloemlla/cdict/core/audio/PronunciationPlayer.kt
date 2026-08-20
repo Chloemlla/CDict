@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.chloemlla.cdict.core.net.CDictBackend
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -33,7 +34,8 @@ interface PronunciationSpeaker {
 }
 
 /**
- * 发音播放器，三级回退：按设置以有道或 vivo TTS 为首选 → 另一在线来源 → 系统 TextToSpeech。
+ * 发音播放器，三级回退：按设置以有道或在线合成引擎为首选 → 另一在线来源 → 系统 TextToSpeech。
+ * 两路在线来源都只请求自有后端（[CDictBackend]），上游地址与凭据不在客户端。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  *
  * 并发安全：每次 [play] 都会让之前的播放流水线失效（generation 递增 + 取消旧 job），
@@ -244,13 +246,14 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** 有道下载。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
+    /** 有道音频（经自有后端代理）。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
     private fun fetchYoudaoDetailed(word: String, accent: Accent): YoudaoFetch = try {
-        val conn = URL("https://dict.youdao.com/dictvoice?audio=${word.encodeUrl()}&type=${accent.youdaoType}")
-            .openConnection() as HttpURLConnection
+        val url = CDictBackend.BASE_URL + CDictBackend.TTS_PATH +
+            "?source=${CDictBackend.SOURCE_YOUDAO}&text=${word.encodeUrl()}&type=${accent.youdaoType}"
+        val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 8000
         conn.readTimeout = 8000
-        conn.setRequestProperty("User-Agent", USER_AGENT)
+        conn.setRequestProperty("Accept", "audio/*, application/json")
         try {
             if (conn.responseCode != 200) return YoudaoFetch(null, "HTTP ${conn.responseCode}")
             val type = conn.contentType
@@ -398,8 +401,6 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
 
     companion object {
         private const val TAG = "CDictAudio"
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
         private const val SOURCE_VIVO = "vivo"
         private const val SOURCE_YOUDAO = "youdao"
     }

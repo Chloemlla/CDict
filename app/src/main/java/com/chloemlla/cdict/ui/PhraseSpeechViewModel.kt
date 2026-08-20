@@ -25,7 +25,7 @@ sealed interface PhraseUiState {
 
 /**
  * 词详情页英文内容的“朗读 + 中文翻译”调度器：按英文片段缓存翻译状态(加载中/完成/失败)，
- * 复用 vivo 翻译网关做英文→中文，用 [PronunciationSpeaker] 播放朗读。构造 VM 不触发任何网络。
+ * 复用在线翻译做英文→中文，用 [PronunciationSpeaker] 播放朗读。构造 VM 不触发任何网络。
  */
 class PhraseSpeechViewModel(
     private val client: VivoTranslationClient = VivoTranslationClient(),
