@@ -181,7 +181,11 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        if (BuildInfo.updateCheckEnabled && !BuildInfo.isDevBuild && !autoCheckStarted) {
+        if (BuildInfo.updateCheckEnabled &&
+            !BuildInfo.isDevBuild &&
+            !autoCheckStarted &&
+            store.autoCheckUpdate
+        ) {
             triggerUpdateCheck(manual = false)
         }
     }

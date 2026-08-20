@@ -165,6 +165,7 @@ fun AboutScreen(
     val context = LocalContext.current
     val aboutStore = remember { AboutStore(context) }
     var youdaoFirst by remember { mutableStateOf(aboutStore.youdaoFirst) }
+    var autoCheckUpdate by remember { mutableStateOf(aboutStore.autoCheckUpdate) }
     val controller = LocalAboutController.current
     val commitUrl = "${AboutData.sourceUrl}/commit/${BuildInfo.commitHash}"
     Scaffold(
@@ -288,6 +289,28 @@ fun AboutScreen(
                     title = "本次更新说明",
                     subtitle = "基于 Commit Hash / Build Time 的本构建有意变更",
                     onClick = { controller.push(AboutScreenRoute.WhatsNew) },
+                )
+                HorizontalDivider()
+                AboutRow(
+                    title = "自动检查软件更新",
+                    subtitle = when {
+                        !updateCheckEnabled -> "当前版本不支持检查更新"
+                        autoCheckUpdate -> "启动应用时自动检查新版本，发现更新才提示"
+                        else -> "已关闭，仅在手动点击「检查更新」时检查"
+                    },
+                    trailing = {
+                        Switch(
+                            checked = autoCheckUpdate,
+                            enabled = updateCheckEnabled,
+                            onCheckedChange = { checked ->
+                                autoCheckUpdate = checked
+                                aboutStore.autoCheckUpdate = checked
+                            },
+                            modifier = Modifier.semantics {
+                                stateDescription = if (autoCheckUpdate) "自动检查更新已开启" else "自动检查更新已关闭"
+                            },
+                        )
+                    },
                 )
                 HorizontalDivider()
                 Button(

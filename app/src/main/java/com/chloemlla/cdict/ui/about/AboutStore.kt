@@ -31,4 +31,11 @@ class AboutStore(context: Context) {
         set(value) {
             prefs.edit { putBoolean("youdao_first", value) }
         }
+
+    /** 启动时是否自动检查软件更新。默认开启。 */
+    var autoCheckUpdate: Boolean
+        get() = prefs.getBoolean("auto_check_update", true)
+        set(value) {
+            prefs.edit { putBoolean("auto_check_update", value) }
+        }
 }
