@@ -255,22 +255,21 @@ internal fun parseTranslationResponse(resp: HttpResponse): TranslationOutcome {
 }
 
 /**
- * 归一化 vivo 网关返回的 phonetic 字段为可展示的纯音标字符串。
+ * 归一化 vivo 网关返回的 phonetic 字段为可展示的纯音标字符串,不可展示时返回 null。
  *
  * 中文等场景下该字段不是纯 IPA,而是一段 JSON(数组,元素含 filename / ttsId / text / type),
  * 例如 `[{"filename":"https://openapi.youdao.com/vivo/ttsapi?...&appKey=...","ttsId":"…","text":"fú wù qì","type":"auto"}]`。
- * 直接据实展示会把内部 TTS URL、appKey 等一并泄出,故这里抽取出各元素的 `text`(拼音/音标)拼接;
- * 本身就是纯字符串(如英文 IPA)或解析失败时,原样返回。
+ * 抽取各元素的 `text`(拼音/音标)拼接;抽不出可展示文本(字段缺失、JSON 被截断)时返回 null——
+ * 一旦回退成原样返回,内部 TTS URL 与 appKey 就会出现在译文下方,这是必须避免的泄露面。
  */
-internal fun normalizePhonetic(raw: String): String {
+internal fun normalizePhonetic(raw: String): String? {
     val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return null
+    val jsonShaped = trimmed.startsWith("[") || trimmed.startsWith("{")
+    if (!jsonShaped) return trimmed.takeUnless(::carriesInternals)
     val parsed: Any? = runCatching {
-        when {
-            trimmed.startsWith("[") -> JSONArray(trimmed)
-            trimmed.startsWith("{") -> JSONObject(trimmed)
-            else -> null
-        }
-    }.getOrNull() ?: return raw
+        if (trimmed.startsWith("[")) JSONArray(trimmed) else JSONObject(trimmed)
+    }.getOrNull()
     val texts = ArrayList<String>()
     val queue = ArrayDeque<Any?>()
     queue.add(parsed)
@@ -278,11 +277,17 @@ internal fun normalizePhonetic(raw: String): String {
         when (val node = queue.removeFirst()) {
             is JSONArray -> for (i in 0 until node.length()) queue.add(node.opt(i))
             is JSONObject -> {
-                node.optString("text").takeIf { it.isNotEmpty() }?.let(texts::add)
+                node.optString("text")
+                    .takeIf { it.isNotEmpty() && !carriesInternals(it) }
+                    ?.let(texts::add)
                 node.keys().forEach { key -> queue.add(node.opt(key)) }
             }
             else -> {}
         }
     }
-    return texts.joinToString("，").ifEmpty { raw }
+    return texts.joinToString("，").takeIf { it.isNotEmpty() }
 }
+
+/** 含链接或网关凭据痕迹的字符串一律不展示。 */
+private fun carriesInternals(value: String): Boolean =
+    "http://" in value || "https://" in value || "appKey" in value || "ttsId" in value

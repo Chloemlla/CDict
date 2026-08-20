@@ -3,6 +3,7 @@ package com.chloemlla.cdict.core.translate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -109,9 +110,15 @@ class VivoTranslationClientTest {
     }
 
     @Test
-    fun `malformed phonetic json falls back to raw`() {
+    fun `malformed phonetic json is dropped instead of leaking raw`() {
         assertEquals("junk", normalizePhonetic("junk"))
-        assertEquals("""[{"text":""]""", normalizePhonetic("""[{"text":""]"""))
+        assertNull(normalizePhonetic("""[{"text":""]"""))
+        assertNull(
+            normalizePhonetic(
+                """[{"filename":"https://openapi.youdao.com/vivo/ttsapi?q=depending&appKey=48fd18fd98fb24b2","ttsId":"x-phonetic-0","type":"auto"}]""",
+            ),
+        )
+        assertNull(normalizePhonetic("https://openapi.youdao.com/vivo/ttsapi?q=depending"))
     }
 
     @Test

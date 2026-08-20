@@ -83,6 +83,30 @@ class RoomTranslationCacheTest {
         assertEquals(result, cold.get(key)) // 仅靠已提升进内存的副本命中
     }
 
+    @Test
+    fun `legacy row with raw phonetic json is sanitized on read`() = runTest {
+        dao.clear()
+        val dir = TranslationDirection.AUTO_TO_EN
+        val key = TranslationCacheKey.of("取决于", dir)
+        val leak =
+            """[{"filename":"https://openapi.youdao.com/vivo/ttsapi?q=depending&appKey=48fd18fd98fb24b2","ttsId":"x-phonetic-0","text":"dɪˈpendɪŋ","type":"auto"}]"""
+        dao.upsert(
+            TranslationCacheEntity(
+                hashKey = key,
+                sourceText = "取决于",
+                direction = "${dir.from}>${dir.to}",
+                from = "zh-CHS",
+                to = "en",
+                translationsJson = """["depending"]""",
+                phonetic = leak,
+                isFavorite = 0,
+                createdAt = 1L,
+                lastAccessedAt = 1L,
+            ),
+        )
+        assertEquals("dɪˈpendɪŋ", cache().get(key)!!.phonetic)
+    }
+
     /** 内存 DAO：替换实现细节，聚焦编排逻辑（LRU 排序、淘汰、收藏免疫）。 */
     private class FakeDao : TranslationCacheDao {
         private val rows = linkedMapOf<String, TranslationCacheEntity>()

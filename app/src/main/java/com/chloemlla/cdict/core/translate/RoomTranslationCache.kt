@@ -63,7 +63,8 @@ class RoomTranslationCache(
             val arr = JSONArray(translationsJson)
             buildList { for (i in 0 until arr.length()) add(arr.optString(i)) }
         }.getOrNull() ?: emptyList()
-        return TranslationResult(translations, from, to, phonetic)
+        // 归一化前写入的行仍存着 phonetic 原始 JSON（内含 TTS URL 与 appKey），读出时再过一遍。
+        return TranslationResult(translations, from, to, phonetic?.let(::normalizePhonetic))
     }
 
     companion object {
