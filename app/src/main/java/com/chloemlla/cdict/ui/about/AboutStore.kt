@@ -73,4 +73,19 @@ class AboutStore(context: Context) {
         set(value) {
             prefs.edit { putBoolean("review_round_done", value) }
         }
+
+    /** 署名提交的本地限流状态，仅本地记次数与时刻，不联网。 */
+    var donationClaimQuota: DonationClaimQuota
+        get() = DonationClaimQuota(
+            windowStart = prefs.getLong("claim_window_start", 0L),
+            count = prefs.getInt("claim_window_count", 0),
+            lastSubmitMillis = prefs.getLong("claim_last_millis", 0L),
+        )
+        set(value) {
+            prefs.edit {
+                putLong("claim_window_start", value.windowStart)
+                putInt("claim_window_count", value.count)
+                putLong("claim_last_millis", value.lastSubmitMillis)
+            }
+        }
 }

@@ -12,6 +12,9 @@ object CDictBackend {
     /** 赞赏渠道列表（图片字节走 [DONATE_PATH] + "/{id}"）。 */
     const val DONATE_PATH = "/api/cdict/donate"
 
+    /** 署名申请提交（拼在 [DONATE_PATH] 之后）。 */
+    const val DONATE_CLAIM_SUFFIX = "/claim"
+
     /** 在线合成引擎（服务端代签名）。 */
     const val SOURCE_ENGINE = "engine"
 

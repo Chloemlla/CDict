@@ -34,6 +34,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Gavel
@@ -83,6 +84,8 @@ import androidx.compose.ui.semantics.stateDescription
 import com.chloemlla.cdict.R
 import com.chloemlla.cdict.core.audio.PronunciationDiagnostics
 import com.chloemlla.cdict.core.net.ClashPartner
+import com.chloemlla.cdict.core.net.DonationClient
+import com.chloemlla.cdict.core.net.DonationOutcome
 import com.chloemlla.cdict.core.net.summary
 import com.chloemlla.cdict.ui.ResponsiveContentBox
 import kotlinx.coroutines.launch
@@ -473,7 +476,7 @@ fun AboutScreen(
                     HorizontalDivider()
                     AboutRow(
                         title = "赞赏支持",
-                        subtitle = "完全自愿；收款码由服务端实时下发，应用永久免费",
+                        subtitle = "完全自愿；收款码与鸣谢名单由服务端实时下发，应用永久免费",
                         onClick = { controller.push(AboutScreenRoute.Donation) },
                     )
                 }
@@ -729,6 +732,13 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
 @Composable
 fun OssNoticeScreen(forced: Boolean, onBack: () -> Unit) {
     val context = LocalContext.current
+    var supporters by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(forced) {
+        // 首启强制阅读这一页时不联网；用户自己打开才顺带取一次鸣谢名单，取不到就不显示这一节。
+        if (forced) return@LaunchedEffect
+        val outcome = DonationClient().fetchChannels()
+        if (outcome is DonationOutcome.Success) supporters = outcome.info.supporters
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -832,6 +842,20 @@ fun OssNoticeScreen(forced: Boolean, onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+                if (supporters.isNotEmpty()) {
+                    item(key = "supporters") {
+                        SectionCard(icon = Icons.Filled.Celebration, title = "赞赏鸣谢名单") {
+                            Text(
+                                "以下朋友赞赏并同意署名。名单由服务端实时下发，核实转账备注后即时更新，" +
+                                    "不需要更新应用；赞赏完全自愿，也不解锁任何功能。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            SupporterNameFlow(supporters)
+                        }
                     }
                 }
                 item(key = "creditsHeading") {

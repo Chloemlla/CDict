@@ -72,6 +72,7 @@ fun DonationScreen(onBack: () -> Unit) {
     val client = remember { DonationClient() }
     var state by remember { mutableStateOf<DonationUiState>(DonationUiState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
+    var confettiKey by remember { mutableStateOf(0) }
     LaunchedEffect(reloadKey) {
         state = DonationUiState.Loading
         state = when (val outcome = client.fetchChannels()) {
@@ -94,38 +95,50 @@ fun DonationScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        ResponsiveContentBox(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        Box(modifier = Modifier.fillMaxSize()) {
+            ResponsiveContentBox(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
             ) {
-                item {
-                    SelectionContainer {
-                        Text(
-                            (state as? DonationUiState.Ready)?.info?.notice ?: DONATION_NOTICE,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                ) {
+                    item {
+                        SelectionContainer {
+                            Text(
+                                (state as? DonationUiState.Ready)?.info?.notice ?: DONATION_NOTICE,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
                     }
-                    Spacer(Modifier.height(16.dp))
-                }
-                when (val current = state) {
-                    is DonationUiState.Loading -> item { DonationPlaceholder("正在获取赞赏码…", true) }
-                    is DonationUiState.Failed -> item {
-                        DonationPlaceholder("赞赏码获取失败：${current.message}", false)
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedButton(onClick = { reloadKey++ }) { Text("重试") }
-                    }
-                    is DonationUiState.Ready -> items(current.info.channels.size) { index ->
-                        DonationChannelCard(client, current.info.channels[index])
-                        Spacer(Modifier.height(20.dp))
+                    when (val current = state) {
+                        is DonationUiState.Loading -> item { DonationPlaceholder("正在获取赞赏码…", true) }
+                        is DonationUiState.Failed -> item {
+                            DonationPlaceholder("赞赏码获取失败：${current.message}", false)
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(onClick = { reloadKey++ }) { Text("重试") }
+                        }
+                        is DonationUiState.Ready -> {
+                            items(current.info.channels.size) { index ->
+                                DonationChannelCard(client, current.info.channels[index])
+                                Spacer(Modifier.height(20.dp))
+                            }
+                            item(key = "supporters") {
+                                DonationSupportSection(
+                                    client = client,
+                                    supporters = current.info.supporters,
+                                    onCelebrate = { confettiKey++ },
+                                )
+                            }
+                        }
                     }
                 }
             }
+            EmojiConfetti(burstKey = confettiKey)
         }
     }
 }
@@ -253,4 +266,4 @@ private fun DonationPlaceholder(text: String, loading: Boolean) {
 
 private const val DONATION_NOTICE =
     "赞赏完全自愿：本应用永久免费，所有功能都不需要付费解锁，赞赏与否不影响任何使用体验。" +
-        "收款码由服务端实时下发，安装包内不内置任何收款信息。"
+        "收款码地址与说明文案都由服务端实时下发，安装包内不内置任何收款信息。"

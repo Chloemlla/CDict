@@ -148,8 +148,12 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 |:---:|:---:|
 | <img src="https://bee-reg-ab.imagency.cn/p/a2df2e95b7dc5c235e9e5bd51a5d7d56.jpg" alt="支付宝赞赏码" width="220"> | <img src="https://bee-reg-ab.imagency.cn/p/1ef3d8b53b69cf08a9fa7d6e98f779f4.png" alt="微信赞赏码" width="220"> |
 
-- **收款码不内置**:安装包内没有任何收款码或收款账号。打开赞赏页时向自有后端拉取 `GET https://tts.chloemlla.com/api/cdict/donate`(渠道与文案)与 `GET /api/cdict/donate/<渠道 id>`(图片字节),换码换文案无需发版。
-- **出口不变**:客户端忽略服务端返回的任何绝对图片地址,一律用 `CDictBackend.BASE_URL + /api/cdict/donate/<id>` 重建;渠道 id 按 `[a-z0-9-]{1,32}` 校验,避免被引到第三方域名。
+- **收款码不内置**:安装包内没有任何收款码或收款账号。打开赞赏页时向自有后端拉取 `GET https://tts.chloemlla.com/api/cdict/donate`(渠道、文案与鸣谢名单)与 `GET /api/cdict/donate/<渠道 id>`(收款码),换码换文案换名单都无需发版。
+- **图片地址原样下发**:`/api/cdict/donate/<渠道 id>` 在后台填了图床地址时返回 `302`,直接指向后台填写的那个地址——后端不下载、不缓存、不改写图片字节。因此取图这一跳会直连该图床;地址留空时才由后端返回内置图片。客户端始终忽略响应体里的绝对地址,一律用 `CDictBackend.BASE_URL + /api/cdict/donate/<id>` 重建请求,渠道 id 按 `[a-z0-9-]{1,32}` 校验。
+- **署名鸣谢**:转账备注里写上想展示的称呼,开发者核实后加入后台名单,应用内「赞赏支持」页的鸣谢名单随即实时更新;不写备注即匿名支持。
+- **应用内申请署名**:赞赏页底部的表单可直接提交「交易号 + 希望展示的称呼」(`POST /api/cdict/donate/claim`),核实后加入名单;提交只上传这两项,不采集设备信息,同一交易号幂等。提交成功会有 🎉 洒落一遍。
+- **提交限流两层**:客户端本地 `DonationClaimQuota` 限定两次至少间隔 30 秒、一小时内最多 5 次(仅存本地 prefs `claim_window_start` / `claim_window_count` / `claim_last_millis`),后端另有每 IP 每小时 10 次的独立限流。
+- **名单两处可见**:「赞赏支持」页底部与「开源许可声明」页的「赞赏鸣谢名单」分区都以圆角标签展示同一份名单;首启强制阅读许可声明时不会为此联网。
 - **只提醒一次**:`MainActivity` 的 `onResume` / `onPause` 用 `SystemClock.elapsedRealtime()` 累加前台时长写入 `AboutStore`;累计 ≥ 30 分钟且完成过至少一轮复习后,在回到主标签时判定一次,于学习小结页给出一次入口 + 一条底部提示条。无论点开还是关掉,之后都不再自动出现。
 - **不新增权限、不埋点**:前台时长只存在本地 prefs(`foreground_millis` / `tip_prompt_shown` / `tip_prompt_dismissed` / `review_round_done`),不联网上报;划词翻译弹窗走独立 Activity,显式排除在判定路径之外。
 
