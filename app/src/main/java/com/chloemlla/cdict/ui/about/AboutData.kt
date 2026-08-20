@@ -4,6 +4,8 @@ object AboutData {
     const val appName = "CDict"
     const val appDescription = "离线优先的雅思词典 Android 应用"
     const val sourceUrl = "https://github.com/Chloemlla/CDict"
+    const val clashPartnerReleaseUrl =
+        "https://github.com/Chloemlla/ClashMetaForAndroid/releases/latest"
     const val projectLicense = "GNU Affero General Public License v3.0 (AGPL-3.0)"
     const val projectLicenseUrl = "https://github.com/Chloemlla/CDict/blob/main/LICENSE"
     const val freeNoticeTitle = "永久免费 · 谨防上当受骗"

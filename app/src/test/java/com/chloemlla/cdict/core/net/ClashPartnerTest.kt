@@ -85,7 +85,7 @@ class ClashPartnerTest {
 
     @Test
     fun summary_describesNotInstalledAndDisabledAndProxiedStates() {
-        assertTrue(ClashPartnerState().summary().contains("未检测到"))
+        assertTrue(ClashPartnerState().summary().contains("未安装"))
         assertTrue(
             ClashPartnerState(installedPackage = PACKAGE, adaptEnabled = false)
                 .summary()

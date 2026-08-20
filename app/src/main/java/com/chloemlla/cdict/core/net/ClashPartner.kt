@@ -90,7 +90,7 @@ internal fun resolveClashRoute(
 
 /** 关于页「伙伴应用」分区的一行状态文案。 */
 fun ClashPartnerState.summary(): String = when {
-    installedPackage == null -> "未检测到 Clash Meta for Android，联网请求直连"
+    installedPackage == null -> "未安装 Clash Meta for Android（可选），联网请求直连"
     !adaptEnabled -> "已关闭跟随，联网请求直连"
     !statusReadable -> "已安装，但读不到伙伴状态（需同签名或已登记的伙伴身份）"
     vpnConnected -> buildString {

@@ -435,6 +435,28 @@ fun AboutScreen(
                         subtitle = clashState.summary(),
                         onClick = openClashApp,
                     )
+                    HorizontalDivider()
+                    AboutRow(
+                        title = if (clashState.installedPackage == null) {
+                            "下载 Clash Meta for Android（可选）"
+                        } else {
+                            "更新 Clash Meta for Android"
+                        },
+                        subtitle = if (clashState.installedPackage == null) {
+                            "可选安装：装上并运行后，在线翻译 / 朗读 / 更新检查可跟随其代理；点击前往 GitHub Releases"
+                        } else {
+                            "点击前往 GitHub Releases 查看最新版；长按复制下载链接"
+                        },
+                        onClick = { UrlOpener.open(context, AboutData.clashPartnerReleaseUrl) },
+                        onLongClick = {
+                            UrlOpener.copy(
+                                context,
+                                AboutData.clashPartnerReleaseUrl,
+                                "已复制伙伴应用下载链接",
+                            )
+                        },
+                        external = true,
+                    )
 
                     AboutSectionLabel("更多信息")
                     AboutRow(

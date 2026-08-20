@@ -16,6 +16,18 @@ object WhatsNewData {
     fun slides(): List<WhatsNewSlide> = listOf(
         WhatsNewSlide(
             icon = Icons.Filled.NewReleases,
+            title = "伙伴应用可一键下载",
+            subtitle = "关于页「伙伴应用」分区新增下载入口：网络代理伙伴应用 Clash Meta for Android 属于可选安装，装或不装都不影响词典与背词。",
+            bullets = listOf(
+                "可选安装：未安装时条目显示为「下载 Clash Meta for Android（可选）」，点击直接前往其 GitHub Releases 最新版页面；长按可复制下载链接。",
+                "已装即更新：检测到已安装时条目改为「更新 Clash Meta for Android」，同样指向最新发布版本。",
+                "状态文案更清楚：未安装时的说明改为「未安装 Clash Meta for Android（可选），联网请求直连」，避免被误读成缺少必需组件。",
+                "伙伴身份已打通：Clash 侧改为按发布签名证书摘要认可伙伴，装好并运行后关于页即可读到内核与隧道状态，不再停留在「读不到伙伴状态」。",
+            ),
+            tip = "入口：关于页 → 伙伴应用 → 下载 / 更新 Clash Meta for Android。",
+        ),
+        WhatsNewSlide(
+            icon = Icons.Filled.NewReleases,
             title = "赞赏支持：完全自愿，只出现一次",
             subtitle = "关于页新增「赞赏支持」入口，收款码由服务端实时下发；累计使用满 30 分钟且完成过至少一轮复习后，会在学习小结页出现一次入口和一条底部提示条，关掉后不再自动出现。",
             bullets = listOf(
@@ -66,30 +78,6 @@ object WhatsNewData {
                 "弹窗：划词翻译弹窗内容较长时可滚动，「复制译文 / 前往 CDict」不再被推出屏幕；更新检查、无需更新与下载进度三个对话框也补上滚动。",
             ),
             tip = "入口：背词页、词典页、推荐页与划词翻译/更新弹窗 → 手机横屏或分屏等低高度窗口。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "伙伴应用：可跟随 Clash 代理",
-            subtitle = "CDict 成为 Clash Meta for Android 登记在册的伙伴应用：被其自动纳入 VPN 访问控制，联网请求也能跟着它的本地代理走，全程只读、随时可关。",
-            bullets = listOf(
-                "互认身份：CDict 声明伙伴标记并列出 Clash 的包名，被对方的伙伴注册表识别后自动纳入 VPN 访问控制，不必再手动勾选应用。",
-                "只读状态：只读取 Clash 导出的运行状态（内核是否在跑 / 隧道状态 / 配置名称），不会启动、停止或切换 VPN，也不读取订阅与密钥。",
-                "智能选路：内核在跑但未开隧道时，在线翻译 / 朗读 / 更新检查改走其本地混合端口 127.0.0.1:7890；隧道已连接时交给隧道，本地端口连不上则立即回退直连，联网功能不会被适配弄坏。",
-                "状态可见：关于页新增「伙伴应用」分区，实时说明当前是直连、走本地代理还是随隧道，并在对方未开启伙伴自动适配时给出提示；点条目可直接打开 Clash。",
-                "开关可控：「跟随 Clash 代理」默认开启并本地持久化，关闭后所有联网请求恒定直连。",
-            ),
-            tip = "入口：关于页 → 伙伴应用 → 跟随 Clash 代理 / Clash Meta for Android。",
-        ),
-        WhatsNewSlide(
-            icon = Icons.Filled.NewReleases,
-            title = "音标不再露出内部链接",
-            subtitle = "划词翻译与翻译页的音标栏原先可能显示一整段带朗读链接与密钥的 JSON，现已改为抽不出音标就不显示。",
-            bullets = listOf(
-                "网关返回的音标字段在中文等场景下是一段 JSON，之前只在解析成功且能取到读音文本时才归一化，字段缺失或内容被截断时会把原文照抄到界面上。",
-                "现在抽不出可展示音标就整栏隐藏，任何含链接或网关密钥痕迹的文本一律不展示，译文本身与三层缓存行为不变。",
-                "修复前已写入本地缓存的历史记录也会在读取时重新清洗，无需清缓存或重装即可生效。",
-            ),
-            tip = "入口：任意应用长按选词 → 「CDict 翻译」弹窗译文下方；翻译页结果区「音标」一行。",
         ),
     )
 }
