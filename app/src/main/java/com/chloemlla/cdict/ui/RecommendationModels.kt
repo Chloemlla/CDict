@@ -23,7 +23,6 @@ sealed interface RecommendationScreenState {
     /** [items] 为首的元素即当前卡片，其余为后续队列；空队列表示“今日推荐已看完”。 */
     data class Ready(
         val dailyGoal: Int,
-        val totalCount: Int,
         val items: List<RecommendationItemCard>,
         val handledToday: Int,
         val scope: StudyScope = StudyScope(),

@@ -409,7 +409,7 @@ private fun RecommendationHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                "今日已推荐",
+                "今日已完成",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -426,13 +426,13 @@ private fun RecommendationHeader(
                 .height(8.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .semantics {
-                    contentDescription = "今日推荐完成进度"
+                    contentDescription = "今日学习目标完成进度（与背词页共用）"
                     stateDescription = "已完成 ${state.handledToday} 个，共 ${state.dailyGoal} 个"
                 },
         )
         if (isComplete) {
             Text(
-                "今日推荐目标已达成！",
+                "今日目标已达成！",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
@@ -633,9 +633,9 @@ private fun RecommendationCurrentCard(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 52.dp)
-                        .semantics { contentDescription = "把 ${word.word} 加入今日背词" },
+                        .semantics { contentDescription = "把 ${word.word} 纳入复习计划，明天开始测验" },
                 ) {
-                    Text("加入今日背词")
+                    Text("纳入复习计划")
                 }
             }
             Row(
@@ -672,7 +672,7 @@ private fun RecommendationCurrentCard(
             onDismissRequest = { showMasteredConfirmation = false },
             title = { Text("确认标记为已掌握") },
             text = {
-                Text("“${word.word}”将从推荐队列移除，且不会加入今日背词任务。")
+                Text("“${word.word}”将从推荐队列移除，且不会进入复习计划。")
             },
             confirmButton = {
                 Button(
@@ -697,7 +697,7 @@ private fun RecommendationCurrentCard(
 /**
  * 「接下来」队列预览。[upcoming] 由调用方算好（已去掉当前卡、并应用图例筛选），
  * 这样筛选只影响预览列表，不会改变当前卡——当前卡必须始终是队列真实头部，
- * 否则底部操作按钮（加入背词 / 已掌握 / 稍后再看）作用的词与卡面显示的词会不一致。
+ * 否则底部操作按钮（纳入复习计划 / 已掌握 / 稍后再看）作用的词与卡面显示的词会不一致。
  */
 @Composable
 private fun RecommendationUpcomingBlock(

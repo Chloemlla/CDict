@@ -22,17 +22,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** 与背词页共享同一个每日目标（同一 SharedPreferences），保证两侧进度一致。 */
+/**
+ * 与背词页共享同一份每日目标与筛选范围（同一 SharedPreferences 文件与键），两页对「今天学多少、
+ * 从哪个词表哪个频率组里学」保持同一口径。
+ */
 private const val REC_PREFS_NAME = "cdict_study_settings"
 private const val REC_PREF_KEY_GOAL = "study_daily_goal"
-private const val REC_PREF_KEY_SCOPE_TAG = "rec_scope_curriculum_tag"
-private const val REC_PREF_KEY_SCOPE_GROUP = "rec_scope_frequency_group"
+private const val REC_PREF_KEY_SCOPE_TAG = "study_scope_curriculum_tag"
+private const val REC_PREF_KEY_SCOPE_GROUP = "study_scope_frequency_group"
 
 /** “稍后再看”打散：插回到当前词之后第 4~6 位（PRD 智能插入）。 */
 private const val DEFER_INSERT_SLOT = 5
 
 /**
- * 推荐页 ViewModel：持有内存中的推荐流队列（ArrayDeque），负责“加入今日背词任务 / 已掌握 /
+ * 推荐页 ViewModel：持有内存中的推荐流队列（ArrayDeque），负责“纳入复习计划 / 已掌握 /
  * 稍后再看 / 改目标 / 再来一批”的实时队列重排，并把处理过的词实时落库 study.db（方案C 流转
  * 状态同步），使背词引擎的 ASR 状态机自动跳过已处理词。构造不触发任何网络；全部数据来自本地 Room。
  */
@@ -50,7 +53,6 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private var studyDb: StudyDatabase? = null
     private val queue = ArrayDeque<RecommendationItemCard>()
     private val consumedToday = mutableSetOf<Long>()
-    private var totalCount = 0
     private var handledToday = 0
 
     private val today: String get() = LocalDate.now().toString()
@@ -99,6 +101,22 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch { buildFeed() }
     }
 
+    /**
+     * 回到推荐标签时的轻量同步：今日进度以 study.db 为准重算，剔除已在背词页处理过的词，
+     * 再补足到今日剩余额度。不重建整条流，用户当前看到的卡片不会被换掉。
+     */
+    fun syncFromStore() {
+        if (_state.value !is RecommendationScreenState.Ready) return
+        viewModelScope.launch {
+            val dao = studyDb?.studyDao() ?: return@launch
+            val handled = dao.allStudiedIds().toSet()
+            queue.retainAll { it.word.id !in handled }
+            handledToday = dao.learnedTodayCount(today)
+            topUpToQuota()
+            emit()
+        }
+    }
+
     private suspend fun engine(): RecommendationEngine? {
         val dictDao = dictDb?.dictionaryDao() ?: return null
         val dao = studyDb?.studyDao() ?: return null
@@ -106,22 +124,31 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     }
 
     private suspend fun buildFeed() {
-        val eng = engine() ?: return
-        val goal = dailyGoal()
-        val scope = savedScope()
-        val occupied = consumedToday + queue.map { it.word.id }
+        val dao = studyDb?.studyDao() ?: return
         queue.clear()
-        val feed = eng.generateFeed(goal, today, occupied, scope.curriculumTag, scope.frequencyGroup)
-        feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
-        totalCount = feed.items.size
-        handledToday = 0
+        handledToday = dao.learnedTodayCount(today)
+        topUpToQuota()
         emit()
     }
 
     /**
-     * “加入今日背词任务”：把当前词写入 study.db 的复习管线（learning，明日首轮复习），供背词页的
-     * 四选一 / ASR 状态机做提取练习；并从推荐流移除。推荐页只负责“输入（预热）”，真正的测验
-     * 交给背词页（方案C 统一数据源：同一 StudyStatus 实时可见）。
+     * 把队列补足到「今日剩余额度 = 每日目标 − 今日已完成」。只补不裁，这样「再来一批」额外
+     * 生成的卡片不会在下一次同步时被削掉。
+     */
+    private suspend fun topUpToQuota() {
+        val shortfall = (dailyGoal() - handledToday).coerceAtLeast(0) - queue.size
+        if (shortfall <= 0) return
+        val eng = engine() ?: return
+        val scope = savedScope()
+        val occupied = consumedToday + queue.map { it.word.id }
+        eng.generateFeed(shortfall, today, occupied, scope.curriculumTag, scope.frequencyGroup)
+            .items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
+    }
+
+    /**
+     * “纳入复习计划”：把当前词写入 study.db 的复习管线（learning，明日首轮复习），供背词页的
+     * 四选一 / ASR 状态机做提取练习；并从推荐流移除。它当天不会再出现在背词页的新词卡里——
+     * 推荐页只负责“输入（预热）”，提取练习从明天的复习开始（方案C：先预热、再间隔测试）。
      */
     fun markLearned() {
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
@@ -146,7 +173,8 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
 
     /**
      * “已掌握（直接消灭）”：立即写入 mastered 并实时同步到 study.db，背词引擎的 ASR 状态机会
-     * 自动跳过该词（不再进入新词 / 复习池）；并从推荐流直接移除。
+     * 自动跳过该词（不再进入新词 / 复习池）；并从推荐流直接移除。已掌握不占用今日额度——
+     * 它是把词从词库里划掉，而不是今天学了一个，因此队列会随即补进一张新卡。
      */
     fun markMastered() {
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
@@ -166,16 +194,17 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    /** 从队列移除并在本会话排除，推进今日已处理计数后刷新 UI。 */
-    private fun consume(id: Long) {
+    /** 从队列移除并在本会话排除，今日进度以 study.db 为准重算后刷新 UI。 */
+    private suspend fun consume(id: Long) {
         // The db upsert before this call is a suspend point, so the queue head may
         // have shifted (e.g. a concurrent defer); remove the exact item rather than
         // the current head to avoid dropping the wrong card.
         val idx = queue.indexOfFirst { it.word.id == id }
         if (idx < 0) return
         consumedToday.add(id)
-        handledToday++
         queue.removeAt(idx)
+        handledToday = studyDb?.studyDao()?.learnedTodayCount(today) ?: handledToday
+        topUpToQuota()
         emit()
     }
 
@@ -198,36 +227,24 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
             val occupied = consumedToday + queue.map { it.word.id }
             val feed = eng.generateFeed(goal, today, occupied, scope.curriculumTag, scope.frequencyGroup)
             feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
-            totalCount += feed.items.size
             emit()
         }
     }
 
-    /** 修改每日目标：追加符合 3:5:2 的新切片；降低则从队尾裁剪（PRD 无缝扩充）。 */
+    /** 修改每日目标：调高则补足到新额度，调低则从队尾裁剪（PRD 无缝扩充）。 */
     fun setGoal(value: Int) {
         val goal = value.coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
         val prev = dailyGoal()
         prefs.edit { putInt(REC_PREF_KEY_GOAL, goal) }
-        val cur = _state.value as? RecommendationScreenState.Ready ?: return
+        if (_state.value !is RecommendationScreenState.Ready) return
         viewModelScope.launch {
-            val delta = goal - prev
-            val scope = savedScope()
-            when {
-                delta > 0 -> {
-                    val eng = engine() ?: return@launch
-                    val occupied = consumedToday + queue.map { it.word.id }
-                    val feed = eng.generateFeed(delta, today, occupied, scope.curriculumTag, scope.frequencyGroup)
-                    feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
-                    totalCount += feed.items.size
-                }
-                delta < 0 -> {
-                    // Goal is the day's total target; already-handled words still count
-                    // toward it, so trim the queue to what remains to be shown.
-                    val remaining = (goal - handledToday).coerceAtLeast(0)
-                    val remove = (queue.size - remaining).coerceAtLeast(0)
-                    repeat(remove) { queue.removeLast() }
-                    totalCount = (totalCount - remove).coerceAtLeast(0)
-                }
+            if (goal > prev) {
+                topUpToQuota()
+            } else if (goal < prev) {
+                // Goal is the day's total target; already-handled words still count
+                // toward it, so trim the queue to what remains to be shown.
+                val remaining = (goal - handledToday).coerceAtLeast(0)
+                repeat((queue.size - remaining).coerceAtLeast(0)) { queue.removeLast() }
             }
             emit()
         }
@@ -238,7 +255,6 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private fun emit() {
         _state.value = RecommendationScreenState.Ready(
             dailyGoal = dailyGoal(),
-            totalCount = totalCount,
             items = queue.toList(),
             handledToday = handledToday,
             scope = savedScope(),

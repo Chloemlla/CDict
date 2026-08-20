@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.chloemlla.cdict.core.data.DatabaseState
 import com.chloemlla.cdict.core.data.DictionaryDatabase
 import com.chloemlla.cdict.core.data.DictionaryRepository
+import com.chloemlla.cdict.core.data.RecommendationEngine
 import com.chloemlla.cdict.core.data.STUDY_STATUS_FREE
 import com.chloemlla.cdict.core.data.STUDY_STATUS_LEARNING
 import com.chloemlla.cdict.core.data.STUDY_STATUS_MASTERED
@@ -50,10 +51,6 @@ private const val REVIEW_ABSENCE_HARD_CAP = 50
 // Error Attribution thresholds (优化项五), in milliseconds.
 private const val CONFUSION_MAX_MS = 1500L
 private const val UNKNOWN_MIN_MS = 6000L
-
-// Adaptive cold-start gradient (优化项四): a guess at the learner's boundary difficulty
-// band, feeding the 60%/30%/10% recommendation split.
-private const val DEFAULT_BOUNDARY_GROUP = 3
 
 // Smart-cool-down insertion slot for 稍后再看 (优化项三).
 private const val DEFER_INSERT_SLOT = 4
@@ -169,6 +166,30 @@ class StudyViewModel(context: Context) : ViewModel() {
             } else {
                 buildLearn()
             }
+        }
+    }
+
+    /**
+     * 回到背词标签时的轻量同步：今日进度以 study.db 为准重算，并把已在推荐页处理过的词从
+     * 内存学习队列里剔除，避免同一个词在两页各出现一次。复习进行中（含答题反馈）不打扰，
+     * 只在学习 / 完成态刷新，防止把用户正在答的题重置掉。
+     */
+    fun syncFromStore() {
+        val cur = _state.value as? StudyScreenState.Ready ?: return
+        if (cur.phase == StudyPhase.REVIEW) return
+        viewModelScope.launch {
+            val dao = studyDb?.studyDao() ?: return@launch
+            val handled = dao.allStudiedIds().toSet()
+            learnQueue.retainAll { it.id !in handled }
+            todayDone = dao.learnedTodayCount(today)
+            refreshLearnedToday()
+            val isFree = cur.phase == StudyPhase.FREE_PLAY
+            if (!isFree && todayDone >= dailyGoal()) {
+                emit(StudyPhase.DONE, learnedList = learnedToday.toList())
+                return@launch
+            }
+            topUpLearnQueue(isFree)
+            emit(if (isFree) StudyPhase.FREE_PLAY else StudyPhase.LEARN, card = learnQueue.firstOrNull())
         }
     }
 
@@ -378,53 +399,18 @@ class StudyViewModel(context: Context) : ViewModel() {
     }
 
     /**
-     * Adaptive cold-start recommendation (优化项四): pulls the [need] new words along the
-     * 60% core / 30% high-frequency-extension / 10% simple-word gradient around the learner's
-     * boundary difficulty band, then pads any shortfall from the general unstudied pool.
-     * Reservoir-style sampling keeps the studied set out of large SQLite IN-lists.
+     * 新词投喂与推荐页共用同一台 [RecommendationEngine]：配比（核心 5 / 派生拓展 3 / 高频过渡 2）、
+     * 课程标签与频率组筛选、冷启动兜底全部由引擎决定，两页不再各跑一套梯度算法。
      */
     private suspend fun sampleNewWords(need: Int, occupied: Set<Long>): List<WordEntity> {
         if (need <= 0) return emptyList()
-        val scope = savedScope()
-        val tag = scope.curriculumTag
-        val group = scope.frequencyGroup
-        val used = occupied.toMutableSet()
-        val result = mutableListOf<WordEntity>()
-        val core = need * 6 / 10
-        val expand = need * 3 / 10
-        val easy = need - core - expand
-        result += sampleGroup(core, group ?: DEFAULT_BOUNDARY_GROUP, used, tag)
-        result += sampleGroup(expand, minOf((group ?: DEFAULT_BOUNDARY_GROUP) + 1, 7), used, tag)
-        result += sampleGroup(easy, maxOf((group ?: DEFAULT_BOUNDARY_GROUP) - 1, 1), used, tag)
-        if (result.size < need) {
-            val dictDao = dictDb?.dictionaryDao() ?: return result
-            var attempts = 0
-            while (result.size < need && attempts < 12) {
-                for (word in dictDao.randomWordsFiltered(tag, 600)) {
-                    if (result.size >= need) break
-                    if (used.add(word.id)) result.add(word)
-                }
-                attempts++
-            }
-        }
-        return result
-    }
-
-    private suspend fun sampleGroup(target: Int, group: Int, used: MutableSet<Long>, tag: String? = null): List<WordEntity> {
-        if (target <= 0) return emptyList()
         val dictDao = dictDb?.dictionaryDao() ?: return emptyList()
-        val out = mutableListOf<WordEntity>()
-        var attempts = 0
-        while (out.size < target && attempts < 8) {
-            val pool = if (tag == null) dictDao.randomWordsInGroup(group, 200)
-            else dictDao.randomWordsInGroupFiltered(tag, group, 200)
-            for (word in pool) {
-                if (out.size >= target) break
-                if (used.add(word.id)) out.add(word)
-            }
-            attempts++
-        }
-        return out
+        val dao = studyDb?.studyDao() ?: return emptyList()
+        val scope = savedScope()
+        return RecommendationEngine(dictDao, dao)
+            .generateFeed(need, today, occupied, scope.curriculumTag, scope.frequencyGroup)
+            .items
+            .map { it.word }
     }
 
     fun markLearned() {
@@ -435,26 +421,37 @@ class StudyViewModel(context: Context) : ViewModel() {
         val wordId = card.id
         viewModelScope.launch {
             val dao = studyDb?.studyDao() ?: return@launch
-            dao.upsert(
-                StudyWordEntity(
-                    wordId = wordId,
-                    status = if (isFree) STUDY_STATUS_FREE else STUDY_STATUS_LEARNING,
-                    learnedDate = if (isFree) null else today,
-                    nextReviewDate = if (isFree) null else plusDays(1),
-                    ease = 2.5,
-                    repetitions = 0,
-                    lastInterval = 1,
-                    addedAt = System.currentTimeMillis(),
-                ),
-            )
+            // 该词可能已在推荐页「纳入复习计划」时入库。REPLACE 写入会把排好的 ASR 进度
+            // 重置回首轮，所以已有记录时只把卡片摘出队列，不覆盖既有状态。
+            val existing = dao.word(wordId)
+            if (existing == null) {
+                dao.upsert(
+                    StudyWordEntity(
+                        wordId = wordId,
+                        status = if (isFree) STUDY_STATUS_FREE else STUDY_STATUS_LEARNING,
+                        learnedDate = if (isFree) null else today,
+                        nextReviewDate = if (isFree) null else plusDays(1),
+                        ease = 2.5,
+                        repetitions = 0,
+                        lastInterval = 1,
+                        addedAt = System.currentTimeMillis(),
+                    ),
+                )
+            }
             // dao.upsert is a suspend point; a double-tap can reach here after an
             // earlier invocation already removed and bookkept the card. Only count
             // progress on a successful removal to avoid double-counting todayDone
             // and duplicating the learnedToday entry.
             val removed = learnQueue.remove(card)
             if (removed && !isFree) {
-                todayDone++
-                learnedToday.add(card)
+                if (existing == null) {
+                    todayDone++
+                    learnedToday.add(card)
+                } else {
+                    // 已在别处入库：以库为准重算今日进度，避免把同一个词记两次。
+                    todayDone = dao.learnedTodayCount(today)
+                    refreshLearnedToday()
+                }
             }
             topUpLearnQueue(isFree)
             if (!isFree && todayDone >= dailyGoal()) {

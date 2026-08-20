@@ -178,6 +178,14 @@ fun CdictApp(
             selectedTab = CdictDestination.Dictionary.ordinal
         }
     }
+    // 背词与推荐共用同一份今日额度与 study.db 状态：切回任一页时按库对齐今日进度，并把已在
+    // 另一页处理过的词从内存队列剔除，避免同一个词被两页各展示一次。
+    LaunchedEffect(selectedTab) {
+        when (selectedTab) {
+            CdictDestination.Study.ordinal -> studyViewModel.syncFromStore()
+            CdictDestination.Recommendation.ordinal -> recommendationViewModel.syncFromStore()
+        }
+    }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
     // 各标签共用播放状态，让发音按钮能同步显示播放或停止状态。
     val playingKey = (dictionaryState as? DictionaryScreenState.Ready)?.playingKey
