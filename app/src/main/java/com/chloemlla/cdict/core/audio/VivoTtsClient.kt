@@ -111,7 +111,7 @@ class VivoTtsClient(
         val code = Regex("\"errorCode\"\\s*:\\s*\"?([^,\"}\\s]+)\"?").find(s)?.groupValues?.get(1)
         val msg = Regex("\"errorMsg\"\\s*:\\s*\"([^\"]*)\"").find(s)?.groupValues?.get(1)
         return buildString {
-            append("vivo TTS 拒绝")
+            append("在线合成拒绝")
             if (code != null) append(" errorCode=$code")
             if (msg != null) append(" errorMsg=$msg")
         }

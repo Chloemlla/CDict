@@ -114,7 +114,7 @@ private fun SheetHeader(direction: TranslationDirection, onClose: () -> Unit) {
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "vivo 翻译引擎 · ${direction.label}",
+                text = "在线翻译引擎 · ${direction.label}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

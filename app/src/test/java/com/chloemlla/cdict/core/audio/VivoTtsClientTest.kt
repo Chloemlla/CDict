@@ -40,7 +40,7 @@ class VivoTtsClientTest {
         val client = VivoTtsClient()
         val body = """{"errorResult":{"errorCode":10101,"errorMsg":"文本过长，无法合成"}}"""
         val err = client.parseErrorResult(body.toByteArray(Charsets.UTF_8))
-        assertEquals("vivo TTS 拒绝 errorCode=10101 errorMsg=文本过长，无法合成", err)
+        assertEquals("在线合成拒绝 errorCode=10101 errorMsg=文本过长，无法合成", err)
     }
 
     @Test

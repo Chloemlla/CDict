@@ -8,7 +8,7 @@ object AboutData {
     const val projectLicenseUrl = "https://github.com/Chloemlla/CDict/blob/main/LICENSE"
     const val freeNoticeTitle = "永久免费 · 谨防上当受骗"
     const val freeNoticeBody = "本项目为兴趣驱动的开源雅思词典应用，永久免费。不会以“正版激活、付费解锁、私下转账”等名义收费。请仅通过官方源码仓库与可信发行渠道获取；任何声称“收费版 / 内部版 / 破解授权”的都可能是骗局，请勿上当。"
-    const val disclaimer = "词典核心完全离线可用；内置的 vivo 语音合成与翻译网关为公开资料收集的接口，仅用于可选的在线翻译与发音，可能随时失效或变更。请在遵守当地法律法规的前提下使用，并支持正版。"
+    const val disclaimer = "词典核心完全离线可用；内置的在线语音合成与翻译网关为公开资料收集的接口，仅用于可选的在线翻译与发音，可能随时失效或变更。请在遵守当地法律法规的前提下使用，并支持正版。"
 
     data class LegalDoc(val title: String, val url: String)
 
@@ -32,7 +32,7 @@ object AboutData {
     val appPermissions: List<AppPermission> = listOf(
         AppPermission(
             name = "网络",
-            purpose = "连接互联网，用于可选的在线翻译与发音（vivo 合成 / 有道）。",
+            purpose = "连接互联网，用于可选的在线翻译与发音（在线合成 / 有道）。",
             scope = "INTERNET",
         ),
     )
@@ -110,11 +110,11 @@ object AboutData {
             url = "https://fldc.pages.dev",
         ),
         OssCredit(
-            name = "vivo 语音合成 / 翻译网关",
-            author = "vivo",
+            name = "在线语音合成 / 翻译网关",
+            author = "第三方公开接口",
             description = "可选的在线翻译与发音（逆向公开接口，客户端常量，可随时失效）。",
             license = "私有接口",
-            url = "https://vivotrans.vivo.com",
+            url = null,
         ),
     )
 }

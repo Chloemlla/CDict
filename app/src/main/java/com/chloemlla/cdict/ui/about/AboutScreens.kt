@@ -382,12 +382,12 @@ fun AboutScreen(
                     AboutSwitchRow(
                         title = "朗读优先来源",
                         subtitle = if (youdaoFirst) {
-                            "有道优先，失败时使用 vivo TTS"
+                            "有道优先，失败时使用在线合成引擎"
                         } else {
-                            "vivo TTS 优先，失败时使用有道"
+                            "在线合成引擎优先，失败时使用有道"
                         },
                         checked = youdaoFirst,
-                        stateText = if (youdaoFirst) "有道优先" else "vivo TTS 优先",
+                        stateText = if (youdaoFirst) "有道优先" else "在线合成优先",
                         onCheckedChange = { checked ->
                             youdaoFirst = checked
                             aboutStore.youdaoFirst = checked
@@ -399,7 +399,7 @@ fun AboutScreen(
                         title = "朗读诊断",
                         subtitle = when (val d = pronunciationDiag) {
                             null -> "暂无回退记录：先在词详情页点喇叭朗读一次"
-                            else -> "vivo: ${d.vivoReason ?: "—"} · 有道: ${d.youdaoReason}"
+                            else -> "在线合成: ${d.vivoReason ?: "—"} · 有道: ${d.youdaoReason}"
                         },
                     )
 

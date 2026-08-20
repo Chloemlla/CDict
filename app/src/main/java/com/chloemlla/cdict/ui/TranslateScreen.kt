@@ -175,7 +175,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                         Column {
                             Text("翻译", style = MaterialTheme.typography.titleLarge)
                             Text(
-                                "vivo 翻译引擎",
+                                "在线翻译引擎",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

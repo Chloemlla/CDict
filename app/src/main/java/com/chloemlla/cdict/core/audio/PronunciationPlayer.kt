@@ -109,20 +109,20 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         val cached = cache.find(word, accent, SOURCE_VIVO)
         if (cached != null) {
             playFile(generation, cached) {
-                scope.launch { playYoudaoFallback(generation, word, accent, "vivo 缓存音频播放失败") }
+                scope.launch { playYoudaoFallback(generation, word, accent, "在线合成缓存音频播放失败") }
             }
             return
         }
         val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
         if (generation != playGeneration) return
         val vivoReason: String? = when (result) {
-            is VivoTtsResult.Audio -> if (result.bytes.isEmpty()) "vivo 返回空音频" else null
+            is VivoTtsResult.Audio -> if (result.bytes.isEmpty()) "在线合成返回空音频" else null
             is VivoTtsResult.Error -> result.message
         }
         val audio = (result as? VivoTtsResult.Audio)?.bytes
         if (audio == null || audio.isEmpty()) {
             if (generation == playGeneration) {
-                playYoudaoFallback(generation, word, accent, vivoReason ?: "vivo 无返回值")
+                playYoudaoFallback(generation, word, accent, vivoReason ?: "在线合成无返回值")
             }
             return
         }
@@ -130,7 +130,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         if (generation == playGeneration) {
             playFile(generation, file) {
                 scope.launch {
-                    playYoudaoFallback(generation, word, accent, "vivo 合成音频播放失败")
+                    playYoudaoFallback(generation, word, accent, "在线合成音频播放失败")
                 }
             }
         }
@@ -204,14 +204,14 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         val cached = cache.find(word, accent, SOURCE_VIVO)
         if (cached != null) {
             playFile(generation, cached) {
-                scope.launch { speak(generation, word, accent, "vivo 缓存音频播放失败", youdaoReason) }
+                scope.launch { speak(generation, word, accent, "在线合成缓存音频播放失败", youdaoReason) }
             }
             return
         }
         val result = vivoClient.synthesize(word, langType = accent.ttsLangType)
         if (generation != playGeneration) return
         val vivoReason: String? = when (result) {
-            is VivoTtsResult.Audio -> if (result.bytes.isEmpty()) "vivo 返回空音频" else null
+            is VivoTtsResult.Audio -> if (result.bytes.isEmpty()) "在线合成返回空音频" else null
             is VivoTtsResult.Error -> result.message
         }
         val audio = (result as? VivoTtsResult.Audio)?.bytes
@@ -222,7 +222,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
         if (generation == playGeneration) {
             playFile(generation, file) {
-                scope.launch { speak(generation, word, accent, "vivo 合成音频播放失败", youdaoReason) }
+                scope.launch { speak(generation, word, accent, "在线合成音频播放失败", youdaoReason) }
             }
         }
     }
