@@ -440,6 +440,10 @@ private fun WordList(
                 .padding(padding)
                 .imePadding(),
         ) {
+            // 手机横屏、分屏等紧凑高度窗口里，顶栏之外每一块固定内容都直接从列表高度里扣：
+            // 搜索框收紧留白后仍固定（打字时不随列表滚走、也不会因重建丢焦点），
+            // 筛选行与分组标题改为随列表一起滚动，列表才不会只剩一行。
+            val chromeInList = isCompactWindowHeight()
             Column(
                 modifier = Modifier
                     .fillMaxSize(),
@@ -452,7 +456,7 @@ private fun WordList(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 16.dp, vertical = if (chromeInList) 4.dp else 12.dp)
                     .semantics {
                         contentDescription = "搜索英文、中文或定义"
                         stateDescription = when {
@@ -512,37 +516,29 @@ private fun WordList(
                 ),
             )
 
-            if (query.isBlank()) {
-                Row(
+            if (query.isBlank() && !chromeInList) {
+                DictionaryFilterRow(
+                    state = state,
+                    onSortModeChanged = onSortModeChanged,
+                    onCurriculumTagChanged = onCurriculumTagChanged,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterDropdownMenu(
-                        description = "排序方式",
-                        label = state.sortMode.label,
-                        options = SortMode.entries.map { mode -> mode.label to mode },
-                        selected = state.sortMode,
-                        onSelect = onSortModeChanged,
-                        modifier = Modifier.weight(1f),
-                    )
-                    FilterDropdownMenu(
-                        description = "词条范围",
-                        label = state.curriculumTag ?: "全部词条",
-                        options = buildList {
-                            add("全部词条" to null)
-                            state.availableCurriculumTags.forEach { add(it to it) }
-                        },
-                        selected = state.curriculumTag,
-                        onSelect = onCurriculumTagChanged,
-                        active = state.curriculumTag != null,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                )
             }
 
             if (isSearchPending || state.words.isEmpty()) {
+                if (query.isBlank() && chromeInList) {
+                    // 空状态区自带滚动，筛选行固定在这里不会把内容压到看不见。
+                    DictionaryFilterRow(
+                        state = state,
+                        onSortModeChanged = onSortModeChanged,
+                        onCurriculumTagChanged = onCurriculumTagChanged,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
                 EmptySearchState(
                     query = query,
                     isSearchPending = isSearchPending,
@@ -563,14 +559,12 @@ private fun WordList(
                     label = "search-clear-crossfade",
                 ) { isSearching ->
                     Column(modifier = Modifier.fillMaxSize()) {
-                        Text(
-                            text = if (isSearching) "匹配词条" else "全部词条",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .padding(start = 20.dp, end = 16.dp, bottom = 8.dp)
-                                .semantics { heading() },
-                        )
+                        if (!chromeInList) {
+                            DictionaryListHeading(
+                                isSearching = isSearching,
+                                modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
+                            )
+                        }
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -579,6 +573,21 @@ private fun WordList(
                             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
+                            if (chromeInList) {
+                                if (query.isBlank()) {
+                                    item(key = "filter-row") {
+                                        DictionaryFilterRow(
+                                            state = state,
+                                            onSortModeChanged = onSortModeChanged,
+                                            onCurriculumTagChanged = onCurriculumTagChanged,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
+                                }
+                                item(key = "list-heading") {
+                                    DictionaryListHeading(isSearching = isSearching)
+                                }
+                            }
                             itemsIndexed(state.words, key = { _, word -> word.id }) { index, word ->
                                 // Stagger: each item fades in with a tiny vertical slide, capped so
                                 // long lists don't drag the entrance past the animation duration.
@@ -742,6 +751,52 @@ private fun <T> FilterDropdownMenu(
             }
         }
     }
+}
+
+/** 浏览列表的排序与词条范围筛选行；紧凑高度窗口下作为列表项随内容滚动。 */
+@Composable
+private fun DictionaryFilterRow(
+    state: DictionaryScreenState.Ready,
+    onSortModeChanged: (SortMode) -> Unit,
+    onCurriculumTagChanged: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterDropdownMenu(
+            description = "排序方式",
+            label = state.sortMode.label,
+            options = SortMode.entries.map { mode -> mode.label to mode },
+            selected = state.sortMode,
+            onSelect = onSortModeChanged,
+            modifier = Modifier.weight(1f),
+        )
+        FilterDropdownMenu(
+            description = "词条范围",
+            label = state.curriculumTag ?: "全部词条",
+            options = buildList {
+                add("全部词条" to null)
+                state.availableCurriculumTags.forEach { add(it to it) }
+            },
+            selected = state.curriculumTag,
+            onSelect = onCurriculumTagChanged,
+            active = state.curriculumTag != null,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** 列表分组标题：搜索中显示「匹配词条」，浏览时显示「全部词条」。 */
+@Composable
+private fun DictionaryListHeading(isSearching: Boolean, modifier: Modifier = Modifier) {
+    Text(
+        text = if (isSearching) "匹配词条" else "全部词条",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.semantics { heading() },
+    )
 }
 
 @Composable

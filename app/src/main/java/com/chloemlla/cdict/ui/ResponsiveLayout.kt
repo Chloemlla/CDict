@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
@@ -55,6 +56,18 @@ fun ResponsiveContentBox(
             content = content,
         )
     }
+}
+
+/**
+ * 【响应式】窗口高度是否为紧凑档（手机横屏、分屏等，约 < 480dp）。
+ * 这类窗口留给内容的高度只有一两百 dp，固定在顶部的搜索框与筛选行会把用 weight 分配
+ * 高度的列表挤到近乎 0，因此紧凑高度下应把这些顶部控件放进列表一起滚动。
+ */
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
+@Composable
+fun isCompactWindowHeight(): Boolean {
+    val activity = LocalContext.current.findActivity() ?: return false
+    return calculateWindowSizeClass(activity).heightSizeClass == WindowHeightSizeClass.Compact
 }
 
 /** 从 Compose LocalContext 逆包装找到 [Activity]；找不到返回 null（退化为满宽）。 */
