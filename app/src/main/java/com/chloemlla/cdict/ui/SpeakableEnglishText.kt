@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Stop
@@ -57,8 +58,10 @@ internal fun SpeakableEnglishText(
                 color = if (speaking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .weight(1f)
+                    // 触控目标保持 48dp，同时让文字在这块高度内垂直居中，避免与朗读按钮错位。
                     .heightIn(min = 48.dp)
                     .clickable(role = Role.Button, onClick = { onSpeak(en) })
+                    .wrapContentHeight(Alignment.CenterVertically)
                     .semantics {
                         contentDescription = if (speaking) "停止朗读 $en" else "朗读 $en"
                         stateDescription = if (speaking) "正在朗读，再次点击停止" else "未朗读"
@@ -92,7 +95,7 @@ internal fun SpeakableEnglishText(
             ui is PhraseUiState.Loading -> Text(
                 text = "翻译中…",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ui is PhraseUiState.Done -> Text(
                 text = ui.zh,
@@ -104,9 +107,9 @@ internal fun SpeakableEnglishText(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    text = "翻译失败",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    text = "译文加载失败",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
                 )
                 TextButton(onClick = { onTranslate(en) }) { Text("重试") }
             }

@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,13 +80,19 @@ fun wordHasAnnotations(word: WordEntity): Boolean =
         parseCollocations(word.collocations).isNotEmpty()
 
 @Composable
-private fun AnnotationPill(text: String, bg: Color, fg: Color) {
-    Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(8.dp)) {
+private fun AnnotationPill(
+    text: String,
+    bg: Color,
+    fg: Color,
+    modifier: Modifier = Modifier,
+    maxLines: Int = 1,
+) {
+    Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(8.dp), modifier = modifier) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
+            maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
         )
@@ -158,13 +166,25 @@ fun WordAnnotationBadges(word: WordEntity, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (emotion != null && emotionLabel != null) {
-            AnnotationPill(text = emotionLabel, bg = emotion.first, fg = emotion.second)
-        }
-        register?.let {
+            // 只有颜色区分不足以说明标签含义，读屏时补上「情感色彩」维度。
             AnnotationPill(
-                text = it,
-                bg = MaterialTheme.colorScheme.secondaryContainer,
-                fg = MaterialTheme.colorScheme.onSecondaryContainer,
+                text = emotionLabel,
+                bg = emotion.first,
+                fg = emotion.second,
+                modifier = Modifier.semantics(mergeDescendants = true) {
+                    contentDescription = "情感色彩：$emotionLabel"
+                },
+            )
+        }
+        register?.let { registerText ->
+            // 语域改用中性容器色：避免与「中性」情感标签渲染成完全相同的胶囊。
+            AnnotationPill(
+                text = registerText,
+                bg = MaterialTheme.colorScheme.surfaceContainerHighest,
+                fg = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics(mergeDescendants = true) {
+                    contentDescription = "语域：$registerText"
+                },
             )
         }
     }
@@ -225,6 +245,8 @@ fun WordAnnotationSection(
                             text = collocation,
                             bg = MaterialTheme.colorScheme.surfaceContainerHighest,
                             fg = MaterialTheme.colorScheme.onSurface,
+                            // 搭配短语可能较长，允许折成两行而不是直接截断。
+                            maxLines = 2,
                         )
                     }
                 }
@@ -243,7 +265,8 @@ fun WordAnnotationSection(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.WarningAmber,
-                        contentDescription = null,
+                        // 提醒语气只靠图标和容器色表达，读屏需要显式说明。
+                        contentDescription = "使用提醒",
                         modifier = Modifier.size(20.dp),
                     )
                     Text(

@@ -64,11 +64,12 @@ fun PronunciationButtons(
             if (ukPlaying) {
                 Icon(Icons.Filled.Stop, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
-                Text("停止")
+                // 播放中保留口音信息，避免两个按钮都只写「停止」难以分辨。
+                Text("停止英音", maxLines = 1)
             } else {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
-                Text("英音")
+                Text("英音", maxLines = 1)
             }
         }
         FilledTonalButton(
@@ -85,11 +86,11 @@ fun PronunciationButtons(
             if (usPlaying) {
                 Icon(Icons.Filled.Stop, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
-                Text("停止")
+                Text("停止美音", maxLines = 1)
             } else {
                 Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
-                Text("美音")
+                Text("美音", maxLines = 1)
             }
         }
     }
@@ -151,7 +152,8 @@ fun WordCardContent(
                             partOfSpeechLabel(it),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            // 与词表标签、词频标签统一内边距（8dp / 5dp）。
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         )
                     }
                 }
@@ -159,7 +161,8 @@ fun WordCardContent(
                     Text(
                         text = phonetics.joinToString("  ·  "),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // 音标统一用 primary，与词典列表、词条详情保持一致。
+                        color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,

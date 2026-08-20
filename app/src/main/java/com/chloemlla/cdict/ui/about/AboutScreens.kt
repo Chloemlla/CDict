@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -76,7 +77,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import com.chloemlla.cdict.R
@@ -92,6 +92,7 @@ private fun AboutRow(
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    external: Boolean = false,
 ) {
     val interactive = onClick != null || onLongClick != null
     Row(
@@ -103,22 +104,17 @@ private fun AboutRow(
                         .clip(MaterialTheme.shapes.small)
                         .combinedClickable(
                             onClick = onClick ?: {},
-                            onClickLabel = title,
+                            onClickLabel = if (external) "$title，将在浏览器中打开" else title,
                             role = if (onClick != null) Role.Button else null,
                             onLongClick = onLongClick,
                             onLongClickLabel = if (onLongClick != null) "长按复制" else null,
                         )
-                        .semantics {
-                            if (onClick != null || onLongClick != null) {
-                                role = Role.Button
-                            }
-                        }
                 } else {
                     Modifier
                 }
             )
-            .padding(horizontal = 4.dp, vertical = 14.dp)
-            .heightIn(min = 48.dp),
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 4.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -134,7 +130,7 @@ private fun AboutRow(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -146,12 +142,86 @@ private fun AboutRow(
         if (onClick != null) {
             Spacer(Modifier.width(4.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = if (external) {
+                    Icons.AutoMirrored.Filled.OpenInNew
+                } else {
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                },
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.outline,
+                modifier = if (external) Modifier.size(18.dp) else Modifier,
             )
         }
     }
+}
+
+/** 整行可切换的开关项：点击行任意位置都会切换，开关本体不单独获得无障碍焦点。 */
+@Composable
+private fun AboutSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    stateText: String,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .semantics { stateDescription = stateText }
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 4.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            enabled = enabled,
+        )
+    }
+}
+
+/** 关于页分组小标题，作为无障碍 heading，方便快速跳转。 */
+@Composable
+private fun AboutSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 20.dp, bottom = 4.dp)
+            .semantics { heading() },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -168,6 +238,12 @@ fun AboutScreen(
     var autoCheckUpdate by remember { mutableStateOf(aboutStore.autoCheckUpdate) }
     val controller = LocalAboutController.current
     val commitUrl = "${AboutData.sourceUrl}/commit/${BuildInfo.commitHash}"
+    // 开发构建没有真实提交哈希，此时整行不可点击，避免打开无效链接。
+    val openCommitPage: (() -> Unit)? = if (BuildInfo.isDevBuild) {
+        null
+    } else {
+        ({ UrlOpener.open(context, commitUrl) })
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -194,163 +270,163 @@ fun AboutScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-            Spacer(Modifier.height(32.dp))
-            Image(
-                painter = painterResource(R.mipmap.ic_launcher),
-                contentDescription = null,
-                modifier = Modifier.size(96.dp),
-            )
-            Spacer(Modifier.height(16.dp))
-            SelectionContainer {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(AboutData.appName, style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        AboutData.appDescription,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(28.dp))
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-            ) {
-                AboutRow(
-                    title = "当前版本",
-                    trailing = {
-                        SelectionContainer {
-                            Text(
-                                BuildInfo.versionLabel,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
+                Spacer(Modifier.height(32.dp))
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher),
+                    contentDescription = null,
+                    modifier = Modifier.size(96.dp),
                 )
-                HorizontalDivider()
-                AboutRow(
-                    title = "构建信息",
-                    subtitle = "构建于 ${BuildInfo.formatBuildTime()} · 长按复制提交哈希",
-                    trailing = {
+                Spacer(Modifier.height(16.dp))
+                SelectionContainer {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(AboutData.appName, style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            BuildInfo.shortHash,
-                            style = MaterialTheme.typography.labelLarge,
+                            AboutData.appDescription,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp),
                         )
-                    },
-                    onClick = {
-                        if (!BuildInfo.isDevBuild) {
-                            UrlOpener.open(context, commitUrl)
-                        }
-                    },
-                    onLongClick = {
-                        UrlOpener.copy(context, BuildInfo.commitHash, "已复制提交哈希")
-                    },
-                )
-                HorizontalDivider()
-                AboutRow(
-                    title = "源码仓库",
-                    subtitle = AboutData.sourceUrl,
-                    onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
-                )
-                HorizontalDivider()
-                AboutRow(
-                    title = "朗读优先来源",
-                    subtitle = if (youdaoFirst) {
-                        "有道优先，失败时使用 vivo TTS"
-                    } else {
-                        "vivo TTS 优先，失败时使用有道"
-                    },
-                    trailing = {
-                        Switch(
-                            checked = youdaoFirst,
-                            onCheckedChange = { checked ->
-                                youdaoFirst = checked
-                                aboutStore.youdaoFirst = checked
-                            },
-                        )
-                    },
-                )
-                HorizontalDivider()
-                AboutRow(
-                    title = "应用声明",
-                    subtitle = "法律信息、开源许可声明、应用权限",
-                    onClick = { controller.push(AboutScreenRoute.Declarations) },
-                )
-                HorizontalDivider()
-                AboutRow(
-                    title = "本次更新说明",
-                    subtitle = "基于 Commit Hash / Build Time 的本构建有意变更",
-                    onClick = { controller.push(AboutScreenRoute.WhatsNew) },
-                )
-                HorizontalDivider()
-                AboutRow(
-                    title = "自动检查软件更新",
-                    subtitle = when {
-                        !updateCheckEnabled -> "当前版本不支持检查更新"
-                        autoCheckUpdate -> "启动应用时自动检查新版本，发现更新才提示"
-                        else -> "已关闭，仅在手动点击「检查更新」时检查"
-                    },
-                    trailing = {
-                        Switch(
-                            checked = autoCheckUpdate,
-                            enabled = updateCheckEnabled,
-                            onCheckedChange = { checked ->
-                                autoCheckUpdate = checked
-                                aboutStore.autoCheckUpdate = checked
-                            },
-                            modifier = Modifier.semantics {
-                                stateDescription = if (autoCheckUpdate) "自动检查更新已开启" else "自动检查更新已关闭"
-                            },
-                        )
-                    },
-                )
-                HorizontalDivider()
-                Button(
-                    onClick = onCheckForUpdate,
-                    enabled = updateCheckEnabled && !updateCheckInProgress,
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics {
-                            stateDescription = when {
-                                !updateCheckEnabled -> "当前版本不支持检查更新"
-                                updateCheckInProgress -> "正在检查更新"
-                                else -> "可检查更新"
+                        .padding(horizontal = 20.dp),
+                ) {
+                    AboutSectionLabel("版本与构建")
+                    AboutRow(
+                        title = "当前版本",
+                        trailing = {
+                            SelectionContainer {
+                                Text(
+                                    BuildInfo.versionLabel,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         },
-                ) {
-                    Icon(Icons.Filled.Update, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (updateCheckInProgress) "检查中…" else "检查更新")
+                    )
+                    HorizontalDivider()
+                    AboutRow(
+                        title = "构建信息",
+                        subtitle = if (BuildInfo.isDevBuild) {
+                            "构建于 ${BuildInfo.formatBuildTime()} · 长按复制提交哈希"
+                        } else {
+                            "构建于 ${BuildInfo.formatBuildTime()} · 点击查看提交，长按复制哈希"
+                        },
+                        trailing = {
+                            Text(
+                                BuildInfo.shortHash,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        onClick = openCommitPage,
+                        onLongClick = {
+                            UrlOpener.copy(context, BuildInfo.commitHash, "已复制提交哈希")
+                        },
+                        external = !BuildInfo.isDevBuild,
+                    )
+                    HorizontalDivider()
+                    AboutRow(
+                        title = "源码仓库",
+                        subtitle = AboutData.sourceUrl,
+                        onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
+                        external = true,
+                    )
+
+                    AboutSectionLabel("软件更新")
+                    AboutSwitchRow(
+                        title = "自动检查软件更新",
+                        subtitle = when {
+                            !updateCheckEnabled -> "当前版本不支持检查更新"
+                            autoCheckUpdate -> "启动应用时自动检查新版本，发现更新才提示"
+                            else -> "已关闭，仅在手动点击「检查更新」时检查"
+                        },
+                        checked = autoCheckUpdate,
+                        stateText = if (autoCheckUpdate) "自动检查更新已开启" else "自动检查更新已关闭",
+                        enabled = updateCheckEnabled,
+                        onCheckedChange = { checked ->
+                            autoCheckUpdate = checked
+                            aboutStore.autoCheckUpdate = checked
+                        },
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onCheckForUpdate,
+                        enabled = updateCheckEnabled && !updateCheckInProgress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .semantics {
+                                stateDescription = when {
+                                    !updateCheckEnabled -> "当前版本不支持检查更新"
+                                    updateCheckInProgress -> "正在检查更新"
+                                    else -> "可检查更新"
+                                }
+                            },
+                    ) {
+                        Icon(Icons.Filled.Update, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (updateCheckInProgress) "检查中…" else "检查更新")
+                    }
+
+                    AboutSectionLabel("朗读")
+                    AboutSwitchRow(
+                        title = "朗读优先来源",
+                        subtitle = if (youdaoFirst) {
+                            "有道优先，失败时使用 vivo TTS"
+                        } else {
+                            "vivo TTS 优先，失败时使用有道"
+                        },
+                        checked = youdaoFirst,
+                        stateText = if (youdaoFirst) "有道优先" else "vivo TTS 优先",
+                        onCheckedChange = { checked ->
+                            youdaoFirst = checked
+                            aboutStore.youdaoFirst = checked
+                        },
+                    )
+                    HorizontalDivider()
+                    val pronunciationDiag by PronunciationDiagnostics.lastFallback.collectAsState()
+                    AboutRow(
+                        title = "朗读诊断",
+                        subtitle = when (val d = pronunciationDiag) {
+                            null -> "暂无回退记录：先在词详情页点喇叭朗读一次"
+                            else -> "vivo: ${d.vivoReason ?: "—"} · 有道: ${d.youdaoReason}"
+                        },
+                    )
+
+                    AboutSectionLabel("更多信息")
+                    AboutRow(
+                        title = "应用声明",
+                        subtitle = "法律信息、开源许可声明、应用权限",
+                        onClick = { controller.push(AboutScreenRoute.Declarations) },
+                    )
+                    HorizontalDivider()
+                    AboutRow(
+                        title = "本次更新说明",
+                        subtitle = "基于 Commit Hash / Build Time 的本构建有意变更",
+                        onClick = { controller.push(AboutScreenRoute.WhatsNew) },
+                    )
                 }
-                Spacer(Modifier.height(4.dp))
-                val pronunciationDiag by PronunciationDiagnostics.lastFallback.collectAsState()
-                AboutRow(
-                    title = "朗读诊断",
-                    subtitle = when (val d = pronunciationDiag) {
-                        null -> "暂无回退记录：先在词详情页点喇叭朗读一次"
-                        else -> "vivo: ${d.vivoReason ?: "—"} · 有道: ${d.youdaoReason}"
-                    },
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "开源协议见「应用声明 → 开源许可声明」",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp),
                 )
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(24.dp))
-            Text(
-                "开源协议见「应用声明 → 开源许可声明」",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-            Spacer(Modifier.height(24.dp))
         }
     }
-}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -383,26 +459,26 @@ fun DeclarationsScreen(onBack: () -> Unit) {
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp),
             ) {
-            AboutRow(
-                title = "法律信息",
-                subtitle = "用户协议、隐私政策、开源协议",
-                onClick = { controller.push(AboutScreenRoute.LegalInfo) },
-            )
-            HorizontalDivider()
-            AboutRow(
-                title = "开源许可声明",
-                subtitle = "源码地址、永久免费提示、协议与依赖鸣谢",
-                onClick = { controller.push(AboutScreenRoute.OssNotice) },
-            )
-            HorizontalDivider()
-            AboutRow(
-                title = "应用权限",
-                subtitle = "应用声明的系统权限及用途说明",
-                onClick = { controller.push(AboutScreenRoute.AppPermissions) },
-            )
+                AboutRow(
+                    title = "法律信息",
+                    subtitle = "用户协议、隐私政策、开源协议",
+                    onClick = { controller.push(AboutScreenRoute.LegalInfo) },
+                )
+                HorizontalDivider()
+                AboutRow(
+                    title = "开源许可声明",
+                    subtitle = "源码地址、永久免费提示、协议与依赖鸣谢",
+                    onClick = { controller.push(AboutScreenRoute.OssNotice) },
+                )
+                HorizontalDivider()
+                AboutRow(
+                    title = "应用权限",
+                    subtitle = "应用声明的系统权限及用途说明",
+                    onClick = { controller.push(AboutScreenRoute.AppPermissions) },
+                )
+            }
         }
     }
-}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -424,46 +500,52 @@ fun LegalInfoScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        LazyColumn(
+        ResponsiveContentBox(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            item {
-                SelectionContainer {
-                    Text(
-                        "以下为应用提供的法律文件。点击条目在浏览器中打开对应页面。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp),
+            ) {
+                item {
+                    SelectionContainer {
+                        Text(
+                            "以下为应用提供的法律文件。点击条目会在浏览器中打开对应页面。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        )
+                    }
                 }
-            }
-            items(AboutData.legalDocs) { doc ->
-                HorizontalDivider(Modifier.padding(horizontal = 20.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { UrlOpener.open(context, doc.url) }
-                        .semantics { role = Role.Button }
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                        .heightIn(min = 56.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        doc.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(18.dp),
-                    )
+                items(AboutData.legalDocs) { doc ->
+                    HorizontalDivider(Modifier.padding(horizontal = 20.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                onClickLabel = "${doc.title}，将在浏览器中打开",
+                                role = Role.Button,
+                            ) { UrlOpener.open(context, doc.url) }
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            doc.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
         }
@@ -520,8 +602,11 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
                 if (credit.url != null) {
                     Modifier
                         .clip(cardShape)
-                        .clickable(onClick = onClick)
-                        .semantics { role = Role.Button }
+                        .clickable(
+                            onClickLabel = "${credit.name}，将在浏览器中打开",
+                            role = Role.Button,
+                            onClick = onClick,
+                        )
                 } else {
                     Modifier
                 }
@@ -565,7 +650,7 @@ private fun CreditCard(credit: AboutData.OssCredit, onClick: () -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = MaterialTheme.shapes.extraSmall,
                 color = MaterialTheme.colorScheme.secondaryContainer,
             ) {
                 Text(
@@ -606,102 +691,117 @@ fun OssNoticeScreen(forced: Boolean, onBack: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 12.dp)
-                        .navigationBarsPadding(),
+                        .navigationBarsPadding()
+                        .heightIn(min = 48.dp),
                 ) {
                     Text(if (forced) "我已了解，继续" else "关闭")
                 }
             }
         },
     ) { padding ->
-        LazyColumn(
+        ResponsiveContentBox(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item(key = "source") {
-                SectionCard(icon = Icons.Filled.Code, title = "官方开源地址") {
-                    Text(
-                        AboutData.sourceUrl,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        FilledTonalButton(
-                            onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("打开仓库", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        OutlinedButton(
-                            onClick = { UrlOpener.copy(context, AboutData.sourceUrl, "已复制仓库链接") },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("复制链接", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-            item(key = "free") {
-                SectionCard(
-                    icon = Icons.Filled.Info,
-                    title = AboutData.freeNoticeTitle,
-                    titleColor = MaterialTheme.colorScheme.error,
-                ) {
-                    Text(AboutData.freeNoticeBody, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            item(key = "license") {
-                SectionCard(icon = Icons.Filled.Gavel, title = "本项目开源协议") {
-                    Text(AboutData.projectLicense, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "完整协议文本见仓库 LICENSE 文件。使用、修改与再分发须遵守 AGPL-3.0。",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    FilledTonalButton(onClick = { UrlOpener.open(context, AboutData.projectLicenseUrl) }) {
-                        Text("查看 LICENSE")
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        AboutData.disclaimer,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            item(key = "creditsHeading") {
-                SelectionContainer {
-                    Column {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                item(key = "source") {
+                    SectionCard(icon = Icons.Filled.Code, title = "官方开源地址") {
                         Text(
-                            "第三方依赖鸣谢",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                            AboutData.sourceUrl,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            FilledTonalButton(
+                                onClick = { UrlOpener.open(context, AboutData.sourceUrl) },
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            ) {
+                                Text("打开仓库", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            OutlinedButton(
+                                onClick = { UrlOpener.copy(context, AboutData.sourceUrl, "已复制仓库链接") },
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            ) {
+                                Text("复制链接", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            "以下为本应用使用到的第三方开源项目、数据来源与接口。点击条目可打开对应链接。",
+                            "「打开仓库」将在浏览器中打开。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+                item(key = "free") {
+                    SectionCard(
+                        icon = Icons.Filled.Info,
+                        title = AboutData.freeNoticeTitle,
+                        titleColor = MaterialTheme.colorScheme.error,
+                    ) {
+                        Text(AboutData.freeNoticeBody, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                item(key = "license") {
+                    SectionCard(icon = Icons.Filled.Gavel, title = "本项目开源协议") {
+                        Text(AboutData.projectLicense, style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "完整协议文本见仓库 LICENSE 文件。使用、修改与再分发须遵守 AGPL-3.0。",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        FilledTonalButton(
+                            onClick = { UrlOpener.open(context, AboutData.projectLicenseUrl) },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
+                            Text("查看 LICENSE（浏览器打开）", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            AboutData.disclaimer,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-            }
-            items(AboutData.credits) { credit ->
-                CreditCard(
-                    credit = credit,
-                    onClick = {
-                        credit.url?.let { url -> UrlOpener.open(context, url) }
-                    },
-                )
-            }
-            item(key = "bottomSpacer") {
-                Spacer(Modifier.height(4.dp))
+                item(key = "creditsHeading") {
+                    SelectionContainer {
+                        Column {
+                            Text(
+                                "第三方依赖鸣谢",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.semantics { heading() },
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "以下为本应用使用到的第三方开源项目、数据来源与接口。点击条目会在浏览器中打开对应链接。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                items(AboutData.credits) { credit ->
+                    CreditCard(
+                        credit = credit,
+                        onClick = {
+                            credit.url?.let { url -> UrlOpener.open(context, url) }
+                        },
+                    )
+                }
+                item(key = "bottomSpacer") {
+                    Spacer(Modifier.height(4.dp))
+                }
             }
         }
     }
@@ -725,55 +825,67 @@ fun AppPermissionsScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        LazyColumn(
+        ResponsiveContentBox(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            item {
-                SelectionContainer {
-                    Text(
-                        "以下为应用声明使用的系统权限及其用途。权限仅在对应功能首次使用时请求，未授权不会影响其余功能。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(vertical = 8.dp),
+            ) {
+                item {
+                    SelectionContainer {
+                        Text(
+                            "以下为应用声明使用的系统权限及其用途。权限仅在对应功能首次使用时请求，未授权不会影响其余功能。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        )
+                    }
                 }
-            }
-            items(AboutData.appPermissions) { permission ->
-                HorizontalDivider(Modifier.padding(horizontal = 20.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Shield,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(16.dp))
-                    SelectionContainer(modifier = Modifier.weight(1f)) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(permission.name, style = MaterialTheme.typography.titleMedium)
-                                permission.scope?.let { scope ->
-                                    Spacer(Modifier.width(8.dp))
+                items(AboutData.appPermissions) { permission ->
+                    HorizontalDivider(Modifier.padding(horizontal = 20.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Shield,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        SelectionContainer(modifier = Modifier.weight(1f)) {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        scope,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.outline,
+                                        permission.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
+                                    permission.scope?.let { scope ->
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            scope,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    permission.purpose,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                permission.purpose,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }
@@ -822,7 +934,10 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                 )
                 Spacer(Modifier.weight(1f))
                 if (currentPage < lastIndex) {
-                    TextButton(onClick = onBack) { Text("跳过") }
+                    TextButton(
+                        onClick = onBack,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("跳过") }
                 }
             }
             HorizontalPager(
@@ -990,7 +1105,7 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                             scope.launch { pagerState.animateScrollToPage(currentPage - 1) }
                         },
                         enabled = currentPage > 0,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     ) {
                         Text("上一页")
                     }
@@ -1002,7 +1117,7 @@ fun WhatsNewScreen(forced: Boolean, onBack: () -> Unit) {
                                 onBack()
                             }
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     ) {
                         Text(
                             when {

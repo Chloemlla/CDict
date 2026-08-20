@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -68,12 +70,15 @@ fun ScopeFilterRow(
             availableCurriculumTags.forEach { add(it to it) }
         }
     }
+    val isFiltered = scope.curriculumTag != null || scope.frequencyGroup != null
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         ScopeDropdown(
             label = scope.curriculumTag ?: SCOPE_ALL_WORDS_LABEL,
+            a11yLabel = "词表范围",
             options = curriculumOptions,
             selected = scope.curriculumTag,
             onSelect = { tag -> onScopeChange(scope.copy(curriculumTag = tag)) },
@@ -82,6 +87,7 @@ fun ScopeFilterRow(
         )
         ScopeDropdown(
             label = scope.frequencyGroup?.let { "组 $it" } ?: SCOPE_ALL_GROUPS_LABEL,
+            a11yLabel = "频率组范围",
             options = SCOPE_FREQUENCY_OPTIONS,
             selected = scope.frequencyGroup,
             onSelect = { group ->
@@ -90,6 +96,19 @@ fun ScopeFilterRow(
             active = scope.frequencyGroup != null,
             modifier = Modifier.weight(1f),
         )
+        // 仅在存在筛选时出现，避免平时占用行宽；一键回到「全部词表 + 全部组」。
+        if (isFiltered) {
+            IconButton(
+                onClick = { onScopeChange(StudyScope()) },
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "清空范围筛选，恢复全部词表与全部组",
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
     }
 }
 
@@ -97,6 +116,7 @@ fun ScopeFilterRow(
 @Composable
 private fun <T> ScopeDropdown(
     label: String,
+    a11yLabel: String,
     options: List<Pair<String, T>>,
     selected: T,
     onSelect: (T) -> Unit,
@@ -109,7 +129,7 @@ private fun <T> ScopeDropdown(
         .fillMaxWidth()
         .heightIn(min = 48.dp)
         .semantics {
-            contentDescription = "范围筛选：$label"
+            contentDescription = "$a11yLabel：$label"
             role = Role.Button
             stateDescription = filterState
         }
@@ -165,7 +185,7 @@ private fun <T> ScopeDropdown(
                         onSelect(option)
                     },
                     trailingIcon = if (option == selected) {
-                        { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        { Icon(Icons.Filled.Check, contentDescription = "已选中", modifier = Modifier.size(18.dp)) }
                     } else null,
                 )
             }

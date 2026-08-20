@@ -25,10 +25,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Recommend
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -59,6 +62,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -108,7 +112,7 @@ fun CdictApp(
     val studyState by studyViewModel.state.collectAsStateWithLifecycle()
     val masteredIds by studyViewModel.masteredIds.collectAsStateWithLifecycle()
     val recommendationState by recommendationViewModel.state.collectAsStateWithLifecycle()
-    // 记录实际访问过的标签；历史为空时交还系统处理返回并退出应用。
+    // 记录实际访问过的标签；每个标签只保留最近一次，历史为空时交还系统处理返回并退出应用。
     var navStack by rememberSaveable(stateSaver = IntListSaver) { mutableStateOf<List<Int>>(emptyList()) }
     // 仅在从其他标签跳转到词典详情时记录来源，以便关闭详情后原路返回。
     var dictionaryJumpFrom by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -133,10 +137,11 @@ fun CdictApp(
 
     val haptic = LocalHapticFeedback.current
     // 手动切换标签时保留访问历史，轻触反馈帮助用户确认当前标签已改变。
+    // 同一标签在历史里只保留最近一次，避免来回切换后要按很多次返回才能退出应用。
     val switchTab: (Int) -> Unit = { index ->
         if (index != selectedTab) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            navStack = navStack + selectedTab
+            navStack = navStack.filterNot { it == selectedTab } + selectedTab
             if (index == CdictDestination.Dictionary.ordinal) dictionaryJumpFrom = null
             selectedTab = index
         }
@@ -146,7 +151,7 @@ fun CdictApp(
         onDictionarySelect(word)
         if (selectedTab != CdictDestination.Dictionary.ordinal) {
             dictionaryJumpFrom = selectedTab
-            navStack = navStack + selectedTab
+            navStack = navStack.filterNot { it == selectedTab } + selectedTab
             selectedTab = CdictDestination.Dictionary.ordinal
         }
     }
@@ -165,6 +170,11 @@ fun CdictApp(
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
     // 各标签共用播放状态，让发音按钮能同步显示播放或停止状态。
     val playingKey = (dictionaryState as? DictionaryScreenState.Ready)?.playingKey
+    // 待复习数量角标：在词典/翻译/推荐页也能看到今天还剩多少词要复习，不必先切回背词页确认。
+    val pendingReviewCount = (studyState as? StudyScreenState.Ready)
+        ?.takeIf { it.phase == StudyPhase.REVIEW }
+        ?.reviewRemaining
+        ?.takeIf { it > 0 }
     // 保留每个标签的滚动位置、输入内容和打开的详情，切回时不丢失上下文。
     val tabStateHolder = rememberSaveableStateHolder()
 
@@ -172,6 +182,7 @@ fun CdictApp(
     if (dictionaryState is DictionaryScreenState.Ready && dictionaryState.updateNeeded) {
         AlertDialog(
             onDismissRequest = onDictionaryDismissUpdate,
+            icon = { Icon(imageVector = Icons.Filled.Autorenew, contentDescription = null) },
             title = { Text("检测到词典已更新") },
             text = {
                 Text("本地词库需要重建以加载新版词典内容，通常只需几秒。重建期间暂不能查询，但不会影响背词进度。")
@@ -200,6 +211,7 @@ fun CdictApp(
                 CdictNavigationBar(
                     selectedTab = selectedTab,
                     onTabSelected = switchTab,
+                    pendingReviewCount = pendingReviewCount,
                 )
             }
         },
@@ -213,6 +225,7 @@ fun CdictApp(
                 CdictNavigationRail(
                     selected = destination,
                     onSelect = { switchTab(it.ordinal) },
+                    pendingReviewCount = pendingReviewCount,
                 )
                 Box(
                     modifier = Modifier
@@ -389,6 +402,7 @@ private fun DestinationContent(
 private fun CdictNavigationBar(
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
+    pendingReviewCount: Int?,
 ) {
     val selectedDestination =
         CdictDestination.entries.getOrElse(selectedTab.coerceIn(0, CdictDestination.entries.lastIndex)) {
@@ -423,9 +437,9 @@ private fun CdictNavigationBar(
                         selected = selectedTab == index,
                         onClick = { onTabSelected(index) },
                         icon = {
-                            Icon(
-                                imageVector = dest.icon,
-                                contentDescription = null,
+                            NavigationDestinationIcon(
+                                destination = dest,
+                                pendingReviewCount = pendingReviewCount,
                             )
                         },
                         label = { Text(dest.label, maxLines = 1) },
@@ -447,6 +461,7 @@ private fun CdictNavigationBar(
 private fun CdictNavigationRail(
     selected: CdictDestination,
     onSelect: (CdictDestination) -> Unit,
+    pendingReviewCount: Int?,
 ) {
     val itemColors = NavigationRailItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -482,9 +497,9 @@ private fun CdictNavigationRail(
                 selected = dest == selected,
                 onClick = { onSelect(dest) },
                 icon = {
-                    Icon(
-                        imageVector = dest.icon,
-                        contentDescription = null,
+                    NavigationDestinationIcon(
+                        destination = dest,
+                        pendingReviewCount = pendingReviewCount,
                     )
                 },
                 label = { Text(dest.label, maxLines = 1) },
@@ -495,5 +510,34 @@ private fun CdictNavigationRail(
                 },
             )
         }
+    }
+}
+
+/**
+ * 导航项图标：背词标签在有待复习词时叠加数量角标（超过 99 显示 99+），
+ * 让用户在任意标签都能看到今天剩余的复习量。角标带中文语义，读屏会朗读“待复习 N 个”。
+ */
+@Composable
+private fun NavigationDestinationIcon(
+    destination: CdictDestination,
+    pendingReviewCount: Int?,
+) {
+    val count = pendingReviewCount?.takeIf { destination == CdictDestination.Study }
+    if (count == null) {
+        Icon(imageVector = destination.icon, contentDescription = null)
+        return
+    }
+    BadgedBox(
+        badge = {
+            Badge(
+                modifier = Modifier.semantics(mergeDescendants = true) {
+                    contentDescription = "待复习 $count 个"
+                },
+            ) {
+                Text(text = if (count > 99) "99+" else count.toString(), maxLines = 1)
+            }
+        },
+    ) {
+        Icon(imageVector = destination.icon, contentDescription = null)
     }
 }

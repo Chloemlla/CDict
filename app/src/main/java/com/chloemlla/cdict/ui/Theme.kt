@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 
@@ -74,14 +75,19 @@ private val CdictDarkColorScheme = androidx.compose.material3.darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6),
 )
 
+// 词典释义、例句多为中英混排长文本，正文改用段落级断行，减少中文标点行首悬挂与英文单词
+// 被硬切；标题使用 Heading 断行策略，短标题不会在不合适的位置折行。
 private val CdictTypography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontWeight = FontWeight.Bold),
-        headlineLarge = headlineLarge.copy(fontWeight = FontWeight.SemiBold),
-        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        displayLarge = displayLarge.copy(fontWeight = FontWeight.Bold, lineBreak = LineBreak.Heading),
+        headlineLarge = headlineLarge.copy(fontWeight = FontWeight.SemiBold, lineBreak = LineBreak.Heading),
+        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold, lineBreak = LineBreak.Heading),
+        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold, lineBreak = LineBreak.Heading),
+        titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold, lineBreak = LineBreak.Heading),
         labelLarge = labelLarge.copy(fontWeight = FontWeight.SemiBold),
+        bodyLarge = bodyLarge.copy(lineBreak = LineBreak.Paragraph),
+        bodyMedium = bodyMedium.copy(lineBreak = LineBreak.Paragraph),
+        bodySmall = bodySmall.copy(lineBreak = LineBreak.Paragraph),
     )
 }
 

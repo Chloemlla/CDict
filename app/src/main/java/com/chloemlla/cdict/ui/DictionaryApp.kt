@@ -40,7 +40,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -299,10 +298,16 @@ private fun ErrorScreen(message: String) {
                     text = "无法打开词典",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { heading() },
                 )
                 Text(
                     text = message.takeIf { it.isNotBlank() } ?: "无法读取本地词典数据。",
                     style = MaterialTheme.typography.bodyLarge,
+                )
+                // 错误态给出可执行的下一步，避免只报错不给指引。
+                Text(
+                    text = "请确认设备存储空间充足后重新启动应用；若仍然失败，可在「关于」页检查更新。",
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
@@ -390,9 +395,12 @@ private fun WordList(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
+                        // 图标是装饰性的，右侧「CDict」文本已表达同样信息；
+                        // 固定 28dp 避免 mipmap 按固有像素撑高顶栏。
                         Image(
                             painter = painterResource(R.mipmap.ic_launcher),
-                            contentDescription = "CDict 图标",
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
                         )
                         Column {
                             Text(
@@ -686,6 +694,8 @@ private fun <T> FilterDropdownMenu(
                 onClick = { expanded = true },
                 modifier = Modifier
                     .fillMaxWidth()
+                    // 按钮默认高 40dp，抬到 48dp 满足最小触控目标。
+                    .heightIn(min = 48.dp)
                     .semantics {
                         contentDescription = "$description：$label"
                         stateDescription = "当前选择 $label"
@@ -697,6 +707,7 @@ private fun <T> FilterDropdownMenu(
                 onClick = { expanded = true },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .semantics {
                         contentDescription = "$description：$label"
                         stateDescription = "当前选择 $label"
@@ -812,7 +823,10 @@ private fun ColumnScope.EmptySearchState(
                         onClick = { onSuggestionClick(suggestion) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 56.dp),
+                            .heightIn(min = 56.dp)
+                            .semantics {
+                                contentDescription = "搜索建议：${suggestion.word}，点击查找"
+                            },
                         colors = CardDefaults.outlinedCardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         ),
@@ -835,6 +849,9 @@ private fun ColumnScope.EmptySearchState(
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -912,13 +929,14 @@ private fun SearchTip(label: String, example: String) {
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(80.dp),
+            // 用比例宽度代替固定 80dp：大字号下「英文定义关键词」不再被挤断。
+            modifier = Modifier.weight(0.42f),
         )
         Text(
             text = example,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.58f),
         )
     }
 }
@@ -991,6 +1009,8 @@ private fun WordResultCard(
                     text = phonetics.joinToString("  ·  "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
@@ -999,6 +1019,9 @@ private fun WordResultCard(
                     text = it,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface,
+                    // 列表卡是摘要，长释义截断到两行，完整内容在详情页。
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
@@ -1363,7 +1386,10 @@ private fun WordDetail(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                TextButton(onClick = onRetryDetail) {
+                                TextButton(
+                                    onClick = onRetryDetail,
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                ) {
                                     Text("重试")
                                 }
                             }
@@ -1431,7 +1457,16 @@ private fun WordDetail(
                                         speakingKey = speakingKey,
                                         modifier = Modifier.fillMaxWidth(),
                                         trailing = if (targetWord == null) null else {
-                                            { TextButton(onClick = { onOpenWord(targetWord) }) { Text("前往") } }
+                                            {
+                                                TextButton(
+                                                    onClick = { onOpenWord(targetWord) },
+                                                    modifier = Modifier
+                                                        .heightIn(min = 48.dp)
+                                                        .semantics {
+                                                            contentDescription = "前往词条 ${targetWord.word}"
+                                                        },
+                                                ) { Text("前往") }
+                                            }
                                         },
                                     )
                                 }
@@ -1469,7 +1504,16 @@ private fun WordDetail(
                                                     speakingKey = speakingKey,
                                                     modifier = Modifier.fillMaxWidth(),
                                                     trailing = if (targetWord == null) null else {
-                                                        { TextButton(onClick = { onOpenWord(targetWord) }) { Text("前往") } }
+                                                        {
+                                                            TextButton(
+                                                                onClick = { onOpenWord(targetWord) },
+                                                                modifier = Modifier
+                                                                    .heightIn(min = 48.dp)
+                                                                    .semantics {
+                                                                        contentDescription = "前往词条 ${targetWord.word}"
+                                                                    },
+                                                            ) { Text("前往") }
+                                                        }
                                                     },
                                                 )
                                             }
@@ -1501,6 +1545,8 @@ private fun WordDetail(
                                                     text = form.formTags.split(",").joinToString("、"),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
                                                 )
                                             }
                                         },
@@ -1563,7 +1609,12 @@ private fun WordDetail(
                                 heatmap.forEach { entry ->
                                     val fraction = if (maxScore > 0) (entry.score / maxScore).toFloat() else 0f
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            // 进度条本身对读屏无意义，整行合并成一句可读描述。
+                                            .semantics(mergeDescendants = true) {
+                                                contentDescription = "${entry.period} 出现频率 ${entry.score}"
+                                            },
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     ) {

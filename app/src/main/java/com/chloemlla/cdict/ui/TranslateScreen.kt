@@ -23,6 +23,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,11 +47,13 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,6 +68,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -126,7 +130,28 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
     val pronunciationPlayer = remember { PronunciationPlayer(context) }
     DisposableEffect(Unit) { onDispose { pronunciationPlayer.release() } }
 
+    // 当前正在朗读的译文；播放自然结束自动清空，同一条再点一次即停止。
+    var speakingText by remember { mutableStateOf<String?>(null) }
+    val onSpeakTranslation: (String) -> Unit = { text ->
+        if (speakingText == text) {
+            pronunciationPlayer.stop()
+            speakingText = null
+        } else {
+            pronunciationPlayer.onCompletion = { speakingText = null }
+            pronunciationPlayer.play(text, Accent.US)
+            speakingText = text
+        }
+    }
+
     LaunchedEffect(Unit) { viewModel.loadSupportedLanguages() }
+
+    // 结果卡片消失（改输入 / 重新翻译）时停掉正在播放的朗读，避免"看不到来源的声音"。
+    LaunchedEffect(state) {
+        if (state !is TranslationUiState.Success && speakingText != null) {
+            pronunciationPlayer.stop()
+            speakingText = null
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -172,7 +197,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
             Column(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -312,12 +337,18 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("支持多行输入，最多 $MAX_QUERY_LENGTH 字符")
-                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "回车即可翻译，可粘贴多行文本",
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Text(
                             "${query.length}/$MAX_QUERY_LENGTH",
-                            color = if (query.length == MAX_QUERY_LENGTH) {
+                            maxLines = 1,
+                            color = if (query.length >= MAX_QUERY_LENGTH) {
                                 MaterialTheme.colorScheme.error
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -393,7 +424,8 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                     is TranslationUiState.Success -> TranslationResultBlock(
                         result = currentState.result,
                         originalText = query,
-                        onSpeak = { translation -> pronunciationPlayer.play(translation, Accent.US) },
+                        speakingText = speakingText,
+                        onSpeak = onSpeakTranslation,
                     )
                     is TranslationUiState.Failure -> FailureState(
                         message = currentState.message,
@@ -504,9 +536,9 @@ private fun EmptyTranslationState() {
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TranslateTip("多行输入", "支持长文本、段落、整句翻译")
+                    TranslateTip("多行输入", "可粘贴长文本、段落做整段翻译")
                     TranslateTip("自动检测语言", "选择「自动检测 → 目标语言」无需手动选源语言")
-                    TranslateTip("朗读译文", "英语译文点击 🔊 可美式/英式发音")
+                    TranslateTip("朗读译文", "英文译文点击喇叭朗读，再点一次停止")
                     TranslateTip("清除重输", "点击输入框右侧 ✕ 快速清空")
                     TranslateTip("交换语言", "点击翻译方向右侧 ⇄ 快速互译")
                 }
@@ -524,13 +556,13 @@ private fun TranslateTip(title: String, desc: String) {
         Text(
             text = title,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.width(72.dp),
         )
         Text(
             text = desc,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
     }
@@ -608,6 +640,7 @@ private fun FailureState(
     enabled: Boolean,
 ) {
     val shake = remember { Animatable(0f) }
+    var detailShown by remember(message) { mutableStateOf(false) }
     LaunchedEffect(message) {
         shake.animateTo(
             targetValue = 0f,
@@ -643,7 +676,7 @@ private fun FailureState(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Warning,
-                    contentDescription = "翻译失败",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Column(
@@ -654,13 +687,33 @@ private fun FailureState(
                         "翻译未完成",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.semantics { heading() },
                     )
-                    SelectionContainer {
+                    Text(
+                        friendlyFailureHint(message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    TextButton(
+                        onClick = { detailShown = !detailShown },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                    ) {
                         Text(
-                            message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            if (detailShown) "收起错误详情" else "查看错误详情",
+                            style = MaterialTheme.typography.labelLarge,
                         )
+                    }
+                    if (detailShown) {
+                        SelectionContainer {
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
                     }
                 }
             }
@@ -679,19 +732,36 @@ private fun FailureState(
     }
 }
 
+// 把接口/网络层的技术性错误串翻成用户能读懂的中文提示；原始串仍可在"查看错误详情"里展开。
+private fun friendlyFailureHint(message: String): String = when {
+    message.contains("网络请求失败") ||
+        message.contains("网络异常") ||
+        message.contains("timeout", ignoreCase = true) ||
+        message.contains("Unable to resolve host", ignoreCase = true) ->
+        "网络连接不稳定，请检查网络后重试。"
+    message.contains("401") || message.contains("签名") -> "翻译服务鉴权失败，请稍后再试。"
+    message.contains("非 JSON") -> "翻译服务返回了异常内容，请稍后再试。"
+    message.contains("服务端错误") || message.contains("HTTP 5") -> "翻译服务暂时不可用，请稍后再试。"
+    else -> "这次翻译没有完成，请稍后重试或换个说法。"
+}
+
 @Composable
 private fun TranslationResultBlock(
     result: TranslationResult,
     originalText: String,
+    speakingText: String?,
     onSpeak: (String) -> Unit,
 ) {
     val clipboardManager = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
     val copyText = result.translations.joinToString("\n")
     var copied by remember(result) { mutableStateOf(false) }
+    // 长原文默认折叠 3 行；hasVisualOverflow 决定是否需要"展开"入口（展开后保持入口可见以便收起）。
+    var originalExpanded by remember(originalText) { mutableStateOf(false) }
+    var originalTruncated by remember(originalText) { mutableStateOf(false) }
     val metadata = buildList {
-        if (result.from.isNotEmpty()) add("来源语言" to result.from)
-        if (result.to.isNotEmpty()) add("目标语言" to result.to)
+        if (result.from.isNotEmpty()) add("来源语言" to languageLabel(result.from))
+        if (result.to.isNotEmpty()) add("目标语言" to languageLabel(result.to))
         result.phonetic?.takeIf { it.isNotEmpty() }?.let { add("音标" to it) }
     }
 
@@ -767,9 +837,26 @@ private fun TranslationResultBlock(
                             originalText,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 3,
+                            maxLines = if (originalExpanded) Int.MAX_VALUE else 3,
                             overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { layout ->
+                                if (!originalExpanded) originalTruncated = layout.hasVisualOverflow
+                            },
                         )
+                    }
+                    if (originalTruncated) {
+                        TextButton(
+                            onClick = { originalExpanded = !originalExpanded },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                        ) {
+                            Text(
+                                if (originalExpanded) "收起原文" else "展开全部原文",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                 }
             }
@@ -793,6 +880,7 @@ private fun TranslationResultBlock(
                     SelectionContainer {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             result.translations.forEach { translation ->
+                                val speaking = speakingText == translation
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -807,11 +895,24 @@ private fun TranslationResultBlock(
                                         IconButton(
                                             onClick = { onSpeak(translation) },
                                             modifier = Modifier.semantics {
-                                                contentDescription = "朗读 $translation"
+                                                contentDescription = if (speaking) {
+                                                    "停止朗读 $translation"
+                                                } else {
+                                                    "朗读 $translation"
+                                                }
+                                                stateDescription = if (speaking) {
+                                                    "正在朗读，再次点击停止"
+                                                } else {
+                                                    "未朗读"
+                                                }
                                             },
                                         ) {
                                             Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                                imageVector = if (speaking) {
+                                                    Icons.Filled.Stop
+                                                } else {
+                                                    Icons.AutoMirrored.Filled.VolumeUp
+                                                },
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                             )
@@ -848,6 +949,23 @@ private fun TranslationResultBlock(
             }
         }
     }
+}
+
+// 语种元数据显示为中文名并附原始代码（如「英语（en）」），未知代码原样展示。
+private fun languageLabel(code: String): String {
+    val name = when (code.lowercase()) {
+        "auto" -> "自动检测"
+        "zh", "zh-chs", "zh-cn", "zh-hans" -> "中文"
+        "en" -> "英语"
+        "ja" -> "日语"
+        "ko" -> "韩语"
+        "fr" -> "法语"
+        "de" -> "德语"
+        "es" -> "西班牙语"
+        "ru" -> "俄语"
+        else -> null
+    }
+    return if (name == null) code else "$name（$code）"
 }
 
 @Composable

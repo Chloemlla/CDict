@@ -16,11 +16,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Info
@@ -46,6 +50,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +62,7 @@ import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val updateDialogTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -63,7 +70,7 @@ private val updateDialogTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd 
 private fun formatUpdateBytes(bytes: Long): String = when {
     bytes < 1024L -> "$bytes B"
     bytes < 1024L * 1024L -> "${bytes / 1024L} KB"
-    else -> "${bytes / (1024L * 1024L)} MB"
+    else -> "%.1f MB".format(Locale.US, bytes.toDouble() / (1024.0 * 1024.0))
 }
 
 sealed interface UpdateDialogState {
@@ -73,7 +80,9 @@ sealed interface UpdateDialogState {
     data object NoUpdate : UpdateDialogState
     data class Downloading(val candidate: UpdateCandidate, val asset: ReleaseAsset) : UpdateDialogState
     data class InstallAuthorization(val candidate: UpdateCandidate, val file: File) : UpdateDialogState
-    data class Error(val message: String) : UpdateDialogState
+
+    /** [detail] 为原始异常文本，仅作为「错误详情」折行展示；[title] 说明失败发生在哪个环节。 */
+    data class Error(val detail: String, val title: String = "更新失败") : UpdateDialogState
 }
 
 @Composable
@@ -87,6 +96,7 @@ fun UpdateDialog(
     onInstallDownloadedApk: (UpdateCandidate, File) -> Unit,
     onError: (String) -> Unit,
     updateInstaller: UpdateInstaller,
+    onCancelDownload: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -95,7 +105,8 @@ fun UpdateDialog(
         UpdateDialogState.Checking -> UpdateCheckingDialog(onDismiss = onDismiss)
         UpdateDialogState.NoUpdate -> UpdateNoUpdateDialog(onDismiss = onDismiss)
         is UpdateDialogState.Error -> UpdateErrorDialog(
-            message = currentState.message,
+            title = currentState.title,
+            detail = currentState.detail,
             onDismiss = onDismiss,
         )
         is UpdateDialogState.UpdateAvailable -> UpdateAvailableDialog(
@@ -109,6 +120,7 @@ fun UpdateDialog(
             candidate = currentState.candidate,
             downloadProgressBytes = downloadProgressBytes,
             downloadProgressTotalBytes = downloadProgressTotalBytes,
+            onCancelDownload = onCancelDownload,
         )
         is UpdateDialogState.InstallAuthorization -> UpdateInstallAuthDialog(
             candidate = currentState.candidate,
@@ -158,7 +170,13 @@ private fun UpdateCheckingDialog(onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = MaterialTheme.shapes.medium,
+            ) { Text("取消", fontWeight = FontWeight.SemiBold) }
+        },
         dismissButton = {},
     )
 }
@@ -204,7 +222,7 @@ private fun UpdateNoUpdateDialog(onDismiss: () -> Unit) {
         confirmButton = {
             OutlinedButton(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 shape = MaterialTheme.shapes.medium,
             ) { Text("确定", fontWeight = FontWeight.SemiBold) }
         },
@@ -214,7 +232,8 @@ private fun UpdateNoUpdateDialog(onDismiss: () -> Unit) {
 
 @Composable
 private fun UpdateErrorDialog(
-    message: String,
+    title: String,
+    detail: String,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -222,33 +241,66 @@ private fun UpdateErrorDialog(
         icon = { DialogIcon(icon = Icons.Filled.Warning, tint = MaterialTheme.colorScheme.error) },
         title = {
             Text(
-                text = "检查失败",
+                text = title,
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                SelectionContainer {
-                    Text(
-                        text = message,
+                Text(
+                    text = "请检查网络后重试。若多次失败，可前往发布页手动下载安装包。",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                if (detail.isNotBlank()) {
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        ),
+                        shape = MaterialTheme.shapes.medium,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = "错误详情",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            SelectionContainer {
+                                Text(
+                                    text = detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    maxLines = 6,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             OutlinedButton(
                 onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 shape = MaterialTheme.shapes.medium,
             ) { Text("关闭", fontWeight = FontWeight.SemiBold) }
         },
@@ -266,7 +318,7 @@ private fun UpdateAvailableDialog(
 ) {
     val release = candidate.release
     val asset = candidate.matchedAsset
-    val isNewer = candidate.isTimeFallback
+    val timeMatched = candidate.isTimeFallback
     val displayVersion = release.tagName
 
     AlertDialog(
@@ -278,27 +330,49 @@ private fun UpdateAvailableDialog(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 DialogIcon(icon = Icons.Filled.SystemUpdate, tint = MaterialTheme.colorScheme.primary)
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "发现新版本${if (isNewer) "（按发布时间匹配）" else ""}",
+                        text = "发现新版本",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = asset?.sizeBytes?.let { "$displayVersion · ${formatUpdateBytes(it)}" } ?: displayVersion,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         },
         text = {
-            Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 ReleaseInfoSection(release = release, asset = asset)
                 if (release.body.isNotBlank()) {
                     ReleaseNotesSection(body = release.body)
+                }
+                if (timeMatched) {
+                    Text(
+                        text = "该版本按发布时间判定为更新（版本号无法语义化比较），如已安装可忽略。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+                if (asset == null) {
+                    Text(
+                        text = "本次发布没有匹配当前设备的安装包，请前往发布页手动选择。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         },
@@ -311,7 +385,7 @@ private fun UpdateAvailableDialog(
                     FilledTonalButton(
                         onClick = { onDownloadUpdate(candidate, asset) },
                         enabled = !downloadingUpdate,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         shape = MaterialTheme.shapes.medium,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
@@ -320,28 +394,28 @@ private fun UpdateAvailableDialog(
                     ) {
                         Icon(Icons.Filled.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("下载更新", fontWeight = FontWeight.SemiBold)
+                        Text("下载更新", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else if (release.htmlUrl.isNotBlank()) {
                     FilledTonalButton(
                         onClick = { UrlOpener.open(context, release.htmlUrl) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         shape = MaterialTheme.shapes.medium,
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                     ) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("查看发布页", fontWeight = FontWeight.SemiBold)
+                        Text("发布页", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 OutlinedButton(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = MaterialTheme.shapes.medium,
-                ) { Text("稍后", fontWeight = FontWeight.SemiBold) }
+                ) { Text("稍后", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         },
         dismissButton = {},
@@ -438,7 +512,7 @@ private fun ReleaseNotesSection(body: String) {
                     text = body,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 12,
+                    maxLines = 30,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -451,16 +525,22 @@ private fun UpdateDownloadingDialog(
     candidate: UpdateCandidate,
     downloadProgressBytes: Long,
     downloadProgressTotalBytes: Long?,
+    onCancelDownload: (() -> Unit)?,
 ) {
     val progress = downloadProgressTotalBytes?.takeIf { it > 0 }?.let {
         (downloadProgressBytes.toFloat() / it.toFloat()).coerceIn(0f, 1f)
     }
-    val progressPercent = progress?.let { (it * 100).roundToInt() } ?: 0
+    val progressPercent = progress?.let { (it * 100).roundToInt() }
     val downloadedStr = formatUpdateBytes(downloadProgressBytes)
     val totalStr = downloadProgressTotalBytes?.let { formatUpdateBytes(it) } ?: "未知大小"
+    val progressStateText = if (progressPercent != null) {
+        "已下载 $progressPercent%，$downloadedStr / $totalStr"
+    } else {
+        "正在连接，已下载 $downloadedStr"
+    }
 
     AlertDialog(
-        onDismissRequest = {},
+        onDismissRequest = onCancelDownload ?: {},
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -468,52 +548,89 @@ private fun UpdateDownloadingDialog(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 DialogIcon(icon = Icons.Filled.FileDownload, tint = MaterialTheme.colorScheme.primary, animated = true)
-                Column {
-                    Text(text = "正在下载更新", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(text = candidate.release.tagName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "正在下载更新",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = candidate.release.tagName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         },
         text = {
-            Column(modifier = Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(text = "$progressPercent%", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            if (progress != null) {
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                )
-                            }
-                        }
-                    }
+            val progressModifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .semantics { stateDescription = progressStateText }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Text(
+                        text = progressPercent?.let { "$it%" } ?: "连接中…",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.weight(1f))
                     Text(
                         text = "$downloadedStr / $totalStr",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = if (progress != null) "下载完成后将提示安装，请保持应用打开。" else "正在连接并获取下载大小…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
+                if (progress != null) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = progressModifier,
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = progressModifier,
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    )
+                }
+                Text(
+                    text = if (progress != null) {
+                        "下载完成后会提示安装，请保持应用打开。"
+                    } else {
+                        "正在连接服务器并获取下载大小…"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            if (onCancelDownload != null) {
+                OutlinedButton(
+                    onClick = onCancelDownload,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text("取消下载", fontWeight = FontWeight.SemiBold) }
+            }
+        },
         dismissButton = {},
     )
 }
@@ -545,11 +662,14 @@ private fun UpdateInstallAuthDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "新版本：${release.tagName}",
+                    text = "更新包已下载完成：${release.tagName}",
                     modifier = Modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -562,21 +682,21 @@ private fun UpdateInstallAuthDialog(
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.Top) {
                             Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                text = "需要授权安装未知来源应用才能完成更新安装。",
+                                text = "系统需要「安装未知来源应用」权限才能安装本更新包。授权后会自动继续安装。",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         if (permissionGranted) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.Top) {
                                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    text = "当前已有安装权限，可直接安装。",
+                                    text = "已获得安装权限，可直接安装。",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.tertiary,
                                 )
@@ -596,26 +716,31 @@ private fun UpdateInstallAuthDialog(
                             try {
                                 context.startActivity(updateInstaller.createInstallPermissionIntent())
                             } catch (e: Exception) {
-                                onError(e.message ?: "无法打开安装设置页面")
+                                onError(e.message.orEmpty())
                             }
                         }
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                 ) {
-                    Icon(Icons.Filled.FileDownload, contentDescription = null)
+                    Icon(Icons.Filled.SystemUpdate, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (permissionGranted) "立即安装" else "去授权", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = if (permissionGranted) "立即安装" else "去开启权限",
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 OutlinedButton(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     shape = MaterialTheme.shapes.medium,
-                ) { Text("取消", fontWeight = FontWeight.SemiBold) }
+                ) { Text("稍后安装", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         },
         dismissButton = {},

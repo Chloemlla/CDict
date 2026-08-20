@@ -58,6 +58,7 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
     var downloadProgressTotalBytes by remember { mutableStateOf<Long?>(null) }
     var autoCheckStarted by remember { mutableStateOf(false) }
     var updateCheckJob by remember { mutableStateOf<Job?>(null) }
+    var updateDownloadJob by remember { mutableStateOf<Job?>(null) }
 
     fun maybeShowWhatsNew() {
         if (!BuildInfo.isDevBuild &&
@@ -81,7 +82,8 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
                 .onSuccess { updateDialogState = UpdateDialogState.Hidden }
                 .onFailure {
                     updateDialogState = UpdateDialogState.Error(
-                        it.message ?: "无法启动安装器",
+                        detail = it.message.orEmpty(),
+                        title = "无法启动安装程序",
                     )
                 }
             return
@@ -111,7 +113,8 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
             } catch (throwable: Throwable) {
                 if (manual) {
                     updateDialogState = UpdateDialogState.Error(
-                        throwable.message ?: "检查更新失败",
+                        detail = throwable.message.orEmpty(),
+                        title = "检查更新失败",
                     )
                 }
             } finally {
@@ -124,30 +127,43 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
         candidate: com.chloemlla.cdict.core.update.UpdateCandidate,
         asset: com.chloemlla.cdict.core.update.ReleaseAsset,
     ) {
-        coroutineScope.launch {
+        updateDownloadJob?.cancel()
+        updateDownloadJob = coroutineScope.launch {
             downloadingUpdate = true
             updateDialogState = UpdateDialogState.Downloading(candidate, asset)
             downloadProgressBytes = 0L
             downloadProgressTotalBytes = null
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    updateInstaller.downloadApk(asset) { downloadedBytes, totalBytes ->
-                        downloadProgressBytes = downloadedBytes
-                        downloadProgressTotalBytes = totalBytes
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        updateInstaller.downloadApk(asset) { downloadedBytes, totalBytes ->
+                            downloadProgressBytes = downloadedBytes
+                            downloadProgressTotalBytes = totalBytes
+                        }
                     }
                 }
-            }
-            downloadingUpdate = false
-            downloadProgressBytes = 0L
-            downloadProgressTotalBytes = null
-            result.onSuccess { file ->
-                startInstallIfAllowed(candidate, file)
-            }.onFailure { throwable ->
-                updateDialogState = UpdateDialogState.Error(
-                    throwable.message ?: "下载更新失败",
-                )
+                result.onSuccess { file ->
+                    startInstallIfAllowed(candidate, file)
+                }.onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    updateDialogState = UpdateDialogState.Error(
+                        detail = throwable.message.orEmpty(),
+                        title = "下载更新失败",
+                    )
+                }
+            } finally {
+                downloadingUpdate = false
+                downloadProgressBytes = 0L
+                downloadProgressTotalBytes = null
             }
         }
+    }
+
+    // 取消下载：立即收起对话框；底层阻塞读取无法中断，因此保留 downloadingUpdate=true
+    // 直到协程真正结束，避免并发写入同一个缓存 APK 文件。
+    fun cancelUpdateDownload() {
+        updateDownloadJob?.cancel()
+        updateDialogState = UpdateDialogState.Hidden
     }
 
     DisposableEffect(lifecycleOwner, updateDialogState) {
@@ -219,6 +235,7 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
                                 enabled = !current.forced,
                                 interactionSource = scrimInteractionSource,
                                 indication = null,
+                                onClickLabel = "关闭",
                                 onClick = controller::pop,
                             ),
                     ) {
@@ -272,11 +289,20 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
                 downloadingUpdate = downloadingUpdate,
                 downloadProgressBytes = downloadProgressBytes,
                 downloadProgressTotalBytes = downloadProgressTotalBytes,
-                onDismiss = { updateDialogState = UpdateDialogState.Hidden },
+                onDismiss = {
+                    updateCheckJob?.cancel()
+                    updateDialogState = UpdateDialogState.Hidden
+                },
                 onDownloadUpdate = { candidate, asset -> triggerUpdateDownload(candidate, asset) },
                 onInstallDownloadedApk = { candidate, file -> startInstallIfAllowed(candidate, file) },
-                onError = { message -> updateDialogState = UpdateDialogState.Error(message) },
+                onError = { message ->
+                    updateDialogState = UpdateDialogState.Error(
+                        detail = message,
+                        title = "无法打开授权页面",
+                    )
+                },
                 updateInstaller = updateInstaller,
+                onCancelDownload = { cancelUpdateDownload() },
             )
         }
     }

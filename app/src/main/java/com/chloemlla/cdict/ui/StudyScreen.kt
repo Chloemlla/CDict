@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -85,14 +87,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -250,7 +255,7 @@ fun StudyScreen(
                                 showDevDialog = false
                                 onDebugLaunchReview()
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         ) {
                             Text("测试 复习单词考试页")
                         }
@@ -259,6 +264,15 @@ fun StudyScreen(
                             "请输入开发者密钥以解锁开发者模式。",
                             style = MaterialTheme.typography.bodyMedium,
                         )
+                        // 回车即提交，避免输入完还要收起键盘去找按钮。
+                        val submitDevKey: () -> Unit = {
+                            if (devKey == DEVELOPER_KEY) {
+                                devUnlocked = true
+                                devKeyWrong = false
+                            } else {
+                                devKeyWrong = true
+                            }
+                        }
                         OutlinedTextField(
                             value = devKey,
                             onValueChange = {
@@ -268,7 +282,11 @@ fun StudyScreen(
                             singleLine = true,
                             label = { Text("开发者密钥") },
                             visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { submitDevKey() }),
                             isError = devKeyWrong,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -276,15 +294,9 @@ fun StudyScreen(
                             Text("密钥错误", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                         }
                         Button(
-                            onClick = {
-                                if (devKey == DEVELOPER_KEY) {
-                                    devUnlocked = true
-                                    devKeyWrong = false
-                                } else {
-                                    devKeyWrong = true
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
+                            onClick = submitDevKey,
+                            enabled = devKey.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         ) {
                             Text("解锁")
                         }
@@ -312,17 +324,13 @@ private fun StudyLoading() {
     )
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .alpha(pulse)
-                    .semantics {
-                        contentDescription = "正在准备今日背词"
-                    },
-            )
+            CircularProgressIndicator(modifier = Modifier.alpha(pulse))
             Text(
                 text = "正在准备今日背词…",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.alpha(pulse),
+                modifier = Modifier
+                    .alpha(pulse)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
             )
             repeat(3) { i ->
                 Box(
@@ -349,18 +357,27 @@ private fun StudyError(message: String, onReload: () -> Unit) {
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
-            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Icon(
                     imageVector = Icons.Default.ErrorOutline,
                     contentDescription = null,
                     modifier = Modifier.size(48.dp),
                 )
                 SelectionContainer {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         Text(
                             text = "无法打开词典",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.semantics { heading() },
                         )
                         Text(
                             text = message.takeIf { it.isNotBlank() } ?: "无法读取本地词典数据。",
@@ -407,9 +424,10 @@ private fun StudyEmpty(
                     text = "暂无可学习词条",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    text = "当前筛选条件下没有可学习的词条。",
+                    text = "当前筛选条件下没有可学习的词条。可放宽范围或刷新后重试。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -457,8 +475,19 @@ private fun ReviewFlow(
 ) {
     val question = state.question
     if (question == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("复习题目准备中…", style = MaterialTheme.typography.bodyMedium)
+        Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    "正在准备复习题目…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
         }
         return
     }
@@ -495,10 +524,20 @@ private fun ReviewFlow(
         val header = if (state.isImmediateTest) "今日测试" else "昨日复习"
         val currentNumber = (state.reviewTotal - state.reviewRemaining + 1)
             .coerceIn(1, state.reviewTotal.coerceAtLeast(1))
+        // 已答题数 = 总题数 - 队列剩余；进度条按「已完成」而非「当前第几题」填充，避免虚高一题。
+        val answered = (state.reviewTotal - state.reviewRemaining).coerceAtLeast(0)
+        val reviewFraction = if (state.reviewTotal > 0) {
+            answered.toFloat() / state.reviewTotal
+        } else {
+            0f
+        }
+        val reviewPercent = (reviewFraction * 100).toInt()
         Text(
             text = "$header  $currentNumber / ${state.reviewTotal}",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics {
@@ -508,16 +547,18 @@ private fun ReviewFlow(
             textAlign = TextAlign.Center,
         )
         LinearProgressIndicator(
-            progress = {
-                if (state.reviewTotal > 0) currentNumber.toFloat() / state.reviewTotal else 0f
-            },
+            progress = { reviewFraction },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .semantics {
                     contentDescription = "复习进度"
-                    stateDescription = "已完成 $currentNumber 题，共 ${state.reviewTotal} 题"
+                    stateDescription = "已完成 $answered 题，共 ${state.reviewTotal} 题，完成 $reviewPercent%"
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        current = reviewFraction,
+                        range = 0f..1f,
+                    )
                 },
         )
         Card(
@@ -538,6 +579,8 @@ private fun ReviewFlow(
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .padding(top = 10.dp)
                                 .semantics {
@@ -551,6 +594,8 @@ private fun ReviewFlow(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(top = 4.dp),
                             )
                         }
@@ -571,10 +616,22 @@ private fun ReviewFlow(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         textAlign = TextAlign.Center,
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                     )
                 }
             }
+            // 释义卡片会自动切换到作答，先说明等待时间，避免用户以为界面卡住。
+            Text(
+                text = "稍后自动进入作答…",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+            )
             return@Column
         }
         if (question.confusionRetry) {
@@ -678,7 +735,7 @@ private fun ReviewOption(
         animationSpec = tween(durationMillis = 120),
         label = "option-press-scale",
     )
-    val optionShape = RoundedCornerShape(14.dp)
+    val optionShape = RoundedCornerShape(12.dp)
     Surface(
         color = bg,
         contentColor = fg,
@@ -696,8 +753,10 @@ private fun ReviewOption(
             )
             .semantics {
                 role = Role.RadioButton
+                selected = isSelected
                 contentDescription = "选项 $optionLabel：$text"
                 stateDescription = state
+                if (!enabled) disabled()
             },
     ) {
         Row(
@@ -711,7 +770,28 @@ private fun ReviewOption(
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            // 对/错不只靠颜色区分：正确项补勾选图标，误选项补错误图标（色盲友好）。
+            when (highlight) {
+                ReviewOptionHighlight.Correct -> {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                ReviewOptionHighlight.Wrong -> {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.ErrorOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                null -> Unit
+            }
         }
     }
 }
@@ -724,20 +804,32 @@ private fun FeedbackBanner(text: String) {
             .fillMaxWidth()
             .background(colorScheme.errorContainer, RoundedCornerShape(12.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp)
-            .semantics {
+            .semantics(mergeDescendants = true) {
                 contentDescription = text
                 liveRegion = LiveRegionMode.Assertive
             },
     ) {
-        SelectionContainer {
-            Text(
-                text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = colorScheme.onErrorContainer,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ErrorOutline,
+                contentDescription = null,
+                tint = colorScheme.error,
+                modifier = Modifier.size(26.dp),
             )
+            SelectionContainer {
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -769,7 +861,7 @@ private fun CorrectFeedbackBanner() {
             .fillMaxWidth()
             .background(colorScheme.tertiaryContainer, RoundedCornerShape(12.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp)
-            .semantics {
+            .semantics(mergeDescendants = true) {
                 contentDescription = "回答正确，正在进入下一题"
                 liveRegion = LiveRegionMode.Assertive
             },
@@ -896,23 +988,24 @@ private fun LearnFlow(
                 )
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                onClick = onDefer,
-                enabled = card != null,
-                modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-            ) {
-                Text("稍后再看")
-            }
-            Button(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onMarkLearned()
-                },
-                enabled = card != null,
-                modifier = Modifier.weight(1f).heightIn(min = 52.dp),
-            ) {
-                Text(if (isFree) "刷完" else "我已背会")
+        // 无卡片时（空状态）不再摆两个禁用按钮，改由空状态卡片自身提供下一步操作。
+        if (card != null) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = onDefer,
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                ) {
+                    Text("稍后再看", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onMarkLearned()
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                ) {
+                    Text(if (isFree) "刷完" else "我已背会", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
         // 无需等明日：今天已背会的词可立即进入考试测试，回答正确即提前推进复习计划。
@@ -989,6 +1082,7 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
         label = "progress-fraction",
     )
     val isComplete = state.dailyGoal > 0 && state.todayDone >= state.dailyGoal
+    val percent = (fraction.coerceIn(0f, 1f) * 100).toInt()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -996,10 +1090,12 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
         ) {
             Text("今日进度", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text = "${state.todayDone} / ${state.dailyGoal}",
+                text = "${state.todayDone} / ${state.dailyGoal} · $percent%",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = if (isComplete) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         LinearProgressIndicator(
@@ -1011,9 +1107,9 @@ private fun StudyProgressBar(state: StudyScreenState.Ready) {
                 .semantics {
                     contentDescription = "今日学习进度"
                     stateDescription = if (isComplete) {
-                        "今日目标已达成，已背会 ${state.todayDone} 个单词"
+                        "今日目标已达成，已背会 ${state.todayDone} 个单词，完成 100%"
                     } else {
-                        "已背会 ${state.todayDone} 个单词，距目标还差 ${(state.dailyGoal - state.todayDone).coerceAtLeast(0)} 个"
+                        "已背会 ${state.todayDone} 个单词，距目标还差 ${(state.dailyGoal - state.todayDone).coerceAtLeast(0)} 个，完成 $percent%"
                     }
                     progressBarRangeInfo = ProgressBarRangeInfo(
                         current = animatedFraction,
@@ -1040,7 +1136,7 @@ private fun GoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
             .fillMaxWidth()
             .semantics {
                 contentDescription = "每日背词量设置"
-                stateDescription = "当前每日背词量 $goal 个"
+                stateDescription = "当前每日背词量 $goal 个，可调范围 $DAILY_GOAL_MIN 到 $DAILY_GOAL_MAX"
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -1080,7 +1176,7 @@ private fun DoneFlow(
     ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
         item(key = "summary") {
@@ -1115,17 +1211,22 @@ private fun DoneFlow(
                         textAlign = TextAlign.Center,
                     )
                     // 无需等明日：达标后仍可立即测试今天背会的词，正确即提前推进复习计划。
+                    // 按钮在 primaryContainer 上，改用 onPrimaryContainer 前景与描边，保证深色模式对比度。
                     OutlinedButton(
                         onClick = onStartImmediateTest,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     ) {
-                        Text("立即测试今日所学（无需等明日）")
+                        Text("立即测试今日所学（无需等明日）", textAlign = TextAlign.Center)
                     }
                     Button(
                         onClick = onContinueFreePlay,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(top = 8.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     ) {
-                        Text("继续自由刷词（不计入明日复习）")
+                        Text("继续自由刷词（不计入明日复习）", textAlign = TextAlign.Center)
                     }
                 }
             }

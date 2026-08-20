@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -142,12 +143,19 @@ fun RecommendationScreen(
                                 modifier = Modifier.padding(8.dp),
                             )
                         }
-                        Column {
-                            Text("探索", style = MaterialTheme.typography.titleLarge)
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                                "探索",
+                                style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Text(
                                 "每日探索 · 5:3:2 配比",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -226,7 +234,7 @@ fun RecommendationScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(16.dp),
+                                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             RecommendationHeader(
@@ -368,6 +376,7 @@ private fun RecommendationHeader(
     onScopeChange: (StudyScope) -> Unit = {},
     onFilterPool: (RecommendationPool?) -> Unit = {},
     currentPoolFilter: RecommendationPool? = null,
+    showPoolLegend: Boolean = true,
 ) {
     val rawFraction = if (state.dailyGoal > 0) state.handledToday.toFloat() / state.dailyGoal else 0f
     val fraction by animateFloatAsState(
@@ -420,6 +429,23 @@ private fun RecommendationHeader(
                     .padding(top = 4.dp),
             )
         }
+        // 空队列时图例是「死按钮」（筛选只作用于预览队列），此时由调用方隐藏。
+        if (showPoolLegend) {
+            RecommendationPoolLegend(
+                currentPoolFilter = currentPoolFilter,
+                onFilterPool = onFilterPool,
+            )
+        }
+    }
+}
+
+/** 预览队列的类别图例 + 当前筛选提示 + 一键清除。 */
+@Composable
+private fun RecommendationPoolLegend(
+    currentPoolFilter: RecommendationPool?,
+    onFilterPool: (RecommendationPool?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "预览类别",
             style = MaterialTheme.typography.labelMedium,
@@ -580,7 +606,10 @@ private fun RecommendationCurrentCard(
             ) {
                 PressableOutlinedButton(
                     onClick = onDefer,
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp)
+                        .semantics { contentDescription = "稍后再看 ${word.word}" },
                 ) {
                     Text("稍后再看")
                 }
@@ -589,7 +618,10 @@ private fun RecommendationCurrentCard(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onMarkLearned()
                     },
-                    modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp)
+                        .semantics { contentDescription = "把 ${word.word} 加入今日背词" },
                 ) {
                     Text("加入今日背词")
                 }
@@ -606,15 +638,17 @@ private fun RecommendationCurrentCard(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .semantics {
-                            contentDescription = "将 ${word.word} 标记为已掌握"
-                            stateDescription = "尚未标记"
+                            contentDescription = "将 ${word.word} 标记为已掌握，需要二次确认"
                         },
                 ) {
                     Text("已掌握")
                 }
                 TextButton(
                     onClick = { onOpenWord(word) },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .semantics { contentDescription = "查看 ${word.word} 的完整词条" },
                 ) {
                     Text("查看完整词条")
                 }
@@ -810,12 +844,21 @@ private fun RecommendationEmpty(
     onSetGoal: (Int) -> Unit,
     onScopeChange: (StudyScope) -> Unit = {},
 ) {
+    val scopeFiltered = state.scope.curriculumTag != null || state.scope.frequencyGroup != null
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        RecommendationHeader(state, onSetGoal, onScopeChange)
+        RecommendationHeader(
+            state = state,
+            onSetGoal = onSetGoal,
+            onScopeChange = onScopeChange,
+            showPoolLegend = false,
+        )
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             colors = CardDefaults.cardColors(
@@ -823,6 +866,7 @@ private fun RecommendationEmpty(
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
+            val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
             Column(
                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -832,13 +876,17 @@ private fun RecommendationEmpty(
                     "今日推荐已学完",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = onContainer,
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    "已处理 ${state.handledToday} 个词。可再补一批、重新生成，或更改上方范围。",
+                    text = if (scopeFiltered) {
+                        "已处理 ${state.handledToday} 个词。当前范围内没有更多新词，可再补一批、重新生成，或放宽范围。"
+                    } else {
+                        "已处理 ${state.handledToday} 个词。可再补一批，或重新生成今日推荐。"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = onContainer,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -853,11 +901,24 @@ private fun RecommendationEmpty(
                     Spacer(Modifier.width(8.dp))
                     Text("再来一批")
                 }
+                // OutlinedButton 默认用 primary 作前景，压在 primaryContainer 上对比度不足，这里改用 onPrimaryContainer。
                 OutlinedButton(
                     onClick = onReload,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = onContainer),
+                    border = BorderStroke(1.dp, onContainer.copy(alpha = 0.5f)),
                 ) {
                     Text("重新生成今日推荐")
+                }
+                if (scopeFiltered) {
+                    OutlinedButton(
+                        onClick = { onScopeChange(StudyScope()) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = onContainer),
+                        border = BorderStroke(1.dp, onContainer.copy(alpha = 0.5f)),
+                    ) {
+                        Text("放宽范围：全部词表与全部组")
+                    }
                 }
             }
         }
@@ -881,7 +942,7 @@ private fun RecommendationGoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .padding(horizontal = 8.dp)
-                .semantics {
+                .semantics(mergeDescendants = true) {
                     contentDescription = "每日推荐目标"
                     stateDescription = "$goal 个"
                 },
@@ -932,7 +993,9 @@ private fun RecommendationLegendPill(
         animationSpec = tween(durationMillis = 150),
         label = "legend-pill-scale",
     )
-    val pillShape = RoundedCornerShape(6.dp)
+    val pillShape = RoundedCornerShape(8.dp)
+    // 胶囊上只显示「核心 50%」这类短文案，读屏改用完整类别名，避免读出百分比噪声。
+    val poolName = recommendationPoolLabel(pool)
     Surface(
         color = if (!filterActive || isSelected) bg else bg.copy(alpha = 0.4f),
         contentColor = if (!filterActive || isSelected) fg else fg.copy(alpha = 0.7f),
@@ -944,12 +1007,12 @@ private fun RecommendationLegendPill(
             .clip(pillShape)
             .clickable(
                 interactionSource = interactionSource,
-                onClickLabel = if (isSelected) "取消${text}筛选" else "只显示$text",
+                onClickLabel = if (isSelected) "取消只看${poolName}" else "只看$poolName",
                 onClick = onClick,
             )
             .semantics {
                 role = Role.Button
-                contentDescription = "筛选 $text"
+                contentDescription = "预览类别筛选：$poolName"
                 stateDescription = when {
                     isSelected -> "已筛选，点击取消"
                     filterActive -> "未筛选，点击改为只看该类别"
