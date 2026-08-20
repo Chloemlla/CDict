@@ -73,9 +73,11 @@ fun QuickTranslateSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
+        // 内容在横屏（窗口高度约 300dp）时高达 550dp+：不加滚动会把「复制译文」「前往 CDict」裁在屏幕外。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

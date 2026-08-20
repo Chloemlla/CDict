@@ -236,6 +236,7 @@ private fun LoadingScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -271,9 +272,11 @@ private fun LoadingScreen() {
 
 @Composable
 private fun ErrorScreen(message: String) {
+    // 错误卡片约 300dp 高：横屏等低窗口高度下必须可滚动，否则报错原文与处理指引会被居中裁掉。
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -755,6 +758,7 @@ private fun ColumnScope.EmptySearchState(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .verticalScroll(rememberScrollState())
                 .padding(32.dp)
                 .semantics {
                     contentDescription = if (query.isBlank()) "正在恢复全部词条" else "正在搜索 $query"

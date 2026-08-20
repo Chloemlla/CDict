@@ -322,7 +322,12 @@ private fun StudyLoading() {
         ),
         label = "study-loading-pulse",
     )
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CircularProgressIndicator(modifier = Modifier.alpha(pulse))
             Text(
@@ -348,7 +353,14 @@ private fun StudyLoading() {
 
 @Composable
 private fun StudyError(message: String, onReload: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+    // 错误卡片约 300dp 高：横屏等低窗口高度下必须可滚动，否则标题与「重试加载」会被居中裁掉且无法触达。
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -408,7 +420,8 @@ private fun StudyEmpty(
     availableCurriculumTags: List<String>,
     currentScope: StudyScope,
 ) {
-    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+    // 空状态位于可滚动列内，高度约束不确定，按内容高度铺满宽度即可。
+    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -929,56 +942,59 @@ private fun LearnFlow(
     val isFree = state.phase == StudyPhase.FREE_PLAY
     val card = state.card
     val haptic = LocalHapticFeedback.current
-    val cardScrollState = rememberScrollState()
-    LaunchedEffect(card?.id) { cardScrollState.scrollTo(0) }
+    val contentScrollState = rememberScrollState()
+    LaunchedEffect(card?.id) { contentScrollState.scrollTo(0) }
     ResponsiveContentBox(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-        ScopeFilterRow(
-            scope = state.scope,
-            availableCurriculumTags = state.availableCurriculumTags,
-            onScopeChange = onScopeChange,
-        )
-        GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
-        StudyProgressBar(state)
-        if (!isFree && card != null) {
-            Text(
-                text = "本轮还剩 ${state.queueRemaining} 个新词",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().semantics {
-                    stateDescription = "学习队列剩余 ${state.queueRemaining} 个单词"
-                },
-                textAlign = TextAlign.Center,
+        // 顶部信息与卡片同处一个滚动区：手机横屏（高度约 300dp）时若顶部固定，
+        // 卡片区的 weight(1f) 会被压成 0 高度且整页不可滚动，只有底部操作保持固定。
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(contentScrollState),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScopeFilterRow(
+                scope = state.scope,
+                availableCurriculumTags = state.availableCurriculumTags,
+                onScopeChange = onScopeChange,
             )
-        }
-        if (isFree) {
-            Text(
-                text = "自由刷词中 · 不计入今日进度与明日复习",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-        }
-        // 卡片区域随屏幕高度滚动（小屏 / 大字体不裁剪），顶部进度与底部操作始终可见。
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
+            StudyProgressBar(state)
+            if (!isFree && card != null) {
+                Text(
+                    text = "本轮还剩 ${state.queueRemaining} 个新词",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().semantics {
+                        stateDescription = "学习队列剩余 ${state.queueRemaining} 个单词"
+                    },
+                    textAlign = TextAlign.Center,
+                )
+            }
+            if (isFree) {
+                Text(
+                    text = "自由刷词中 · 不计入今日进度与明日复习",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                )
+            }
             if (card != null) {
-                Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(cardScrollState),
-                ) {
-                    LearnCard(
-                        word = card,
-                        phraseStates = phraseStates,
-                        onTranslate = onTranslate,
-                        onSpeak = onSpeak,
-                        onPlayPronunciation = onPlayPronunciation,
-                        playingKey = playingKey,
-                        speakingKey = speakingKey,
-                    )
-                }
+                LearnCard(
+                    word = card,
+                    phraseStates = phraseStates,
+                    onTranslate = onTranslate,
+                    onSpeak = onSpeak,
+                    onPlayPronunciation = onPlayPronunciation,
+                    playingKey = playingKey,
+                    speakingKey = speakingKey,
+                )
             } else {
                 StudyEmpty(
                     onReload = onReload,

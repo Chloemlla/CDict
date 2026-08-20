@@ -285,7 +285,12 @@ private fun RecommendationLoading() {
         ),
         label = "rec-loading-pulse",
     )
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -318,7 +323,14 @@ private fun RecommendationLoading() {
 
 @Composable
 private fun RecommendationNoDictionary(onReload: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+    // 错误卡片约 300dp 高：横屏等低窗口高度下必须可滚动，否则标题与「重试加载」会被居中裁掉且无法触达。
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(

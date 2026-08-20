@@ -156,7 +156,10 @@ private fun UpdateCheckingDialog(onDismiss: () -> Unit) {
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp, bottom = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -197,7 +200,10 @@ private fun UpdateNoUpdateDialog(onDismiss: () -> Unit) {
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp, bottom = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -574,6 +580,7 @@ private fun UpdateDownloadingDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(top = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
