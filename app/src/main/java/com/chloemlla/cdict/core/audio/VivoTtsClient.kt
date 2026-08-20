@@ -12,10 +12,10 @@ import kotlinx.coroutines.withContext
 class TtsHttpResponse(val status: Int, val bytes: ByteArray, val contentType: String?)
 
 /**
- * 在线语音合成客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端代理到上游合成引擎。
+ * 在线语音合成客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端完成实际合成。
  *
- * 上游地址、appId/appKey 与签名（taskid / nonce_str / HMAC-SHA256 + MD5）全部留在服务端，
- * 安装包内不再包含任何第三方凭据。服务端成功时返回 audio 类型字节，失败时返回 JSON 诊断。
+ * 凭据与签名全部留在服务端，安装包内不含任何密钥。
+ * 服务端成功时返回 audio 类型字节，失败时返回 JSON 诊断。
  */
 class VivoTtsClient(
     private val baseUrl: String = CDictBackend.BASE_URL,

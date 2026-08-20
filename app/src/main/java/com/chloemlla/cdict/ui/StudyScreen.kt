@@ -130,7 +130,7 @@ fun StudyScreen(
     onScopeChange: (StudyScope) -> Unit = {},
     playingKey: String? = null,
 ) {
-    // 与词典词条一致：背词卡片的英文释义也经 vivo 网关自动翻译为中文，翻译状态按文本缓存。
+    // 与词典词条一致：背词卡片的英文释义也经在线翻译自动转为中文，翻译状态按文本缓存。
     val context = LocalContext.current
     val phraseViewModel: PhraseSpeechViewModel = viewModel(
         factory = remember { PhraseSpeechViewModelFactory(context) },

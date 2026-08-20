@@ -11,10 +11,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 在线翻译客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端代理到上游翻译网关。
+ * 在线翻译客户端：只请求 CDict 自有后端 [CDictBackend]，由服务端完成实际翻译。
  *
- * 上游地址、appId/appKey 与网关签名全部留在服务端，安装包内不含任何第三方凭据；
- * 服务端沿用上游的响应结构（retcode/code/data.translation），因此解析逻辑与之前一致。
+ * 凭据与签名全部留在服务端，安装包内不含任何密钥；
+ * 响应结构（retcode/code/data.translation）保持不变，因此解析逻辑与之前一致。
  */
 data class HttpResponse(val status: Int, val body: String)
 
@@ -143,7 +143,7 @@ internal fun parseLanguageListResponse(resp: HttpResponse): LanguageListOutcome 
 /** 与 java.net.URLEncoder 语义一致：空格 -> '+', 安全字符 A-Za-z0-9.-*_ 不编码，其余 UTF-8 大写百分号编码。 */
 internal fun javaUrlEncode(s: String): String = URLEncoder.encode(s, Charsets.UTF_8.name())
 
-/** 请求体只保留业务字段：原文、源语言、目标语言；appId/设备参数/签名由服务端补全。 */
+/** 请求体只保留业务字段：原文、源语言、目标语言；设备参数与签名由服务端补全。 */
 internal fun buildTranslationForm(
     texts: List<String>,
     direction: TranslationDirection,
@@ -194,12 +194,12 @@ internal fun parseTranslationResponse(resp: HttpResponse): TranslationOutcome {
 }
 
 /**
- * 归一化 vivo 网关返回的 phonetic 字段为可展示的纯音标字符串,不可展示时返回 null。
+ * 归一化响应里的 phonetic 字段为可展示的纯音标字符串,不可展示时返回 null。
  *
  * 中文等场景下该字段不是纯 IPA,而是一段 JSON(数组,元素含 filename / ttsId / text / type),
- * 例如 `[{"filename":"https://openapi.youdao.com/vivo/ttsapi?...&appKey=...","ttsId":"…","text":"fú wù qì","type":"auto"}]`。
+ * 例如 `[{"filename":"https://example.com/ttsapi?...","ttsId":"…","text":"fú wù qì","type":"auto"}]`。
  * 抽取各元素的 `text`(拼音/音标)拼接;抽不出可展示文本(字段缺失、JSON 被截断)时返回 null——
- * 一旦回退成原样返回,内部 TTS URL 与 appKey 就会出现在译文下方,这是必须避免的泄露面。
+ * 一旦回退成原样返回,内部 TTS URL 与凭据字段就会出现在译文下方,这是必须避免的泄露面。
  */
 internal fun normalizePhonetic(raw: String): String? {
     val trimmed = raw.trim()

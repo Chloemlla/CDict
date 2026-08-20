@@ -12,6 +12,6 @@ object CDictBackend {
     /** 在线合成引擎（服务端代签名）。 */
     const val SOURCE_ENGINE = "engine"
 
-    /** 有道静态音频（服务端代取）。 */
+    /** 词典静态音频（服务端代取）。 */
     const val SOURCE_YOUDAO = "youdao"
 }

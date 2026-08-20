@@ -34,14 +34,14 @@ interface PronunciationSpeaker {
 }
 
 /**
- * 发音播放器，三级回退：按设置以有道或在线合成引擎为首选 → 另一在线来源 → 系统 TextToSpeech。
+ * 发音播放器，三级回退：按设置以词典静态音频或在线合成为首选 → 另一在线来源 → 系统 TextToSpeech。
  * 两路在线来源都只请求自有后端（[CDictBackend]），上游地址与凭据不在客户端。
  * [accent] 决定音色语言（英式 en-GBR / 美式 en-USA）。
  *
  * 并发安全：每次 [play] 都会让之前的播放流水线失效（generation 递增 + 取消旧 job），
  * MediaPlayer 回调只作用于它自己的播放器（`player === media`），避免旧回调误杀新播放；
  * 同词同音色的下载经单飞（single-flight）共享一次 HTTP 请求，避免 prefetch 与 play 重复下载。
- * 磁盘 LRU 缓存按来源（vivo / 有道）分命名空间，两级音频互不覆盖。
+ * 磁盘 LRU 缓存按来源分命名空间，两级音频互不覆盖。
  */
 class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -87,9 +87,9 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     }
 
     /**
-     * Pre-fetch (PRD §3.4): pull a word's Youdao audio into the disk LRU cache in the
+     * Pre-fetch (PRD §3.4): pull a word's dictionary audio into the disk LRU cache in the
      * background so an imminent play hits the cached file instead of the network. The
-     * origin tier is the Youdao accent (UK/US) so cache keys align with real playback.
+     * origin tier is the dictionary accent (UK/US) so cache keys align with real playback.
      */
     fun prefetch(word: String, accent: Accent) {
         scope.launch {
@@ -105,7 +105,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         player = null
     }
 
-    /** vivo 优先时的第一级：命中缓存直接播；未命中合成并写缓存；失败落到有道。 */
+    /** 在线合成优先时的第一级：命中缓存直接播；未命中合成并写缓存；失败落到词典静态音频。 */
     private suspend fun playVivoFirst(generation: Int, word: String, accent: Accent) {
         if (generation != playGeneration) return
         val cached = cache.find(word, accent, SOURCE_VIVO)
@@ -138,7 +138,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** vivo 优先时的第二级：有道。失败后落到系统 TTS。 */
+    /** 在线合成优先时的第二级：词典静态音频。失败后落到系统 TTS。 */
     private suspend fun playYoudaoFallback(
         generation: Int,
         word: String,
@@ -172,7 +172,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** 第一级：有道。命中缓存直接播；未命中下载并写缓存；失败落到 vivo。 */
+    /** 第一级：词典静态音频。命中缓存直接播；未命中下载并写缓存；失败落到在线合成。 */
     private suspend fun playYoudaoFirst(generation: Int, word: String, accent: Accent) {
         if (generation != playGeneration) return
         val cached = cache.find(word, accent, SOURCE_YOUDAO)
@@ -195,7 +195,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** 第二级：vivo TTS。命中 vivo 缓存直接播；未命中合成并写缓存；失败落到系统 TTS。 */
+    /** 第二级：在线合成。命中合成缓存直接播；未命中合成并写缓存；失败落到系统 TTS。 */
     private suspend fun playVivoFallback(
         generation: Int,
         word: String,
@@ -246,7 +246,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** 有道音频（经自有后端代理）。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
+    /** 词典静态音频（经自有后端代理）。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
     private fun fetchYoudaoDetailed(word: String, accent: Accent): YoudaoFetch = try {
         val url = CDictBackend.BASE_URL + CDictBackend.TTS_PATH +
             "?source=${CDictBackend.SOURCE_YOUDAO}&text=${word.encodeUrl()}&type=${accent.youdaoType}"
@@ -303,11 +303,11 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         }
     }
 
-    /** vivo 音频可能是有封装（wav/mp3）也可能是无容器 PCM，统一成 MediaPlayer 可播放的字节。 */
+    /** 合成音频可能是有封装（wav/mp3）也可能是无容器 PCM，统一成 MediaPlayer 可播放的字节。 */
     private fun preparePlayable(audio: ByteArray): ByteArray = when {
         looksLikeWav(audio) -> audio
         looksLikeMp3(audio) -> audio
-        // vivo `/fy/tts` 的 auf=audio/L16;rate=16000 会返回无容器 PCM,MediaPlayer 无法直接播,
+        // 16 kHz L16 会返回无容器 PCM,MediaPlayer 无法直接播,
         // 补一个 WAV 头让它可播放;若将来返回其它已封装格式则走上面的检测分支,此处是兜底。
         else -> wavWrap(audio)
     }
@@ -411,5 +411,5 @@ enum class Accent(val path: String, val youdaoType: Int, val ttsLangType: String
     US("us", 2, "en-USA"),
 }
 
-/** 有道静态音频拉取结果；[bytes] 为空表示失败，[reason] 说明失败原因以便诊断。 */
+/** 词典静态音频拉取结果；[bytes] 为空表示失败，[reason] 说明失败原因以便诊断。 */
 private data class YoudaoFetch(val bytes: ByteArray?, val reason: String?)

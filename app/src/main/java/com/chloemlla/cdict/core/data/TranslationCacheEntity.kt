@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * 单条 vivo 网关翻译缓存行，落在独立的 translation_cache.db（不触碰随包分发的只读 dict.db）。
+ * 单条在线翻译缓存行，落在独立的 translation_cache.db（不触碰随包分发的只读 dict.db）。
  *
  * 索引策略：LRU 淘汰只对非收藏记录生效，故 (isFavorite, lastAccessedAt) 复合索引正好
  * 覆盖 ORDER BY lastAccessedAt ASC 的删除路径；收藏记录因 isFavorite=1 排在后面不会误伤。

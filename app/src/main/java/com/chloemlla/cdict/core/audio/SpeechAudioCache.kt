@@ -7,7 +7,7 @@ import java.security.MessageDigest
 /**
  * Disk LRU cache for pronounced audio (PRD §3.4). Files are keyed by the MD5 of
  * `<accent>:<source>:<text>` so the same word+accent maps to a stable, short filename;
- * the [source] dimension (e.g. "vivo" / "youdao") keeps each pronunciation tier's audio
+ * the [source] dimension keeps each pronunciation tier's audio
  * in its own namespace so they never overwrite each other. A 50MB ceiling is enforced by
  * evicting least-recently-played entries (tracked via file mtime) when the folder grows
  * past the limit. Lives in the app cache dir, so it is naturally cleared by the OS under
