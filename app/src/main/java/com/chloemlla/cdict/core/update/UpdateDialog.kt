@@ -1,11 +1,12 @@
 package com.chloemlla.cdict.core.update
 
 import androidx.compose.animation.core.InfiniteTransition
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.rememberInfiniteTransition
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -17,9 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -32,38 +31,25 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DialogProperties
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.ProgressIndicatorDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.graphicsLayer
-import androidx.compose.ui.graphics.BorderStroke
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.chloemlla.cdict.ui.about.BuildInfo
 import com.chloemlla.cdict.ui.about.UrlOpener
 import java.io.File
@@ -80,8 +66,17 @@ private fun formatUpdateBytes(bytes: Long): String = when {
     else -> "${bytes / (1024L * 1024L)} MB"
 }
 
+sealed interface UpdateDialogState {
+    data object Hidden : UpdateDialogState
+    data object Checking : UpdateDialogState
+    data class UpdateAvailable(val candidate: UpdateCandidate) : UpdateDialogState
+    data object NoUpdate : UpdateDialogState
+    data class Downloading(val candidate: UpdateCandidate, val asset: ReleaseAsset) : UpdateDialogState
+    data class InstallAuthorization(val candidate: UpdateCandidate, val file: File) : UpdateDialogState
+    data class Error(val message: String) : UpdateDialogState
+}
+
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun UpdateDialog(
     state: UpdateDialogState,
     downloadingUpdate: Boolean,
@@ -102,7 +97,6 @@ fun UpdateDialog(
         is UpdateDialogState.Error -> UpdateErrorDialog(
             message = currentState.message,
             onDismiss = onDismiss,
-            onRetry = { /* state update handled by caller */ },
         )
         is UpdateDialogState.UpdateAvailable -> UpdateAvailableDialog(
             candidate = currentState.candidate,
@@ -115,13 +109,13 @@ fun UpdateDialog(
             candidate = currentState.candidate,
             downloadProgressBytes = downloadProgressBytes,
             downloadProgressTotalBytes = downloadProgressTotalBytes,
-            onDismiss = onDismiss,
         )
         is UpdateDialogState.InstallAuthorization -> UpdateInstallAuthDialog(
             candidate = currentState.candidate,
             file = currentState.file,
             updateInstaller = updateInstaller,
             onDismiss = onDismiss,
+            onInstallDownloadedApk = onInstallDownloadedApk,
             onError = onError,
             context = context,
         )
@@ -132,7 +126,6 @@ fun UpdateDialog(
 private fun UpdateCheckingDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = dialogProperties(),
         title = { DialogIcon(icon = Icons.Filled.SystemUpdate, tint = MaterialTheme.colorScheme.primary) },
         text = {
             Column(
@@ -165,7 +158,6 @@ private fun UpdateCheckingDialog(onDismiss: () -> Unit) {
 private fun UpdateNoUpdateDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = dialogProperties(),
         title = { DialogIcon(icon = Icons.Filled.CheckCircle, tint = MaterialTheme.colorScheme.tertiary) },
         text = {
             Column(
@@ -205,11 +197,9 @@ private fun UpdateNoUpdateDialog(onDismiss: () -> Unit) {
 private fun UpdateErrorDialog(
     message: String,
     onDismiss: () -> Unit,
-    onRetry: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = dialogProperties(),
         title = { DialogIcon(icon = Icons.Filled.Warning, tint = MaterialTheme.colorScheme.error) },
         text = {
             Column(
@@ -233,25 +223,11 @@ private fun UpdateErrorDialog(
             }
         },
         confirmButton = {
-            Row(
+            OutlinedButton(
+                onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onRetry,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Icon(Icons.Filled.SystemUpdate, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("重试", fontWeight = FontWeight.SemiBold)
-                }
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                ) { Text("取消", fontWeight = FontWeight.SemiBold) }
-            }
+                shape = MaterialTheme.shapes.medium,
+            ) { Text("关闭", fontWeight = FontWeight.SemiBold) }
         },
         dismissButton = {},
     )
@@ -272,7 +248,6 @@ private fun UpdateAvailableDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = dialogProperties(),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -289,7 +264,7 @@ private fun UpdateAvailableDialog(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "$displayVersion · ${formatUpdateBytes(asset?.sizeBytes ?: 0)}",
+                        text = asset?.sizeBytes?.let { "$displayVersion · ${formatUpdateBytes(it)}" } ?: displayVersion,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -305,47 +280,43 @@ private fun UpdateAvailableDialog(
             }
         },
         confirmButton = {
-            val hasAsset = asset != null
-            val hasUrl = release.htmlUrl.isNotBlank()
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (hasAsset) {
+                if (asset != null) {
                     FilledTonalButton(
-                        onClick = {
-                            if (hasAsset) onDownloadUpdate(candidate, asset!!)
-                        },
+                        onClick = { onDownloadUpdate(candidate, asset) },
                         enabled = !downloadingUpdate,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         shape = MaterialTheme.shapes.medium,
-                        colors = FilledTonalButtonDefaults.filledTonalButtonColors(
+                        colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                     ) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                        Icon(Icons.Filled.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("下载更新", fontWeight = FontWeight.SemiBold)
                     }
-                } else if (hasUrl) {
+                } else if (release.htmlUrl.isNotBlank()) {
                     FilledTonalButton(
                         onClick = { UrlOpener.open(context, release.htmlUrl) },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         shape = MaterialTheme.shapes.medium,
-                        colors = FilledTonalButtonDefaults.filledTonalButtonColors(
+                        colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
                         ),
                     ) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                        Icon(Icons.Filled.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("查看发布页", fontWeight = FontWeight.SemiBold)
                     }
                 }
                 OutlinedButton(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     shape = MaterialTheme.shapes.medium,
                 ) { Text("稍后", fontWeight = FontWeight.SemiBold) }
             }
@@ -372,16 +343,38 @@ private fun ReleaseInfoSection(release: ReleaseInfo, asset: ReleaseAsset?) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                InfoRow(label = "版本", value = release.tagName, icon = Icons.Filled.Info)
-                InfoRow(label = "当前", value = BuildInfo.versionLabel, icon = Icons.Filled.SystemUpdate)
+                InfoRow(
+                    label = "新版本",
+                    value = release.tagName,
+                    icon = Icons.Filled.Info,
+                    modifier = Modifier.weight(1f),
+                )
+                InfoRow(
+                    label = "当前版本",
+                    value = BuildInfo.versionLabel,
+                    icon = Icons.Filled.SystemUpdate,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                InfoRow(label = "发布时间", value = publishTime, icon = Icons.Filled.Info)
-                asset?.let {
-                    InfoRow(label = "下载包", value = "${it.name}${it.sizeBytes?.let { "（${formatUpdateBytes(it)}）" } ?: ""}", icon = Icons.Filled.FileDownload)
+                InfoRow(
+                    label = "发布时间",
+                    value = publishTime,
+                    icon = Icons.Filled.Info,
+                    modifier = Modifier.weight(1f),
+                )
+                if (asset != null) {
+                    InfoRow(
+                        label = "下载包",
+                        value = asset.sizeBytes?.let { formatUpdateBytes(it) } ?: asset.name,
+                        icon = Icons.Filled.FileDownload,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -389,12 +382,9 @@ private fun ReleaseInfoSection(release: ReleaseInfo, asset: ReleaseAsset?) {
 }
 
 @Composable
-private fun InfoRow(label: String, value: String, icon: ImageVector) {
+private fun InfoRow(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f)
-            .padding(vertical = 4.dp),
+        modifier = modifier.padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -419,9 +409,7 @@ private fun ReleaseNotesSection(body: String) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row {
-                Text(text = "更新内容", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            }
+            Text(text = "更新内容", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             SelectionContainer {
                 Text(
                     text = body,
@@ -440,7 +428,6 @@ private fun UpdateDownloadingDialog(
     candidate: UpdateCandidate,
     downloadProgressBytes: Long,
     downloadProgressTotalBytes: Long?,
-    onDismiss: () -> Unit,
 ) {
     val progress = downloadProgressTotalBytes?.takeIf { it > 0 }?.let {
         (downloadProgressBytes.toFloat() / it.toFloat()).coerceIn(0f, 1f)
@@ -451,7 +438,6 @@ private fun UpdateDownloadingDialog(
 
     AlertDialog(
         onDismissRequest = {},
-        properties = dialogProperties(),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -475,12 +461,20 @@ private fun UpdateDownloadingDialog(
                         Text(text = "$progressPercent%", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            LinearProgressIndicator(
-                                progress = progress,
-                                modifier = Modifier.fillMaxWidth().height(8.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            )
+                            if (progress != null) {
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                )
+                            }
                         }
                     }
                     Text(
@@ -507,6 +501,7 @@ private fun UpdateInstallAuthDialog(
     file: File,
     updateInstaller: UpdateInstaller,
     onDismiss: () -> Unit,
+    onInstallDownloadedApk: (UpdateCandidate, File) -> Unit,
     onError: (String) -> Unit,
     context: android.content.Context,
 ) {
@@ -515,7 +510,6 @@ private fun UpdateInstallAuthDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = dialogProperties(),
         title = { DialogIcon(icon = Icons.Filled.SystemUpdate, tint = MaterialTheme.colorScheme.primary) },
         text = {
             Column(modifier = Modifier.padding(top = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -566,20 +560,20 @@ private fun UpdateInstallAuthDialog(
                             }
                         }
                     },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     shape = MaterialTheme.shapes.medium,
-                    colors = FilledTonalButtonDefaults.filledTonalButtonColors(
+                    colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                 ) {
-                    Icon(Icons.Filled.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                    Icon(Icons.Filled.FileDownload, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(if (permissionGranted) "立即安装" else "去授权", fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     shape = MaterialTheme.shapes.medium,
                 ) { Text("取消", fontWeight = FontWeight.SemiBold) }
             }
@@ -590,24 +584,17 @@ private fun UpdateInstallAuthDialog(
 
 @Composable
 private fun DialogIcon(icon: ImageVector, tint: Color, animated: Boolean = false) {
-    val scale = if (animated) {
-        val infiniteTransition: InfiniteTransition = rememberInfiniteTransition()
-        infiniteTransition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.15f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow,
-            ),
-            label = "pulse",
-        )
-    } else {
-        null
-    }
+    val pulse = if (animated) rememberPulseScale() else null
     Box(
         modifier = Modifier
             .size(48.dp)
-            .graphicsLayer { scaleX = scale?.value ?: 1f; scaleY = scale?.value ?: 1f }
+            .then(
+                if (pulse != null) {
+                    Modifier.graphicsLayer { scaleX = pulse.value; scaleY = pulse.value }
+                } else {
+                    Modifier
+                }
+            )
             .clip(MaterialTheme.shapes.large)
             .background(tint.copy(alpha = 0.12f))
             .border(BorderStroke(1.dp, tint.copy(alpha = 0.3f)), MaterialTheme.shapes.large),
@@ -622,6 +609,16 @@ private fun DialogIcon(icon: ImageVector, tint: Color, animated: Boolean = false
     }
 }
 
-private fun dialogProperties() = DialogProperties(
-    usePlatformDefaultWidth = false,
-)
+@Composable
+private fun rememberPulseScale(): State<Float> {
+    val transition: InfiniteTransition = rememberInfiniteTransition(label = "dialogIcon")
+    return transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 700),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse",
+    )
+}
