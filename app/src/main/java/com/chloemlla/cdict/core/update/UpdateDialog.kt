@@ -1,5 +1,6 @@
 package com.chloemlla.cdict.core.update
 
+import androidx.compose.animation.core.InfiniteTransition
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteTransition
@@ -17,7 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -33,6 +34,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.BorderStroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -59,12 +61,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.chloemlla.cdict.ui.about.BuildInfo
 import com.chloemlla.cdict.ui.about.UrlOpener
 import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 private val updateDialogTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
@@ -96,7 +100,7 @@ fun UpdateDialog(
         is UpdateDialogState.Error -> UpdateErrorDialog(
             message = currentState.message,
             onDismiss = onDismiss,
-            onRetry = { updateDialogState = UpdateDialogState.Checking },
+            onRetry = { /* state update handled by caller */ },
         )
         is UpdateDialogState.UpdateAvailable -> UpdateAvailableDialog(
             candidate = currentState.candidate,
@@ -124,10 +128,6 @@ fun UpdateDialog(
 
 @Composable
 private fun UpdateCheckingDialog(onDismiss: () -> Unit) {
-    var scale by remember { mutableStateOf(1f) }
-    LaunchedEffect(Unit) {
-        scale = 1.05f
-    }
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = dialogProperties(),
@@ -476,9 +476,8 @@ private fun UpdateDownloadingDialog(
                             LinearProgressIndicator(
                                 progress = progress,
                                 modifier = Modifier.fillMaxWidth().height(8.dp),
-                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                color = MaterialTheme.colorScheme.primary,
                                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                strokeCap = true,
                             )
                         }
                     }
@@ -590,7 +589,7 @@ private fun UpdateInstallAuthDialog(
 @Composable
 private fun DialogIcon(icon: ImageVector, tint: Color, animated: Boolean = false) {
     val scale = if (animated) {
-        val infiniteTransition = rememberInfiniteTransition()
+        val infiniteTransition: InfiniteTransition = rememberInfiniteTransition()
         infiniteTransition.animateFloat(
             initialValue = 1f,
             targetValue = 1.15f,
@@ -609,7 +608,7 @@ private fun DialogIcon(icon: ImageVector, tint: Color, animated: Boolean = false
             .graphicsLayer { scaleX = scale?.value ?: 1f; scaleY = scale?.value ?: 1f }
             .clip(MaterialTheme.shapes.large)
             .background(tint.copy(alpha = 0.12f))
-            .border(androidx.compose.ui.graphics.BorderStroke(1.dp, tint.copy(alpha = 0.3f)), MaterialTheme.shapes.large),
+            .border(BorderStroke(1.dp, tint.copy(alpha = 0.3f)), MaterialTheme.shapes.large),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
