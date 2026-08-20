@@ -52,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -72,6 +73,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.ui.about.AboutScreenRoute
+import com.chloemlla.cdict.ui.about.AboutStore
+import com.chloemlla.cdict.ui.about.DonationPromptGate
+import com.chloemlla.cdict.ui.about.DonationTipBar
+import com.chloemlla.cdict.ui.about.LocalAboutController
 
 private enum class CdictDestination(
     val label: String,
@@ -186,6 +192,16 @@ fun CdictApp(
             CdictDestination.Recommendation.ordinal -> recommendationViewModel.syncFromStore()
         }
     }
+    // 赞赏提示只在回到主标签时判定一次；划词弹窗走独立的 QuickTranslateActivity，不经过这里。
+    val appContext = LocalContext.current.applicationContext
+    val aboutStore = remember(appContext) { AboutStore(appContext) }
+    val donationTipVisible by DonationPromptGate.visible.collectAsStateWithLifecycle()
+    val aboutController = LocalAboutController.current
+    LaunchedEffect(selectedTab) { DonationPromptGate.evaluate(aboutStore) }
+    val openDonation: () -> Unit = {
+        DonationPromptGate.dismiss(aboutStore)
+        aboutController.push(AboutScreenRoute.Donation)
+    }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
     // 各标签共用播放状态，让发音按钮能同步显示播放或停止状态。
     val playingKey = (dictionaryState as? DictionaryScreenState.Ready)?.playingKey
@@ -226,12 +242,26 @@ fun CdictApp(
         // 各页面自行处理顶栏 inset；外壳仅提供导航栏占用的空间，避免重复补白。
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (!useRail) {
-                CdictNavigationBar(
-                    selectedTab = selectedTab,
-                    onTabSelected = switchTab,
-                    pendingReviewCount = pendingReviewCount,
-                )
+            Column {
+                if (donationTipVisible) {
+                    DonationTipBar(
+                        onOpen = openDonation,
+                        onDismiss = { DonationPromptGate.dismiss(aboutStore) },
+                        // 侧边导航时底部没有导航栏兜住系统手势区，提示条自己补白。
+                        modifier = if (useRail) {
+                            Modifier.navigationBarsPadding().imePadding()
+                        } else {
+                            Modifier.imePadding()
+                        },
+                    )
+                }
+                if (!useRail) {
+                    CdictNavigationBar(
+                        selectedTab = selectedTab,
+                        onTabSelected = switchTab,
+                        pendingReviewCount = pendingReviewCount,
+                    )
+                }
             }
         },
     ) { innerPadding ->

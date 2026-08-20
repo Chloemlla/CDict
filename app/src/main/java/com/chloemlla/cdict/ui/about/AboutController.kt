@@ -4,7 +4,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.staticCompositionLocalOf
 
 enum class AboutScreenRoute {
-    About, Declarations, LegalInfo, OssNotice, AppPermissions, WhatsNew
+    About, Declarations, LegalInfo, OssNotice, AppPermissions, WhatsNew, Donation
 }
 
 class AboutController {

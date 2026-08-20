@@ -17,6 +17,7 @@ import com.chloemlla.cdict.core.data.STUDY_STATUS_REVIEW
 import com.chloemlla.cdict.core.data.StudyDatabase
 import com.chloemlla.cdict.core.data.StudyWordEntity
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.ui.about.AboutStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,6 +64,8 @@ private const val PREF_KEY_SCOPE_GROUP = "study_scope_frequency_group"
 class StudyViewModel(context: Context) : ViewModel() {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val aboutStore = AboutStore(context)
 
     private val _state = MutableStateFlow<StudyScreenState>(StudyScreenState.Loading)
     val state: StateFlow<StudyScreenState> = _state.asStateFlow()
@@ -262,8 +265,10 @@ class StudyViewModel(context: Context) : ViewModel() {
         if (cur.feedback.correct) {
             viewModelScope.launch { scheduleReview(question.wordId) }
             reviewQueue.removeFirst()
-            if (reviewQueue.isEmpty()) viewModelScope.launch { startLearningPhase() }
-            else emit(StudyPhase.REVIEW, question = reviewQueue.first())
+            if (reviewQueue.isEmpty()) {
+                aboutStore.reviewRoundDone = true
+                viewModelScope.launch { startLearningPhase() }
+            } else emit(StudyPhase.REVIEW, question = reviewQueue.first())
         } else {
             reviewQueue.removeFirst()
             reviewQueue.addLast(question)

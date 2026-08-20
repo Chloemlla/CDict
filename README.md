@@ -140,6 +140,15 @@ A **Translation** tab runs an embedded online translation engine:
 
 > ⚠️ **Disclaimer:** Translation depends on the project's backend and the upstream gateway behind it, either of which may change. Translation is a convenience feature, not a hard dependency — the dictionary core is fully offline.
 
+### ❤️ Donations (entirely optional)
+
+The app is **free forever** — nothing is paywalled, and donating **unlocks nothing**.
+
+- **No payment details in the APK**: the donation page fetches everything at view time from the project's own backend — `GET https://tts.chloemlla.com/api/cdict/donate` for channels and copy, `GET /api/cdict/donate/<channel-id>` for the image bytes. QR codes and wording can change without shipping a release.
+- **Single egress preserved**: the client ignores any absolute image URL the server returns and always rebuilds it as `CDictBackend.BASE_URL + /api/cdict/donate/<id>`; channel ids are validated against `[a-z0-9-]{1,32}` so a response cannot redirect the app to a third-party host.
+- **Prompted at most once**: `MainActivity`'s `onResume` / `onPause` accumulate foreground time with `SystemClock.elapsedRealtime()` into `AboutStore`. Once the total reaches 30 minutes *and* at least one review round has been completed, the gate is evaluated once on returning to a main tab and shows a single entry on the study summary plus one bottom tip bar. Opening it or dismissing it both stop it from ever appearing again.
+- **No new permissions, no telemetry**: foreground time lives only in local prefs (`foreground_millis` / `tip_prompt_shown` / `tip_prompt_dismissed` / `review_round_done`) and is never uploaded. The quick-translate popup runs in its own Activity and is explicitly excluded from the gate.
+
 ### 🧠 Study Mode (spaced repetition)
 
 The **Study** tab is an adaptive spaced word-learning mode:

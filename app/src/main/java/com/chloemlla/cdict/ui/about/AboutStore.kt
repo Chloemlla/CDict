@@ -45,4 +45,32 @@ class AboutStore(context: Context) {
         set(value) {
             prefs.edit { putBoolean("clash_proxy_adapt", value) }
         }
+
+    /** 累计前台使用时长（毫秒），由 MainActivity 的 onResume/onPause 累加，仅本地判断赞赏提示时机。 */
+    var foregroundMillis: Long
+        get() = prefs.getLong("foreground_millis", 0L)
+        set(value) {
+            prefs.edit { putLong("foreground_millis", value) }
+        }
+
+    /** 赞赏提示是否已经自动出现过一次。 */
+    var tipPromptShown: Boolean
+        get() = prefs.getBoolean("tip_prompt_shown", false)
+        set(value) {
+            prefs.edit { putBoolean("tip_prompt_shown", value) }
+        }
+
+    /** 赞赏提示是否已被用户关掉；一旦为 true 就永不再自动出现。 */
+    var tipPromptDismissed: Boolean
+        get() = prefs.getBoolean("tip_prompt_dismissed", false)
+        set(value) {
+            prefs.edit { putBoolean("tip_prompt_dismissed", value) }
+        }
+
+    /** 是否至少完整做完过一轮复习；与 [foregroundMillis] 共同构成赞赏提示的出现条件。 */
+    var reviewRoundDone: Boolean
+        get() = prefs.getBoolean("review_round_done", false)
+        set(value) {
+            prefs.edit { putBoolean("review_round_done", value) }
+        }
 }

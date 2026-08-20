@@ -448,6 +448,12 @@ fun AboutScreen(
                         subtitle = "基于 Commit Hash / Build Time 的本构建有意变更",
                         onClick = { controller.push(AboutScreenRoute.WhatsNew) },
                     )
+                    HorizontalDivider()
+                    AboutRow(
+                        title = "赞赏支持",
+                        subtitle = "完全自愿；收款码由服务端实时下发，应用永久免费",
+                        onClick = { controller.push(AboutScreenRoute.Donation) },
+                    )
                 }
                 Spacer(Modifier.height(24.dp))
                 Text(

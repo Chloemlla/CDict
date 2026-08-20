@@ -257,6 +257,7 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
                                             AboutScreenRoute.OssNotice -> "开源许可声明"
                                             AboutScreenRoute.AppPermissions -> "应用权限"
                                             AboutScreenRoute.WhatsNew -> "本次更新说明"
+                                            AboutScreenRoute.Donation -> "赞赏支持"
                                         }
                                     },
                                 color = MaterialTheme.colorScheme.surface,
@@ -279,6 +280,7 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
                                         forced = current.forced,
                                         onBack = controller::pop,
                                     )
+                                    AboutScreenRoute.Donation -> DonationScreen(onBack = controller::pop)
                                 }
                             }
                         }

@@ -9,6 +9,9 @@ object CDictBackend {
     const val LANGUAGES_PATH = "/api/cdict/languages"
     const val TTS_PATH = "/api/cdict/tts"
 
+    /** 赞赏渠道列表（图片字节走 [DONATE_PATH] + "/{id}"）。 */
+    const val DONATE_PATH = "/api/cdict/donate"
+
     /** 在线合成引擎（服务端代签名）。 */
     const val SOURCE_ENGINE = "engine"
 

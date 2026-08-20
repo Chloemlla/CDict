@@ -2,6 +2,7 @@ package com.chloemlla.cdict
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.ui.CdictApp
 import com.chloemlla.cdict.ui.CdictTheme
 import com.chloemlla.cdict.ui.about.AboutOverlayHost
+import com.chloemlla.cdict.ui.about.AboutStore
 import com.chloemlla.cdict.ui.DictionaryViewModel
 import com.chloemlla.cdict.ui.DictionaryViewModelFactory
 import com.chloemlla.cdict.ui.RecommendationViewModel
@@ -42,6 +44,9 @@ class MainActivity : ComponentActivity() {
 
     // 每次收到外部词条跳转就自增，用作切到词典标签的一次性信号（值本身无意义，只看变化）。
     private var externalWordRequest by mutableIntStateOf(0)
+
+    // 本次进入前台的单调时刻；onPause 时结算成累计前台时长。
+    private var foregroundSince = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +86,26 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleExternalWord(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        foregroundSince = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * 累加本次前台时长。用单调时钟，避免改系统时间把计数拉成负数或天文数字；
+     * 划词弹窗是独立的 QuickTranslateActivity，不经过这里，因此不计入使用时长。
+     */
+    override fun onPause() {
+        super.onPause()
+        val since = foregroundSince
+        if (since == 0L) return
+        foregroundSince = 0L
+        val elapsed = SystemClock.elapsedRealtime() - since
+        if (elapsed <= 0L) return
+        val store = AboutStore(this)
+        store.foregroundMillis += elapsed
     }
 
     /** 快速翻译弹窗「前往」带来的词条：交给词典 ViewModel 打开，并请求切到词典标签。 */

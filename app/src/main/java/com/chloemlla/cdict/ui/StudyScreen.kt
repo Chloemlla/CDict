@@ -43,6 +43,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.School
@@ -107,6 +108,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
+import com.chloemlla.cdict.ui.about.AboutScreenRoute
+import com.chloemlla.cdict.ui.about.AboutStore
+import com.chloemlla.cdict.ui.about.DonationPromptGate
+import com.chloemlla.cdict.ui.about.LocalAboutController
 
 /** 五次点击标题后解锁开发者测试面板。 */
 private const val DEVELOPER_KEY = "Chloemlla"
@@ -1181,6 +1186,52 @@ private fun GoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
 
 // ---- 完成 / 总结 --------------------------------------------------------------------
 
+/**
+ * 小结页的一次性赞赏入口：仅当 [DonationPromptGate] 判定条件已满足且用户还没关掉提示时出现。
+ * 点开即视为已关闭，之后不再自动出现；纯跳转，不解锁任何功能。
+ */
+@Composable
+private fun DonationSummaryEntry() {
+    val visible by DonationPromptGate.visible.collectAsStateWithLifecycle()
+    if (!visible) return
+    val appContext = LocalContext.current.applicationContext
+    val store = remember(appContext) { AboutStore(appContext) }
+    val controller = LocalAboutController.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "坚持复习到现在，如果觉得有用，可以赞赏支持一下；应用永久免费。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = {
+                    DonationPromptGate.dismiss(store)
+                    controller.push(AboutScreenRoute.Donation)
+                },
+            ) {
+                Text("赞赏支持")
+            }
+        }
+    }
+}
+
 @Composable
 private fun DoneFlow(
     state: StudyScreenState.Ready,
@@ -1246,6 +1297,9 @@ private fun DoneFlow(
                     }
                 }
             }
+        }
+        item(key = "donation-entry") {
+            DonationSummaryEntry()
         }
         if (state.learnedToday.isNotEmpty()) {
             item(key = "learned-title") {
