@@ -144,6 +144,10 @@ A **Translation** tab runs an embedded online translation engine:
 
 The app is **free forever** — nothing is paywalled, and donating **unlocks nothing**.
 
+| Alipay | WeChat Pay |
+|:---:|:---:|
+| <img src="https://bee-reg-ab.imagency.cn/p/a2df2e95b7dc5c235e9e5bd51a5d7d56.jpg" alt="Alipay donation QR" width="220"> | <img src="https://bee-reg-ab.imagency.cn/p/1ef3d8b53b69cf08a9fa7d6e98f779f4.png" alt="WeChat Pay donation QR" width="220"> |
+
 - **No payment details in the APK**: the donation page fetches everything at view time from the project's own backend — `GET https://tts.chloemlla.com/api/cdict/donate` for channels and copy, `GET /api/cdict/donate/<channel-id>` for the image bytes. QR codes and wording can change without shipping a release.
 - **Single egress preserved**: the client ignores any absolute image URL the server returns and always rebuilds it as `CDictBackend.BASE_URL + /api/cdict/donate/<id>`; channel ids are validated against `[a-z0-9-]{1,32}` so a response cannot redirect the app to a third-party host.
 - **Prompted at most once**: `MainActivity`'s `onResume` / `onPause` accumulate foreground time with `SystemClock.elapsedRealtime()` into `AboutStore`. Once the total reaches 30 minutes *and* at least one review round has been completed, the gate is evaluated once on returning to a main tab and shows a single entry on the study summary plus one bottom tip bar. Opening it or dismissing it both stop it from ever appearing again.

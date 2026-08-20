@@ -144,6 +144,10 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 
 应用**永久免费**,所有功能都不需要付费解锁;赞赏只是可选的支持方式,**不解锁任何东西**。
 
+| 支付宝 | 微信 |
+|:---:|:---:|
+| <img src="https://bee-reg-ab.imagency.cn/p/a2df2e95b7dc5c235e9e5bd51a5d7d56.jpg" alt="支付宝赞赏码" width="220"> | <img src="https://bee-reg-ab.imagency.cn/p/1ef3d8b53b69cf08a9fa7d6e98f779f4.png" alt="微信赞赏码" width="220"> |
+
 - **收款码不内置**:安装包内没有任何收款码或收款账号。打开赞赏页时向自有后端拉取 `GET https://tts.chloemlla.com/api/cdict/donate`(渠道与文案)与 `GET /api/cdict/donate/<渠道 id>`(图片字节),换码换文案无需发版。
 - **出口不变**:客户端忽略服务端返回的任何绝对图片地址,一律用 `CDictBackend.BASE_URL + /api/cdict/donate/<id>` 重建;渠道 id 按 `[a-z0-9-]{1,32}` 校验,避免被引到第三方域名。
 - **只提醒一次**:`MainActivity` 的 `onResume` / `onPause` 用 `SystemClock.elapsedRealtime()` 累加前台时长写入 `AboutStore`;累计 ≥ 30 分钟且完成过至少一轮复习后,在回到主标签时判定一次,于学习小结页给出一次入口 + 一条底部提示条。无论点开还是关掉,之后都不再自动出现。
