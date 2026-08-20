@@ -1,5 +1,7 @@
 package com.chloemlla.cdict.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
@@ -88,11 +90,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -752,7 +752,7 @@ private fun TranslationResultBlock(
     speakingText: String?,
     onSpeak: (String) -> Unit,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val copyText = result.translations.joinToString("\n")
     var copied by remember(result) { mutableStateOf(false) }
@@ -807,7 +807,8 @@ private fun TranslationResultBlock(
                 if (copyText.isNotBlank()) {
                     IconButton(
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(copyText))
+                            context.getSystemService(ClipboardManager::class.java)
+                                ?.setPrimaryClip(ClipData.newPlainText(null, copyText))
                             copied = true
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },

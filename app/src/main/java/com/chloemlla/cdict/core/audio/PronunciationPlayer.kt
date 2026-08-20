@@ -374,6 +374,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
                     override fun onDone(utteranceId: String?) {
                         if (generation == playGeneration && tts === newTts) onCompletion?.invoke()
                     }
+                    @Suppress("OVERRIDE_DEPRECATION")
                     override fun onError(utteranceId: String?) {
                         if (generation == playGeneration && tts === newTts) onCompletion?.invoke()
                     }

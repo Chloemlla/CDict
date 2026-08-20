@@ -27,9 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.chloemlla.cdict.core.update.UpdateChecker
 import com.chloemlla.cdict.core.update.UpdateDialog
 import com.chloemlla.cdict.core.update.UpdateDialogState
@@ -208,7 +208,8 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
 
     val top = controller.current
     if (top?.forced == true) {
-        BackHandler { Unit }
+        // 强制浮层（如首次启动的开源声明）必须点按钮确认，这里吞掉返回键。
+        BackHandler {}
     } else {
         BackHandler(enabled = controller.isOpen) { controller.pop() }
     }

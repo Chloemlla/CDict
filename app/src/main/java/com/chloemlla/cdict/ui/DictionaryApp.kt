@@ -579,7 +579,7 @@ private fun WordList(
                             itemsIndexed(state.words, key = { _, word -> word.id }) { index, word ->
                                 // Stagger: each item fades in with a tiny vertical slide, capped so
                                 // long lists don't drag the entrance past the animation duration.
-                                val itemDelay = (index.coerceAtMost(8) * 24).toInt()
+                                val itemDelay = index.coerceAtMost(8) * 24
                                 val itemAlpha by animateFloatAsState(
                                     targetValue = if (entranceProgress.value >= 1f ||
                                         entranceProgress.value >= (itemDelay + 1) / 281f
