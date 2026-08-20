@@ -48,6 +48,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -106,6 +107,7 @@ fun CdictApp(
     translationViewModel: TranslationViewModel,
     studyViewModel: StudyViewModel,
     recommendationViewModel: RecommendationViewModel,
+    dictionaryJumpRequest: Int = 0,
 ) {
     // 默认落在词典页（主要入口），用户可从底部 / 侧边导航切到其他标签。
     var selectedTab by rememberSaveable { mutableIntStateOf(CdictDestination.Dictionary.ordinal) }
@@ -165,6 +167,15 @@ fun CdictApp(
                 selectedTab = origin
                 navStack = navStack.filterNot { it == origin }
             }
+        }
+    }
+    // 外部入口（快速翻译弹窗的「前往」）到来时切到词典标签；词条本身由词典 ViewModel 打开。
+    // 初值 0 表示本次启动没有外部跳转，此时不抢走用户当前所在的标签。
+    LaunchedEffect(dictionaryJumpRequest) {
+        if (dictionaryJumpRequest > 0 && selectedTab != CdictDestination.Dictionary.ordinal) {
+            dictionaryJumpFrom = null
+            navStack = navStack.filterNot { it == selectedTab } + selectedTab
+            selectedTab = CdictDestination.Dictionary.ordinal
         }
     }
     val wideLayout = widthClass != WindowWidthSizeClass.Compact

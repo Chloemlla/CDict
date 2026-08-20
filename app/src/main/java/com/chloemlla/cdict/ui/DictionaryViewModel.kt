@@ -88,6 +88,9 @@ class DictionaryViewModel(
     // Words whose detail is still open underneath the current one (派生词「前往」跳转等),
     // so back walks back through details instead of dumping straight onto the browse list.
     private val detailStack = ArrayDeque<WordEntity>()
+    // 词库就绪信号：外部入口（快速翻译弹窗的「前往」）可能早于首次加载完成到达，
+    // 需要排队等待而不是被静默丢弃。
+    private val databaseReady = MutableStateFlow(false)
 
     init {
         viewModelScope.launch {
@@ -106,6 +109,7 @@ class DictionaryViewModel(
                         hasMore = words.size.toLong() < totalCount,
                         updateNeeded = updateNeeded,
                     )
+                    databaseReady.value = true
                 }
                 is DatabaseState.Failed -> _state.value = DictionaryScreenState.Error(result.message)
                 DatabaseState.Loading -> Unit
@@ -290,6 +294,21 @@ class DictionaryViewModel(
         openWord(word)
     }
 
+    /**
+     * 外部入口（快速翻译弹窗的「前往」）要求打开的词条：等词库就绪后做精确匹配并直接
+     * 展开详情；词库未收录时退化为把原文填进搜索，让用户看到近似结果而不是空白页。
+     */
+    fun openExternalWord(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            databaseReady.first { it }
+            val dao = database?.dictionaryDao() ?: return@launch
+            val match = dao.wordsByText(listOf(trimmed.lowercase())).firstOrNull()
+            if (match != null) select(match) else search(trimmed)
+        }
+    }
+
     /** Opens a derived-term headword, keeping the current detail as the back destination. */
     fun openDerivedWord(word: WordEntity) {
         val current = _state.value
@@ -369,6 +388,7 @@ class DictionaryViewModel(
             database?.close()
             database = null
             detailStack.clear()
+            databaseReady.value = false
             _state.value = DictionaryScreenState.Loading
             when (val result = repository.rebuild()) {
                 is DatabaseState.Ready -> {
@@ -384,6 +404,7 @@ class DictionaryViewModel(
                         hasMore = words.size.toLong() < totalCount,
                         updateNeeded = false,
                     )
+                    databaseReady.value = true
                     DictionaryUpdateManager.markReconciled(appContext)
                 }
                 is DatabaseState.Failed -> _state.value = DictionaryScreenState.Error(result.message)

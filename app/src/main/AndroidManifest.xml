@@ -20,6 +20,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 选中文字后系统工具条（复制 / 全选 那一条）里的「CDict 翻译」入口。
+             PROCESS_TEXT 是该工具条接入第三方应用的标准动作；TRANSLATE / DEFINE 覆盖部分 ROM 与
+             阅读类应用改用 EXTRA_TEXT 发起的划词翻译 / 取词释义。透明主题 + 独立任务，
+             只从底部升起翻译弹窗，不进入主界面。 -->
+        <activity
+            android:name=".quicktranslate.QuickTranslateActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="CDict 翻译"
+            android:taskAffinity=""
+            android:theme="@style/Theme.CDict.QuickTranslate">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.TRANSLATE" />
+                <action android:name="android.intent.action.DEFINE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

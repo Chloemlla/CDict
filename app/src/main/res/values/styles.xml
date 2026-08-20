@@ -1,3 +1,13 @@
 <resources>
     <style name="Theme.CDict" parent="android:style/Theme.Material.Light.NoActionBar" />
+
+    <!-- 文本选择工具条唤起的快速翻译弹窗：窗口全透明且不压暗背景，压暗交给底部弹窗自带的
+         遮罩，视觉上停留在原应用之上，而不是打开了一个新界面。 -->
+    <style name="Theme.CDict.QuickTranslate" parent="@style/Theme.CDict">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

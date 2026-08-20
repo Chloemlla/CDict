@@ -1,5 +1,6 @@
 package com.chloemlla.cdict
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,6 +9,8 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.ui.CdictApp
@@ -37,9 +40,13 @@ class MainActivity : ComponentActivity() {
         RecommendationViewModelFactory(applicationContext)
     }
 
+    // 每次收到外部词条跳转就自增，用作切到词典标签的一次性信号（值本身无意义，只看变化）。
+    private var externalWordRequest by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleExternalWord(intent)
         setContent {
             LumenCrashGate {
                 val state by dictionaryViewModel.state.collectAsStateWithLifecycle()
@@ -61,11 +68,30 @@ class MainActivity : ComponentActivity() {
                                 translationViewModel = translationViewModel,
                                 studyViewModel = studyViewModel,
                                 recommendationViewModel = recommendationViewModel,
+                                dictionaryJumpRequest = externalWordRequest,
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleExternalWord(intent)
+    }
+
+    /** 快速翻译弹窗「前往」带来的词条：交给词典 ViewModel 打开，并请求切到词典标签。 */
+    private fun handleExternalWord(intent: Intent?) {
+        val word = intent?.getStringExtra(EXTRA_WORD)?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        dictionaryViewModel.openExternalWord(word)
+        externalWordRequest++
+    }
+
+    companion object {
+        /** 外部入口要求打开的词条原文（见 quicktranslate.QuickTranslateActivity）。 */
+        const val EXTRA_WORD = "com.chloemlla.cdict.extra.WORD"
     }
 }
