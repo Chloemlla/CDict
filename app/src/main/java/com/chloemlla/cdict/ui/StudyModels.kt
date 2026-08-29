@@ -3,7 +3,9 @@ package com.chloemlla.cdict.ui
 import com.chloemlla.cdict.core.data.WordEntity
 import kotlin.math.abs
 
-enum class StudyPhase { REVIEW, LEARN, DONE, FREE_PLAY }
+// LEARN_QUIZ 是新词卡点「我已背会」后的当堂检测：背词页的职责是记忆闭环（提取练习），
+// 纯浏览输入交给探索页，所以「我已背会」只是一道门槛，答对才入库并计入今日进度。
+enum class StudyPhase { REVIEW, LEARN, LEARN_QUIZ, DONE, FREE_PLAY }
 
 /** Result of the last review answer, driving green/red feedback in the UI. */
 data class ReviewFeedback(

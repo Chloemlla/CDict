@@ -14,6 +14,7 @@ import com.chloemlla.cdict.core.data.DictionaryRepository
 import com.chloemlla.cdict.core.data.RecommendationEngine
 import com.chloemlla.cdict.core.data.STUDY_STATUS_LEARNING
 import com.chloemlla.cdict.core.data.STUDY_STATUS_MASTERED
+import com.chloemlla.cdict.core.data.StudyDao
 import com.chloemlla.cdict.core.data.StudyDatabase
 import com.chloemlla.cdict.core.data.StudyWordEntity
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,13 @@ private const val REC_PREF_KEY_SCOPE_GROUP = "study_scope_frequency_group"
 
 /** “稍后再看”打散：插回到当前词之后第 4~6 位（PRD 智能插入）。 */
 private const val DEFER_INSERT_SLOT = 5
+
+/**
+ * 阅读上下文只为队首和紧随其后的一张卡加载：队列一天最多 200 张，整队预取会变成数百次
+ * Room 查询；预取到第二张是为了翻卡时不闪空。
+ */
+private const val CONTEXT_PREFETCH = 2
+private const val CONTEXT_SENTENCE_LIMIT = 2
 
 /**
  * 推荐页 ViewModel：持有内存中的推荐流队列（ArrayDeque），负责“纳入复习计划 / 已掌握 /
@@ -55,6 +63,9 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private val consumedToday = mutableSetOf<Long>()
     private var handledToday = 0
 
+    // “稍后再看”会把同一张卡推回队首，缓存住已查过的上下文避免重复查库。
+    private val contextCache = mutableMapOf<Long, RecommendationReadingContext>()
+
     private val today: String get() = LocalDate.now().toString()
 
     init {
@@ -63,10 +74,13 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
                 is DatabaseState.Ready -> {
                     dictDb = result.database
                     studyDb = StudyDatabase.open(context)
+                    val dao = studyDb!!.studyDao()
                     _availableTags.value = result.database.dictionaryDao().distinctCurriculumTags()
                         .flatMap { it.split(",").map(String::trim).filter(String::isNotEmpty) }
                         .distinct()
                         .sorted()
+                    // collect 永不返回，必须独立 launch，否则下面的首次建流不会执行。
+                    viewModelScope.launch { observeMastered(dao) }
                     buildFeed()
                 }
                 is DatabaseState.Failed -> {
@@ -74,6 +88,20 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
                 }
                 DatabaseState.Loading -> Unit
             }
+        }
+    }
+
+    /**
+     * 词典页的「已掌握」开关直接写 study.db，内存队列原先只能等切标签时的 [syncFromStore] 才对齐；
+     * 这里靠 Room Flow 实时把已掌握的词从队列剔除并补足。
+     */
+    private suspend fun observeMastered(dao: StudyDao) {
+        dao.masteredIds().collect { ids ->
+            val mastered = ids.toSet()
+            if (queue.none { it.word.id in mastered }) return@collect
+            queue.retainAll { it.word.id !in mastered }
+            topUpToQuota()
+            emitAndHydrate()
         }
     }
 
@@ -113,7 +141,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
             queue.retainAll { it.word.id !in handled }
             handledToday = dao.learnedTodayCount(today)
             topUpToQuota()
-            emit()
+            emitAndHydrate()
         }
     }
 
@@ -126,9 +154,41 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     private suspend fun buildFeed() {
         val dao = studyDb?.studyDao() ?: return
         queue.clear()
+        contextCache.clear()
         handledToday = dao.learnedTodayCount(today)
         topUpToQuota()
+        emitAndHydrate()
+    }
+
+    /**
+     * 先按当前队列刷新界面再补上下文：队首上下文通常已在上一轮预取过，翻卡不必等库；
+     * 这一轮只会为新露出的第二张卡查询。
+     */
+    private suspend fun emitAndHydrate() {
         emit()
+        hydrateHead()
+        emit()
+    }
+
+    /** 只给队首 [CONTEXT_PREFETCH] 张卡加载例句 / 热图与学习状态，其余卡片的上下文留空。 */
+    private suspend fun hydrateHead() {
+        val dictDao = dictDb?.dictionaryDao() ?: return
+        val studyDao = studyDb?.studyDao() ?: return
+        for (index in 0 until minOf(CONTEXT_PREFETCH, queue.size)) {
+            val card = queue[index]
+            val id = card.word.id
+            val reading = contextCache.getOrPut(id) {
+                RecommendationReadingContext(
+                    sentences = dictDao.sentences(id, CONTEXT_SENTENCE_LIMIT, 0)
+                        .filter { it.english.isNotBlank() },
+                    heatmap = dictDao.heatmap(id).filter { it.period.isNotBlank() },
+                )
+            }
+            val studyState = recommendationStudyState(studyDao.word(id)?.status)
+            if (card.reading != reading || card.studyState != studyState) {
+                queue[index] = card.copy(reading = reading, studyState = studyState)
+            }
+        }
     }
 
     /**
@@ -205,7 +265,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         queue.removeAt(idx)
         handledToday = studyDb?.studyDao()?.learnedTodayCount(today) ?: handledToday
         topUpToQuota()
-        emit()
+        emitAndHydrate()
     }
 
     /** 稍后再看：打散插回到当前位置之后第 [DEFER_INSERT_SLOT] 位（队尾不足则回尾）。 */
@@ -215,7 +275,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         queue.removeFirst()
         val insertAt = minOf(DEFER_INSERT_SLOT, queue.size)
         queue.add(insertAt, head)
-        emit()
+        viewModelScope.launch { emitAndHydrate() }
     }
 
     /** 再来一批：词池学光后按目标再生成一批（终极复习 / 补充）。 */
@@ -227,7 +287,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
             val occupied = consumedToday + queue.map { it.word.id }
             val feed = eng.generateFeed(goal, today, occupied, scope.curriculumTag, scope.frequencyGroup)
             feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
-            emit()
+            emitAndHydrate()
         }
     }
 
@@ -246,7 +306,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
                 val remaining = (goal - handledToday).coerceAtLeast(0)
                 repeat((queue.size - remaining).coerceAtLeast(0)) { queue.removeLast() }
             }
-            emit()
+            emitAndHydrate()
         }
     }
 

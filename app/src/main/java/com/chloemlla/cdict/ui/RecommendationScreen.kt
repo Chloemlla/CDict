@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,6 +52,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -88,12 +90,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chloemlla.cdict.core.audio.Accent
+import com.chloemlla.cdict.core.data.HeatmapEntryEntity
 import com.chloemlla.cdict.core.data.RecommendationPool
 import com.chloemlla.cdict.core.data.WordEntity
 
 /**
- * 推荐页用于每日探索与发现。正文按 5:3:2 混排核心新词、派生拓展和高频过渡卡片与后续队列；
- * 推荐页只负责“输入 / 预热”，复习权交还背词页，不再混入复习巩固。中等及以上宽度使用左侧
+ * 探索页用于每日探索与发现。正文按 5:3:2 混排核心新词、派生拓展和高频过渡卡片与后续队列；
+ * 探索页只负责“输入 / 预热”，复习权交还背词页，不再混入复习巩固；当前卡额外带例句、助记与
+ * 真题热度，供无压力的轻度阅读，测验一律留给背词页。中等及以上宽度使用左侧
  * 大卡、右侧队列的两栏布局，紧凑宽度使用纵向滚动单列。英文释义复用应用的自动翻译管线。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,7 +166,7 @@ fun RecommendationScreen(
                 },
                 actions = {
                     IconButton(onClick = onReload, modifier = Modifier.padding(end = 4.dp)) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "重新生成今日推荐")
+                        Icon(Icons.Filled.Refresh, contentDescription = "重新生成今日探索流")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -299,11 +303,11 @@ private fun RecommendationLoading() {
                 modifier = Modifier
                     .alpha(pulse)
                     .semantics {
-                        contentDescription = "正在生成今日推荐"
+                        contentDescription = "正在生成今日探索流"
                     },
             )
             Text(
-                text = "正在生成今日推荐…",
+                text = "正在生成今日探索流…",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.alpha(pulse),
             )
@@ -361,7 +365,7 @@ private fun RecommendationNoDictionary(onReload: () -> Unit) {
                             modifier = Modifier.semantics { heading() },
                         )
                         Text(
-                            text = "推荐页依赖本地词库，请确认安装包包含 dict.db。",
+                            text = "探索页依赖本地词库，请确认安装包包含 dict.db。",
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(),
@@ -584,7 +588,7 @@ private fun RecommendationCurrentCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            "当前推荐",
+                            "当前词卡",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold,
@@ -592,6 +596,14 @@ private fun RecommendationCurrentCard(
                                 .weight(1f)
                                 .semantics { heading() },
                         )
+                        // 「未学」是队首的常态，恒挂一个标签纯是噪音，只在真实状态变化后展示。
+                        if (head.studyState != RecommendationStudyState.NEW) {
+                            val stateLabel = recommendationStudyStateLabel(head.studyState)
+                            RecommendationInfoPill(
+                                text = stateLabel,
+                                description = "学习状态：$stateLabel",
+                            )
+                        }
                         RecommendationModePill(head.pool)
                     }
                     WordCardContent(
@@ -607,6 +619,14 @@ private fun RecommendationCurrentCard(
                         bottomContent = {
                             RecommendationWordMetadata(word)
                         },
+                    )
+                    RecommendationReadingBlock(
+                        card = head,
+                        phraseStates = phraseStates,
+                        onTranslate = onTranslate,
+                        onSpeak = onSpeak,
+                        speakingKey = speakingKey,
+                        modifier = Modifier.padding(top = 14.dp),
                     )
                 }
             }
@@ -672,7 +692,7 @@ private fun RecommendationCurrentCard(
             onDismissRequest = { showMasteredConfirmation = false },
             title = { Text("确认标记为已掌握") },
             text = {
-                Text("“${word.word}”将从推荐队列移除，且不会进入复习计划。")
+                Text("“${word.word}”将从探索队列移除，且不会进入复习计划。")
             },
             confirmButton = {
                 Button(
@@ -717,7 +737,7 @@ private fun RecommendationUpcomingBlock(
         )
         if (upcoming.isEmpty()) {
             Text(
-                text = if (filtered) "该类别下没有后续推荐。" else "这是今天的最后一个推荐。",
+                text = if (filtered) "该类别下没有后续词卡。" else "这是今天的最后一张词卡。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -765,7 +785,7 @@ private fun RecommendationUpcomingList(
                 item(key = "upcoming-empty") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = if (filtered) "该类别下没有后续推荐。" else "这是今天的最后一个推荐。",
+                            text = if (filtered) "该类别下没有后续词卡。" else "这是今天的最后一张词卡。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -885,7 +905,7 @@ private fun RecommendationEmpty(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    "今日推荐已学完",
+                    "今日探索已完成",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = onContainer,
@@ -895,7 +915,7 @@ private fun RecommendationEmpty(
                     text = if (scopeFiltered) {
                         "已处理 ${state.handledToday} 个词。当前范围内没有更多新词，可再补一批、重新生成，或放宽范围。"
                     } else {
-                        "已处理 ${state.handledToday} 个词。可再补一批，或重新生成今日推荐。"
+                        "已处理 ${state.handledToday} 个词。可再补一批，或重新生成今日探索流。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = onContainer,
@@ -920,7 +940,7 @@ private fun RecommendationEmpty(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = onContainer),
                     border = BorderStroke(1.dp, onContainer.copy(alpha = 0.5f)),
                 ) {
-                    Text("重新生成今日推荐")
+                    Text("重新生成今日探索流")
                 }
                 if (scopeFiltered) {
                     OutlinedButton(
@@ -948,14 +968,14 @@ private fun RecommendationGoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
             onClick = { onSetGoal(goal - DAILY_GOAL_STEP) },
             enabled = goal > DAILY_GOAL_MIN,
         ) {
-            Icon(Icons.Filled.Remove, contentDescription = "减少每日推荐量")
+            Icon(Icons.Filled.Remove, contentDescription = "减少每日探索量")
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .padding(horizontal = 8.dp)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "每日推荐目标"
+                    contentDescription = "每日探索目标"
                     stateDescription = "$goal 个"
                 },
         ) {
@@ -966,7 +986,7 @@ private fun RecommendationGoalStepper(goal: Int, onSetGoal: (Int) -> Unit) {
             onClick = { onSetGoal(goal + DAILY_GOAL_STEP) },
             enabled = goal < DAILY_GOAL_MAX,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "增加每日推荐量")
+            Icon(Icons.Filled.Add, contentDescription = "增加每日探索量")
         }
     }
 }
@@ -1063,6 +1083,133 @@ private fun RecommendationPoolDot(pool: RecommendationPool) {
     ) {}
 }
 
+/**
+ * 探索页的差异化内容：例句、助记与真题热度只在这里出现（背词页保持纯测验）。
+ * 上下文尚未加载或三块都为空时整块不渲染，避免留下空标题。
+ */
+@Composable
+private fun RecommendationReadingBlock(
+    card: RecommendationItemCard,
+    phraseStates: Map<String, PhraseUiState>,
+    onTranslate: (String) -> Unit,
+    onSpeak: (String) -> Unit,
+    speakingKey: String?,
+    modifier: Modifier = Modifier,
+) {
+    val mnemonic = card.word.mnemonic?.takeIf(String::isNotBlank)
+    val sentences = card.reading?.sentences.orEmpty()
+    val heatmap = card.reading?.heatmap.orEmpty()
+    if (mnemonic == null && sentences.isEmpty() && heatmap.isEmpty()) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            mnemonic?.let {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    RecommendationReadingTitle("助记")
+                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            if (sentences.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    RecommendationReadingTitle("例句")
+                    sentences.forEachIndexed { index, sentence ->
+                        if (index > 0) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                        }
+                        SpeakableEnglishText(
+                            en = sentence.english,
+                            pinnedZh = sentence.chinese?.takeIf(String::isNotBlank),
+                            ui = phraseStates[sentence.english],
+                            onTranslate = onTranslate,
+                            onSpeak = onSpeak,
+                            speakingKey = speakingKey,
+                        )
+                    }
+                }
+            }
+            if (heatmap.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RecommendationReadingTitle("真题热度")
+                    RecommendationHeatRow(heatmap)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationReadingTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.semantics { heading() },
+    )
+}
+
+/** 柱子多到挤在一起就看不出高低，只保留最近几期。 */
+private const val HEAT_BAR_MAX = 6
+
+@Composable
+private fun RecommendationHeatRow(entries: List<HeatmapEntryEntity>) {
+    val shown = entries.takeLast(HEAT_BAR_MAX)
+    val maxScore = shown.maxOf { it.score }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 柱形对读屏无意义，整行合并成一句可读描述。
+            .semantics(mergeDescendants = true) {
+                contentDescription = "真题热度：" +
+                    shown.joinToString("，") { "${it.period} ${formatHeatScore(it.score)}" }
+            },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        shown.forEach { entry ->
+            val fraction = if (maxScore > 0) (entry.score / maxScore).toFloat() else 0f
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // 最低留一小截，零分档也看得出这一期存在。
+                            .fillMaxHeight(fraction.coerceIn(0.08f, 1f))
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+                }
+                Text(
+                    text = entry.period,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** 热度多是整数，去掉 .0 尾巴，读屏不会念出多余的小数。 */
+private fun formatHeatScore(score: Double): String =
+    if (score == score.toLong().toDouble()) score.toLong().toString() else "%.1f".format(score)
+
 @Composable
 private fun RecommendationWordMetadata(word: WordEntity) {
     val source = parseCurriculumTags(word.curriculumTags).firstOrNull()
@@ -1106,11 +1253,16 @@ private fun RecommendationWordMetadata(word: WordEntity) {
 }
 
 @Composable
-private fun RecommendationInfoPill(text: String) {
+private fun RecommendationInfoPill(text: String, description: String? = null) {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         shape = RoundedCornerShape(8.dp),
+        modifier = if (description != null) {
+            Modifier.semantics(mergeDescendants = true) { contentDescription = description }
+        } else {
+            Modifier
+        },
     ) {
         Text(
             text = text,

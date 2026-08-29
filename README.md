@@ -47,9 +47,9 @@
 | 🏷 **Curriculum tags** | Filter the dictionary by curriculum label (e.g. 高中 3500 词, 高中短语) with a dropdown menu; tagged entries show pills in word detail. |
 | 🔊 **Pronunciation** | Three-tier fallback (dictionary audio → online synthesis → system TTS by default; selectable in About) with on-disk audio caching — no audio files shipped. |
 | 🌐 **Online translation** | Built-in translation engine served by the project's own backend, with a **three-layer cache**. |
-| 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
+| 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine, an immediate post-card check, and next-day MCQ review. |
 | 🤖 **AI word annotations** | AI-generated 语感 annotations — emotion color, register, nuance, usage warnings, and speakable / auto-translated collocations. |
-| 📅 **Daily recommendations** | A fully offline daily exploration feed mixing core-new, root-expansion, and high-frequency transition words in a **5:3:2 ratio** (review stays in the Study tab). |
+| 📅 **Daily exploration** | A fully offline daily exploration feed mixing core-new, root-expansion, and high-frequency transition words in a **5:3:2 ratio**; cards carry example sentences, mnemonics, and exam-frequency heat, and reading only — review and quizzing stay in the Study tab. |
 | ✂️ **Quick-translate toolbar** | Android text-selection toolbar action — select text anywhere on the device, tap *CDict 翻译*, and jump straight to the translation or the matching dictionary entry. |
 | 🔒 **Privacy** | Dictionary and study data stay local. Optional online requests carry the content they need plus a random install ID used only to distinguish request quotas; no hardware identifier is read. |
 | 🛡 **Crash reporting** | Integrated **Lumen Crash SDK** capture with an in-app Compose report screen. |
@@ -63,9 +63,9 @@ A four-tab bottom navigation bar (a side rail on large screens):
 1. **背词 · Study** — spaced word-learning mode
 2. **词典 · Dictionary** — offline dictionary & word detail
 3. **翻译 · Translation** — online translation
-4. **推荐 · Recommendation** — daily recommendation feed
+4. **探索 · Explore** — daily exploration feed (reading only, no quizzing)
 
-The app opens on the **Dictionary** tab by default. Navigation is responsive: the bottom bar collapses into a navigation rail on large screens, and it supports Android system back / gesture navigation with word-detail slide transitions. A real visit-history stack makes the system back button return to the tab you actually came from — including cross-tab word jumps (e.g. recommendation → word detail → back to the recommendation feed) — and each tab's scroll / search / detail state is preserved via saveable state holders.
+The app opens on the **Dictionary** tab by default. Navigation is responsive: the bottom bar collapses into a navigation rail on large screens, and it supports Android system back / gesture navigation with word-detail slide transitions. A real visit-history stack makes the system back button return to the tab you actually came from — including cross-tab word jumps (e.g. exploration → word detail → back to the exploration feed) — and each tab's scroll / search / detail state is preserved via saveable state holders.
 
 ---
 
@@ -163,6 +163,7 @@ The app is **free forever** — nothing is paywalled, and donating **unlocks not
 The **Study** tab is an adaptive spaced word-learning mode:
 
 - **Next-day MCQ review**: after learning, words come back the next day as multiple-choice questions.
+- **Immediate check (当堂检测)**: tapping 我已背会 on a new-word card opens a one-shot MCQ retrieval check — the word is only committed to the review pipeline and counted toward today's progress once you answer correctly; a wrong answer can be retried, and 暂时跳过 returns the card to the learning queue with no database write and no progress. The check is an entry gate only: it does not advance the ASR ladder, so tomorrow's first review still happens.
 - **Adaptive spaced repetition (ASR)**: review intervals progress through a base ladder (e.g. `1 → 3 → 7 → 15 → 30` days) tuned by your answers.
 - **Frequency-weighted intervals**: the interval is scaled by the word's IELTS frequency band — high-frequency (core) words get *shorter* intervals to keep focus, while obscure words stretch theirs.
 - **Distractor engine**: review questions pick distractors that are strictly preferred to come from the **same frequency group** before falling back to the ±1 band, making the choices purposefully hard.
@@ -171,9 +172,9 @@ The **Study** tab is an adaptive spaced word-learning mode:
 - **Adaptive daily goal** with a `StudyStatus` memory state machine persisted in a separate `StudyDatabase`.
 - **Test today's words immediately**: an "立即测试今日所学" entry point on the learning and summary screens runs today's newly-learned words through the review engine on demand; a correct answer advances the spaced-repetition ladder exactly as an on-time review would, pulling the schedule forward rather than granting a free pass.
 
-### 📅 Daily Recommendations
+### 📅 Daily Exploration
 
-The **Recommendation** tab builds a **fully offline** daily exploration feed (方案A positioning: the tab is for light reading / preheating; review is owned by the Study tab):
+The **Explore** tab builds a **fully offline** daily exploration feed (方案A positioning: the tab is for light reading / preheating; review and quizzing are owned by the Study tab):
 
 - A **5:3:2 ratio** across three word pools:
   1. **Core new** (50%) — unlearned new words in your target IELTS frequency groups (1–3), highest frequency first, with full context.
@@ -181,6 +182,9 @@ The **Recommendation** tab builds a **fully offline** daily exploration feed (�
   3. **Simple transition** (20%) — unlearned, ultra-high-frequency words (group 1) for a smooth, low-friction flow.
 - Cold start (nothing learned yet) falls back to the most common group-1 words so you can start swiping in seconds; a pool that runs short is topped up from core-new / full-corpus so the feed is always exactly `goal` items.
 - The daily goal is configurable; raising it appends new 5:3:2 slices and lowering it trims from the tail.
+- **Reading context**: the current card carries example sentences (speakable, auto-translated), a mnemonic, and an exam-frequency heat bar chart. The tab never shows an MCQ — retrieval practice belongs to the Study tab.
+- **Live study state**: each card binds the real `study.db` status (未学 / 学习中 / 复习中 / 已掌握); marking a word mastered from the Dictionary tab drops it from the feed immediately through a Room `Flow`.
+- **Writes back to the review pipeline**: 纳入复习计划 commits the word right away (first review tomorrow) and 已掌握 retires it, so the study engine skips it from then on.
 - Progress is persisted per-day so the feed stays stable across app launches.
 
 ### 🤝 Partner App (Clash Meta for Android)
@@ -314,6 +318,7 @@ A broad UX pass, a new quick-translate entry point, backend unification, and the
 - **Update flow redesign**: Redesigned update dialog (`d732026`); update checker reads `release-manifest.json` and shows package size (`2180c99`); APK assets renamed to `CDict_android_<version>-<short-hash>[_<abi>].apk` (`f8afe2f`). Auto-update toggle in About (`f45b21b`).
 - **Own-backend unification**: Translation and pronunciation now go exclusively through the project's own backend — the client no longer contacts any third party directly (`ad77ee5`). Client comments scrubbed of vendor names and credential field names (`f2fb577`, `8922467`).
 - **Study & recommendation engine sharing**: Study and Recommendation tabs share the recommendation engine, daily quota, and scope filtering (curriculum tag + frequency group) (`f4f582a`, `65e98f9`).
+- **Explore tab repositioning (方案A + 方案C)**: the 推荐 tab is renamed **探索** with an Explore icon, so the two tabs no longer both ask "what should I study today?"; explore cards gained example sentences / mnemonic / exam-frequency heat and now bind live `study.db` state (mastering a word from the Dictionary tab drops it from the feed instantly); the Study tab gained an **immediate check** — 我已背会 opens a one-shot MCQ, and only a correct answer commits the word and counts progress. Reading input belongs to Explore, retrieval practice to Study.
 - **Official client quota isolation**: Requests from the official signed client carry a distinct quota bucket so third-party builds cannot exhaust official users' quotas (`8be8749`).
 - **Donation page**: Backend-served QR codes (no payment details in the APK); 30-minute + review-round gate; in-app claim form with rate limiting; credited donor list in the donation page and OSS notice (`8239cc0`, `d97f274`, `7175425`).
 - **Partner app enhancements**: Clash Meta partner status shows actionable reasons when unreadable (`400a824`); foreground pairing confirmation window via `startActivityForResult` (`9957a98`, `9ea1e62`). About page links to the partner download (`e5dc383`).

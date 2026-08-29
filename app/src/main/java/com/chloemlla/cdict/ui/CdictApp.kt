@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Autorenew
-import androidx.compose.material.icons.filled.Recommend
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
@@ -79,6 +79,7 @@ import com.chloemlla.cdict.ui.about.DonationPromptGate
 import com.chloemlla.cdict.ui.about.DonationTipBar
 import com.chloemlla.cdict.ui.about.LocalAboutController
 
+// 标签命名区分两页职责（方案A 定位分离）：探索页只做浏览与预热，背词页做四选一与记忆度考核。
 private enum class CdictDestination(
     val label: String,
     val paneTitle: String,
@@ -87,7 +88,7 @@ private enum class CdictDestination(
     Study("背词", "CDict 背词", Icons.Filled.School),
     Dictionary("词典", "CDict 词典", Icons.AutoMirrored.Filled.MenuBook),
     Translation("翻译", "CDict 翻译", Icons.Filled.Translate),
-    Recommendation("推荐", "CDict 推荐", Icons.Filled.Recommend),
+    Recommendation("探索", "CDict 探索", Icons.Filled.Explore),
 }
 
 /** 标签访问历史的 Saver，使其可在配置变更后保留。 */
@@ -130,7 +131,7 @@ fun CdictApp(
     }
 
     // 响应式导航：窄窗口（COMPACT）用底部导航栏；平板/大屏（MEDIUM/EXPANDED）用侧边导航栏，
-    // 推荐页内部也随之切换单列 / 两栏布局。
+    // 探索页内部也随之切换单列 / 两栏布局。
     val widthClass = LocalContext.current.findActivity()
         ?.let { calculateWindowSizeClass(it).widthSizeClass }
         ?: WindowWidthSizeClass.Compact
@@ -184,7 +185,7 @@ fun CdictApp(
             selectedTab = CdictDestination.Dictionary.ordinal
         }
     }
-    // 背词与推荐共用同一份今日额度与 study.db 状态：切回任一页时按库对齐今日进度，并把已在
+    // 背词与探索共用同一份今日额度与 study.db 状态：切回任一页时按库对齐今日进度，并把已在
     // 另一页处理过的词从内存队列剔除，避免同一个词被两页各展示一次。
     LaunchedEffect(selectedTab) {
         when (selectedTab) {
@@ -205,7 +206,7 @@ fun CdictApp(
     val wideLayout = widthClass != WindowWidthSizeClass.Compact
     // 各标签共用播放状态，让发音按钮能同步显示播放或停止状态。
     val playingKey = (dictionaryState as? DictionaryScreenState.Ready)?.playingKey
-    // 待复习数量角标：在词典/翻译/推荐页也能看到今天还剩多少词要复习，不必先切回背词页确认。
+    // 待复习数量角标：在词典/翻译/探索页也能看到今天还剩多少词要复习，不必先切回背词页确认。
     val pendingReviewCount = (studyState as? StudyScreenState.Ready)
         ?.takeIf { it.phase == StudyPhase.REVIEW }
         ?.reviewRemaining
@@ -301,7 +302,6 @@ fun CdictApp(
                         masteredIds = masteredIds,
                         recommendationViewModel = recommendationViewModel,
                         recommendationState = recommendationState,
-                        onMarkMastered = recommendationViewModel::markMastered,
                         onToggleMastered = { word -> studyViewModel.toggleMastered(word.id) },
                         onOpenDictionaryWord = onOpenDictionaryWord,
                         playingKey = playingKey,
@@ -336,7 +336,6 @@ fun CdictApp(
                     masteredIds = masteredIds,
                     recommendationViewModel = recommendationViewModel,
                     recommendationState = recommendationState,
-                    onMarkMastered = recommendationViewModel::markMastered,
                     onToggleMastered = { word -> studyViewModel.toggleMastered(word.id) },
                     onOpenDictionaryWord = onOpenDictionaryWord,
                     playingKey = playingKey,
@@ -368,7 +367,6 @@ private fun DestinationContent(
     recommendationViewModel: RecommendationViewModel,
     recommendationState: RecommendationScreenState,
     onToggleMastered: (WordEntity) -> Unit,
-    onMarkMastered: () -> Unit,
     onOpenDictionaryWord: (WordEntity) -> Unit,
     playingKey: String?,
     modifier: Modifier = Modifier,

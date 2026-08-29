@@ -210,11 +210,13 @@ fun StudyScreen(
                 StudyScreenState.Loading -> StudyLoading()
                 is StudyScreenState.NoDictionary -> StudyError(state.message, onReload)
                 is StudyScreenState.Ready -> when (state.phase) {
-                    StudyPhase.REVIEW -> ReviewFlow(
+                    // 当堂检测与复习共用同一套四选一界面，只有头部文案与出口不同。
+                    StudyPhase.REVIEW, StudyPhase.LEARN_QUIZ -> ReviewFlow(
                         state = state,
                         onAnswer = onAnswer,
                         onAdvance = onAdvance,
                         onQuestionPresented = onQuestionPresented,
+                        onQuitQuiz = onDefer,
                     )
                     StudyPhase.LEARN, StudyPhase.FREE_PLAY -> LearnFlow(
                         state = state,
@@ -490,7 +492,9 @@ private fun ReviewFlow(
     onAnswer: (Int) -> Unit,
     onAdvance: () -> Unit,
     onQuestionPresented: () -> Unit,
+    onQuitQuiz: () -> Unit,
 ) {
+    val isLearnQuiz = state.phase == StudyPhase.LEARN_QUIZ
     val question = state.question
     if (question == null) {
         Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -500,7 +504,7 @@ private fun ReviewFlow(
             ) {
                 CircularProgressIndicator()
                 Text(
-                    "正在准备复习题目…",
+                    if (isLearnQuiz) "正在准备检测题目…" else "正在准备复习题目…",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -539,46 +543,30 @@ private fun ReviewFlow(
             modifier = Modifier.fillMaxSize().verticalScroll(scrollState).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-        val header = if (state.isImmediateTest) "今日测试" else "昨日复习"
-        val currentNumber = (state.reviewTotal - state.reviewRemaining + 1)
-            .coerceIn(1, state.reviewTotal.coerceAtLeast(1))
-        // 已答题数 = 总题数 - 队列剩余；进度条按「已完成」而非「当前第几题」填充，避免虚高一题。
-        val answered = (state.reviewTotal - state.reviewRemaining).coerceAtLeast(0)
-        val reviewFraction = if (state.reviewTotal > 0) {
-            answered.toFloat() / state.reviewTotal
+        if (isLearnQuiz) {
+            // 当堂检测只有一道题，复习那套「第 N 题 / 共 M 题」进度在这里没有意义。
+            Text(
+                text = "当堂检测",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "当堂检测，刚背的这个词答对才算学会"
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "答对才算学会：计入今日进度，并安排明日首轮复习。",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         } else {
-            0f
+            ReviewProgressHeader(state)
         }
-        val reviewPercent = (reviewFraction * 100).toInt()
-        Text(
-            text = "$header  $currentNumber / ${state.reviewTotal}",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics {
-                    contentDescription = "$header，第 $currentNumber 题，共 ${state.reviewTotal} 题，剩余 ${state.reviewRemaining} 题"
-                    liveRegion = LiveRegionMode.Polite
-                },
-            textAlign = TextAlign.Center,
-        )
-        LinearProgressIndicator(
-            progress = { reviewFraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .semantics {
-                    contentDescription = "复习进度"
-                    stateDescription = "已完成 $answered 题，共 ${state.reviewTotal} 题，完成 $reviewPercent%"
-                    progressBarRangeInfo = ProgressBarRangeInfo(
-                        current = reviewFraction,
-                        range = 0f..1f,
-                    )
-                },
-        )
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -692,12 +680,67 @@ private fun ReviewFlow(
                     onClick = onAdvance,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                 ) {
-                    Text("继续 · 该词将末尾重试")
+                    Text(if (isLearnQuiz) "重答这道题" else "继续 · 该词将末尾重试")
                 }
+            }
+        }
+        // 实在不会的词必须有出口，否则用户会被永久卡在这一道题上。
+        if (isLearnQuiz) {
+            TextButton(
+                onClick = onQuitQuiz,
+                enabled = feedback?.correct != true,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) {
+                Text("暂时跳过 · 退回学习队列，不计入进度")
             }
         }
     }
     }
+}
+
+/** 复习批次的头部：当前题号与完成度。当堂检测只有一道题，不用这套进度。 */
+@Composable
+private fun ReviewProgressHeader(state: StudyScreenState.Ready) {
+    val header = if (state.isImmediateTest) "今日测试" else "昨日复习"
+    val currentNumber = (state.reviewTotal - state.reviewRemaining + 1)
+        .coerceIn(1, state.reviewTotal.coerceAtLeast(1))
+    // 已答题数 = 总题数 - 队列剩余；进度条按「已完成」而非「当前第几题」填充，避免虚高一题。
+    val answered = (state.reviewTotal - state.reviewRemaining).coerceAtLeast(0)
+    val reviewFraction = if (state.reviewTotal > 0) {
+        answered.toFloat() / state.reviewTotal
+    } else {
+        0f
+    }
+    val reviewPercent = (reviewFraction * 100).toInt()
+    Text(
+        text = "$header  $currentNumber / ${state.reviewTotal}",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "$header，第 $currentNumber 题，共 ${state.reviewTotal} 题，剩余 ${state.reviewRemaining} 题"
+                liveRegion = LiveRegionMode.Polite
+            },
+        textAlign = TextAlign.Center,
+    )
+    LinearProgressIndicator(
+        progress = { reviewFraction },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .semantics {
+                contentDescription = "复习进度"
+                stateDescription = "已完成 $answered 题，共 ${state.reviewTotal} 题，完成 $reviewPercent%"
+                progressBarRangeInfo = ProgressBarRangeInfo(
+                    current = reviewFraction,
+                    range = 0f..1f,
+                )
+            },
+    )
 }
 
 private fun highlightOf(

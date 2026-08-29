@@ -81,6 +81,14 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     private val reviewQueue = ArrayDeque<ReviewQuestion>()
     private val learnQueue = ArrayDeque<WordEntity>()
+
+    // 当堂检测中的那张新词卡与题目。答对前它仍留在 learnQueue 里，放弃作答即退回队列。
+    private var quizCard: WordEntity? = null
+    private var quizQuestion: ReviewQuestion? = null
+
+    // 干扰项词池按会话缓存：每张新词卡都重跑一次 randomWords(400) 会拖慢翻卡。
+    private var cachedDistractorPool: List<WordEntity>? = null
+
     private var learnedToday = mutableListOf<WordEntity>()
     private var todayDone = 0
     private var reviewTotal = 0
@@ -156,6 +164,8 @@ class StudyViewModel(context: Context) : ViewModel() {
             val dao = studyDb?.studyDao() ?: return@launch
             learnQueue.clear()
             reviewQueue.clear()
+            quizCard = null
+            quizQuestion = null
             todayDone = dao.learnedTodayCount(today)
             refreshLearnedToday()
             val cap = (dailyGoal() * REVIEW_CAP_MULTIPLIER).toInt()
@@ -174,12 +184,12 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     /**
      * 回到背词标签时的轻量同步：今日进度以 study.db 为准重算，并把已在推荐页处理过的词从
-     * 内存学习队列里剔除，避免同一个词在两页各出现一次。复习进行中（含答题反馈）不打扰，
-     * 只在学习 / 完成态刷新，防止把用户正在答的题重置掉。
+     * 内存学习队列里剔除，避免同一个词在两页各出现一次。复习与当堂检测进行中（含答题反馈）
+     * 不打扰，只在学习 / 完成态刷新，防止把用户正在答的题重置掉。
      */
     fun syncFromStore() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
-        if (cur.phase == StudyPhase.REVIEW) return
+        if (cur.phase == StudyPhase.REVIEW || cur.phase == StudyPhase.LEARN_QUIZ) return
         viewModelScope.launch {
             val dao = studyDb?.studyDao() ?: return@launch
             val handled = dao.allStudiedIds().toSet()
@@ -232,47 +242,85 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     fun answerReview(index: Int) {
         val cur = _state.value as? StudyScreenState.Ready ?: return
-        if (cur.phase != StudyPhase.REVIEW) return
         val question = cur.question ?: return
         val chosen = question.options.getOrNull(index)
-        if (index != question.correctIndex) {
-            // Error-Attribution Engine (优化项五): classify the miss by hesitation time and
-            // tailor the retry. A fast wrong answer means orthographic/blind confusion (the
-            // same option set is pinned for a focused re-discrimination); a slow wrong answer
-            // signals an unfamiliar word, so the retry re-shows the 释义 card first.
-            val elapsed = System.currentTimeMillis() - questionShownAt
-            val retry = when {
-                elapsed < CONFUSION_MAX_MS -> question.copy(attempt = question.attempt + 1, confusionRetry = true)
-                elapsed > UNKNOWN_MIN_MS -> question.copy(attempt = question.attempt + 1, forceReveal = true)
-                else -> question.copy(attempt = question.attempt + 1)
+        val correct = index == question.correctIndex
+        when (cur.phase) {
+            StudyPhase.REVIEW -> {
+                if (correct) {
+                    emit(StudyPhase.REVIEW, question = question, feedback = ReviewFeedback(true, question.correctText, chosen))
+                } else {
+                    val retry = retryPlanFor(question)
+                    reviewQueue[0] = retry
+                    emit(StudyPhase.REVIEW, question = retry, feedback = ReviewFeedback(false, question.correctText, chosen))
+                }
             }
-            reviewQueue[0] = retry
-            emit(StudyPhase.REVIEW, question = retry, feedback = ReviewFeedback(false, question.correctText, chosen))
-        } else {
-            emit(StudyPhase.REVIEW, question = question, feedback = ReviewFeedback(true, question.correctText, chosen))
+            StudyPhase.LEARN_QUIZ -> {
+                val shown = if (correct) question else retryPlanFor(question)
+                quizQuestion = shown
+                emit(
+                    StudyPhase.LEARN_QUIZ,
+                    question = shown,
+                    card = cur.card,
+                    feedback = ReviewFeedback(correct, question.correctText, chosen),
+                )
+            }
+            else -> return
         }
     }
 
     /**
-     * Progresses past the displayed feedback. A correct answer promotes the word up the
-     * adaptive spacing ladder; a wrong answer requeues the (attribution-tailored) retry to
-     * the end so it reappears before the review ends.
+     * Error-Attribution Engine (优化项五): classify the miss by hesitation time and tailor the
+     * retry. A fast wrong answer means orthographic/blind confusion (the same option set is
+     * pinned for a focused re-discrimination); a slow wrong answer signals an unfamiliar word,
+     * so the retry re-shows the 释义 card first.
+     */
+    private fun retryPlanFor(question: ReviewQuestion): ReviewQuestion {
+        val elapsed = System.currentTimeMillis() - questionShownAt
+        return when {
+            elapsed < CONFUSION_MAX_MS -> question.copy(attempt = question.attempt + 1, confusionRetry = true)
+            elapsed > UNKNOWN_MIN_MS -> question.copy(attempt = question.attempt + 1, forceReveal = true)
+            else -> question.copy(attempt = question.attempt + 1)
+        }
+    }
+
+    /**
+     * Progresses past the displayed feedback. In the review phase a correct answer promotes the
+     * word up the adaptive spacing ladder and a wrong answer requeues the (attribution-tailored)
+     * retry to the end; in the 当堂检测 phase a correct answer finally commits the new word and a
+     * wrong answer re-presents the same question.
      */
     fun advanceAfterFeedback() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
-        if (cur.phase != StudyPhase.REVIEW || cur.feedback == null) return
-        val question = reviewQueue.firstOrNull() ?: return
-        if (cur.feedback.correct) {
-            viewModelScope.launch { scheduleReview(question.wordId) }
-            reviewQueue.removeFirst()
-            if (reviewQueue.isEmpty()) {
-                aboutStore.reviewRoundDone = true
-                viewModelScope.launch { startLearningPhase() }
-            } else emit(StudyPhase.REVIEW, question = reviewQueue.first())
-        } else {
-            reviewQueue.removeFirst()
-            reviewQueue.addLast(question)
-            emit(StudyPhase.REVIEW, question = reviewQueue.first())
+        val feedback = cur.feedback ?: return
+        when (cur.phase) {
+            StudyPhase.REVIEW -> {
+                val question = reviewQueue.firstOrNull() ?: return
+                if (feedback.correct) {
+                    viewModelScope.launch { scheduleReview(question.wordId) }
+                    reviewQueue.removeFirst()
+                    if (reviewQueue.isEmpty()) {
+                        aboutStore.reviewRoundDone = true
+                        viewModelScope.launch { startLearningPhase() }
+                    } else emit(StudyPhase.REVIEW, question = reviewQueue.first())
+                } else {
+                    reviewQueue.removeFirst()
+                    reviewQueue.addLast(question)
+                    emit(StudyPhase.REVIEW, question = reviewQueue.first())
+                }
+            }
+            StudyPhase.LEARN_QUIZ -> {
+                val card = quizCard ?: return
+                val question = quizQuestion ?: return
+                if (feedback.correct) {
+                    quizCard = null
+                    quizQuestion = null
+                    viewModelScope.launch { commitLearned(card, isFree = false) }
+                } else {
+                    emit(StudyPhase.LEARN_QUIZ, question = question, card = card)
+                }
+            }
+            else -> return
         }
     }
 
@@ -418,69 +466,122 @@ class StudyViewModel(context: Context) : ViewModel() {
             .map { it.word }
     }
 
+    /**
+     * 「我已背会」只是当堂检测的入口而非自我声明：先做一次提取练习，答对才由
+     * [commitLearned] 入库与计入进度。自由刷词不计进度，测验无意义；已在推荐页入库的词已经
+     * 在复习管线里，当堂再测一遍是重复劳动，两种情况都直接走 [commitLearned]。
+     */
     fun markLearned() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
         val card = cur.card ?: return
         if (cur.phase != StudyPhase.LEARN && cur.phase != StudyPhase.FREE_PLAY) return
         val isFree = cur.phase == StudyPhase.FREE_PLAY
-        val wordId = card.id
         viewModelScope.launch {
             val dao = studyDb?.studyDao() ?: return@launch
-            // 该词可能已在推荐页「纳入复习计划」时入库。REPLACE 写入会把排好的 ASR 进度
-            // 重置回首轮，所以已有记录时只把卡片摘出队列，不覆盖既有状态。
-            val existing = dao.word(wordId)
-            if (existing == null) {
-                dao.upsert(
-                    StudyWordEntity(
-                        wordId = wordId,
-                        status = if (isFree) STUDY_STATUS_FREE else STUDY_STATUS_LEARNING,
-                        learnedDate = if (isFree) null else today,
-                        nextReviewDate = if (isFree) null else plusDays(1),
-                        ease = 2.5,
-                        repetitions = 0,
-                        lastInterval = 1,
-                        addedAt = System.currentTimeMillis(),
-                    ),
-                )
-            }
-            // dao.upsert is a suspend point; a double-tap can reach here after an
-            // earlier invocation already removed and bookkept the card. Only count
-            // progress on a successful removal to avoid double-counting todayDone
-            // and duplicating the learnedToday entry.
-            val removed = learnQueue.remove(card)
-            if (removed && !isFree) {
-                if (existing == null) {
-                    todayDone++
-                    learnedToday.add(card)
-                } else {
-                    // 已在别处入库：以库为准重算今日进度，避免把同一个词记两次。
-                    todayDone = dao.learnedTodayCount(today)
-                    refreshLearnedToday()
+            if (!isFree && dao.word(card.id) == null) {
+                val question = buildLearnQuiz(card)
+                // 凑不出完整选项集时退回旧行为，别把用户留在残缺的选项列表前。
+                if (question != null) {
+                    quizCard = card
+                    quizQuestion = question
+                    emit(StudyPhase.LEARN_QUIZ, question = question, card = card)
+                    return@launch
                 }
             }
-            topUpLearnQueue(isFree)
-            if (!isFree && todayDone >= dailyGoal()) {
-                refreshLearnedToday()
-                emit(StudyPhase.DONE, learnedList = learnedToday.toList())
+            commitLearned(card, isFree)
+        }
+    }
+
+    /** 当堂检测题：干扰项复用复习那套四层筛选，词池按会话缓存。 */
+    private suspend fun buildLearnQuiz(card: WordEntity): ReviewQuestion? {
+        val correctText = card.translation?.takeIf(String::isNotBlank)
+            ?: card.definition?.takeIf(String::isNotBlank) ?: return null
+        val distractors = buildReviewDistractors(card, distractorPool())
+        if (distractors.size < 3) return null
+        val options = (listOf(correctText) + distractors).shuffled()
+        return ReviewQuestion(
+            wordId = card.id,
+            english = card.word,
+            phonetic = phoneticsOf(card),
+            options = options,
+            correctIndex = options.indexOf(correctText),
+        )
+    }
+
+    private suspend fun distractorPool(): List<WordEntity> {
+        cachedDistractorPool?.let { return it }
+        val pool = dictDb?.dictionaryDao()?.randomWords(400).orEmpty()
+        cachedDistractorPool = pool
+        return pool
+    }
+
+    /**
+     * 学会一个新词的落库与记账。写入的仍是首轮状态（repetitions 0 / 明日复习），当堂检测只是
+     * 入门门槛，不能替代明日首轮复习去推进 ASR 阶梯。
+     */
+    private suspend fun commitLearned(card: WordEntity, isFree: Boolean) {
+        val dao = studyDb?.studyDao() ?: return
+        val wordId = card.id
+        // 该词可能已在推荐页「纳入复习计划」时入库。REPLACE 写入会把排好的 ASR 进度
+        // 重置回首轮，所以已有记录时只把卡片摘出队列，不覆盖既有状态。
+        val existing = dao.word(wordId)
+        if (existing == null) {
+            dao.upsert(
+                StudyWordEntity(
+                    wordId = wordId,
+                    status = if (isFree) STUDY_STATUS_FREE else STUDY_STATUS_LEARNING,
+                    learnedDate = if (isFree) null else today,
+                    nextReviewDate = if (isFree) null else plusDays(1),
+                    ease = 2.5,
+                    repetitions = 0,
+                    lastInterval = 1,
+                    addedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+        // dao.upsert is a suspend point; a double-tap can reach here after an
+        // earlier invocation already removed and bookkept the card. Only count
+        // progress on a successful removal to avoid double-counting todayDone
+        // and duplicating the learnedToday entry.
+        val removed = learnQueue.remove(card)
+        if (removed && !isFree) {
+            if (existing == null) {
+                todayDone++
+                learnedToday.add(card)
             } else {
-                emit(if (isFree) StudyPhase.FREE_PLAY else StudyPhase.LEARN, card = learnQueue.firstOrNull())
+                // 已在别处入库：以库为准重算今日进度，避免把同一个词记两次。
+                todayDone = dao.learnedTodayCount(today)
+                refreshLearnedToday()
             }
+        }
+        topUpLearnQueue(isFree)
+        if (!isFree && todayDone >= dailyGoal()) {
+            refreshLearnedToday()
+            emit(StudyPhase.DONE, learnedList = learnedToday.toList())
+        } else {
+            emit(if (isFree) StudyPhase.FREE_PLAY else StudyPhase.LEARN, card = learnQueue.firstOrNull())
         }
     }
 
     /**
      * Smart re-insertion for 稍后再看 (优化项三): the deferred word gets a cool-down by being
      * re-inserted at slot 4 of the remaining queue rather than bouncing straight back to the
-     * front; short queues (fewer than 4 remaining) drop it to the end.
+     * front; short queues (fewer than 4 remaining) drop it to the end. 当堂检测里它同时是退出口：
+     * 实在不会的词不该把人永久卡在同一道题上，放弃作答即退回队列，不入库、不计进度。
      */
     fun deferWord() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
-        if (cur.phase != StudyPhase.LEARN && cur.phase != StudyPhase.FREE_PLAY) return
+        val quitQuiz = cur.phase == StudyPhase.LEARN_QUIZ
+        if (!quitQuiz && cur.phase != StudyPhase.LEARN && cur.phase != StudyPhase.FREE_PLAY) return
         val card = cur.card ?: return
-        learnQueue.removeFirst()
+        if (quitQuiz) {
+            quizCard = null
+            quizQuestion = null
+        }
+        learnQueue.remove(card)
         val idx = minOf(DEFER_INSERT_SLOT, learnQueue.size)
         learnQueue.add(idx, card)
-        emit(cur.phase, card = learnQueue.firstOrNull())
+        emit(if (quitQuiz) StudyPhase.LEARN else cur.phase, card = learnQueue.firstOrNull())
     }
 
     fun continueFreePlay() {
