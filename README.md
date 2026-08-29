@@ -50,6 +50,7 @@
 | 🧠 **Study mode** | Adaptive spaced repetition weighted by IELTS frequency band, with a distractor engine and next-day MCQ review. |
 | 🤖 **AI word annotations** | AI-generated 语感 annotations — emotion color, register, nuance, usage warnings, and speakable / auto-translated collocations. |
 | 📅 **Daily recommendations** | A fully offline daily exploration feed mixing core-new, root-expansion, and high-frequency transition words in a **5:3:2 ratio** (review stays in the Study tab). |
+| ✂️ **Quick-translate toolbar** | Android text-selection toolbar action — select text anywhere on the device, tap *CDict 翻译*, and jump straight to the translation or the matching dictionary entry. |
 | 🔒 **Privacy** | Dictionary and study data stay local. Optional online requests carry the content they need plus a random install ID used only to distinguish request quotas; no hardware identifier is read. |
 | 🛡 **Crash reporting** | Integrated **Lumen Crash SDK** capture with an in-app Compose report screen. |
 
@@ -190,6 +191,14 @@ CDict is a registered **partner app** of [Clash Meta for Android](https://github
 - CDict only *reads* the exported `partnerStatus` provider (core running / tunnel state / profile name). It never starts, stops, or toggles the VPN, and never reads subscriptions or keys.
 - When the Clash core is running **outside** the tunnel, online translation / pronunciation / update checks are routed through its local mixed port `127.0.0.1:7890`. With the tunnel connected — or if that port is unreachable — requests fall back to direct, so networking can never be bricked by the adaptation.
 - *About → 伙伴应用* shows the live status and lets you turn the adaptation off.
+- When the partner status cannot be read (e.g. Clash is not installed, or its provider is unreachable), the UI shows an **actionable reason** so you know exactly what to do.
+- On foreground entry CDict can launch the **CMFA pairing confirmation window** via `startActivityForResult`, so the partner handshake completes without leaving the app.
+
+### ✂️ Quick-translate Toolbar
+
+CDict registers an Android **text-selection `PROCESS_TEXT` action**. Select any text on the device, tap *CDict 翻译* in the toolbar menu, and the app opens a floating translation popup — if the selected text matches a dictionary headword, it jumps straight to the word entry instead.
+
+The quick-translate Activity runs in its own task and is explicitly excluded from the donation foreground-time gate.
 
 ### 🔒 Permissions & Privacy
 
@@ -295,7 +304,22 @@ Release builds enable **R8 minification** (`proguard-android-optimize.txt` + `pr
 
 A narrative of the development history, reconstructed from the commit log.
 
-### 1.1 — Phrase library, curriculum tags & pipeline hardening (current)
+### 1.1.1 — UX overhaul, quick-translate, partner pairing & donation page (current)
+
+A broad UX pass, a new quick-translate entry point, backend unification, and the donation page:
+
+- **UX overhaul**: Unified loading / error / empty states with shimmer, retry, and actionable empty states across all tabs (`efda5b3`). Added list/detail animations and screen transitions (`65a9eb5`, `5d554f6`). Selectable text site-wide (`0a11242`). Ripple clipping to component corners (`b6a96a6`). Card shadows removed for flat Material 3 feel (`de730d8`, `b4a9d52`). Definitions and translations display in full without ellipsis truncation (`71255f7`).
+- **Compact window height**: All five main pages scroll properly when the window is short; bottom actions are no longer clipped (`f42e606`, `635d096`). Five-page accessibility and UX refinements (`73ab473`).
+- **Quick-translate toolbar**: Android `PROCESS_TEXT` action — select text anywhere, tap *CDict 翻译*, and jump to the translation or the matching dictionary entry (`8dd0a86`).
+- **Update flow redesign**: Redesigned update dialog (`d732026`); update checker reads `release-manifest.json` and shows package size (`2180c99`); APK assets renamed to `CDict_android_<version>-<short-hash>[_<abi>].apk` (`f8afe2f`). Auto-update toggle in About (`f45b21b`).
+- **Own-backend unification**: Translation and pronunciation now go exclusively through the project's own backend — the client no longer contacts any third party directly (`ad77ee5`). Client comments scrubbed of vendor names and credential field names (`f2fb577`, `8922467`).
+- **Study & recommendation engine sharing**: Study and Recommendation tabs share the recommendation engine, daily quota, and scope filtering (curriculum tag + frequency group) (`f4f582a`, `65e98f9`).
+- **Official client quota isolation**: Requests from the official signed client carry a distinct quota bucket so third-party builds cannot exhaust official users' quotas (`8be8749`).
+- **Donation page**: Backend-served QR codes (no payment details in the APK); 30-minute + review-round gate; in-app claim form with rate limiting; credited donor list in the donation page and OSS notice (`8239cc0`, `d97f274`, `7175425`).
+- **Partner app enhancements**: Clash Meta partner status shows actionable reasons when unreadable (`400a824`); foreground pairing confirmation window via `startActivityForResult` (`9957a98`, `9ea1e62`). About page links to the partner download (`e5dc383`).
+- **Build fixes**: KDoc nested block comment (`6fe72dd`), Kotlin compiler warnings zeroed (`a0c28f4`), test assertion cleanup (`8cb0055`).
+
+### 1.1 — Phrase library, curriculum tags & pipeline hardening
 
 The dictionary gained a structured phrase library, curriculum-tag filtering, and several infrastructure improvements:
 
