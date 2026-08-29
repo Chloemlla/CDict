@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.chloemlla.cdict.core.net.ClashPartner
 import com.chloemlla.cdict.ui.CdictApp
 import com.chloemlla.cdict.ui.CdictTheme
 import com.chloemlla.cdict.ui.about.AboutOverlayHost
@@ -52,6 +53,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleExternalWord(intent)
+        // 前台可见时机拉起 CMFA 的伙伴配对确认窗（透明窗盖在本应用之上，每进程一次）。
+        ClashPartner.requestPairing(this)
         setContent {
             LumenCrashGate {
                 val state by dictionaryViewModel.state.collectAsStateWithLifecycle()
