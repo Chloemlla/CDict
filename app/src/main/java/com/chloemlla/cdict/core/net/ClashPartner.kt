@@ -1,5 +1,6 @@
 package com.chloemlla.cdict.core.net
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -167,6 +168,9 @@ object ClashPartner {
     /** CMFA 导出的伙伴配对确认窗：类名固定在 com.github.kr328.clash 命名空间，applicationId 随 flavor 变化。 */
     private const val PARTNER_PAIRING_ACTIVITY = "com.github.kr328.clash.PartnerPairingActivity"
 
+    /** 配对确认窗的请求码：只为让平台填上调用方身份，回传结果不使用。 */
+    private const val REQUEST_PAIRING = 0x0C1A
+
     /** 已知的 CMFA 应用 ID，按优先级排列（Meta 正式版 → Alpha → 旧 Meta → 上游 kr328）。 */
     val knownPackages: List<String> = listOf(
         "com.github.metacubex.clash",
@@ -243,17 +247,16 @@ object ClashPartner {
      * 拉起 CMFA 的伙伴配对确认窗。
      *
      * 后台应用不能替别人弹窗（BAL 拦截，CMFA 因此退化成通知）；CMFA 把配对窗导出后，由前台
-     * 伙伴应用自己发起，透明确认窗就能盖在本应用之上。CMFA 会校验发起者身份，并在用户已作答时
-     * 静默关闭，所以这里每进程只发起一次。只在用户可见的前台入口调用。
+     * 伙伴应用自己发起，透明确认窗就能盖在本应用之上。CMFA 只认平台回传的发起者身份，
+     * `startActivityForResult` 才会填上 `getCallingPackage()`（API 34 以下唯一不可伪造的来源），
+     * 所以这里不能用 application context + NEW_TASK 启动。结果本身不需要，也不必处理回调。
+     * CMFA 在用户已作答时会静默关闭，因此每进程只发起一次。只在用户可见的前台入口调用。
      */
-    fun requestPairing(context: Context) {
+    fun requestPairing(activity: Activity) {
         if (!pairingRequested.compareAndSet(false, true)) return
-        val app = context.applicationContext
-        val clashPackage = detectClashPackage(app) ?: return
-        val intent = Intent()
-            .setClassName(clashPackage, PARTNER_PAIRING_ACTIVITY)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { app.startActivity(intent) }
+        val clashPackage = detectClashPackage(activity.applicationContext) ?: return
+        val intent = Intent().setClassName(clashPackage, PARTNER_PAIRING_ACTIVITY)
+        runCatching { activity.startActivityForResult(intent, REQUEST_PAIRING) }
             .onFailure { error -> Log.w(TAG, "拉起 Clash 配对确认失败：$clashPackage", error) }
     }
 
