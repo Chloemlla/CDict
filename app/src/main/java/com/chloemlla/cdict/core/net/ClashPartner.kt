@@ -28,10 +28,19 @@ import kotlinx.coroutines.launch
 /** CDict 联网请求的出口选择。 */
 enum class ClashRoute { Direct, LocalProxy }
 
+/**
+ * CMFA 授予 CDict 的读取层级，对应 `partnerStatus` 的 `accessTier` 字段。
+ *
+ * [Basic] 是按敏感度分层的低敏感层：只有内核/隧道状态与自动适配开关，足够决定出口，但读不到
+ * 配置名、节点、流量与错误信息。
+ */
+enum class ClashAccess { Unavailable, Denied, Basic, Full }
+
 /** 伙伴应用（Clash Meta for Android）的只读快照，供关于页展示与路由决策使用。 */
 data class ClashPartnerState(
     val installedPackage: String? = null,
-    val statusReadable: Boolean = false,
+    val access: ClashAccess = ClashAccess.Unavailable,
+    val deniedReason: String? = null,
     val coreRunning: Boolean = false,
     val vpnConnected: Boolean = false,
     val partnerAutoAdapt: Boolean = false,
@@ -72,7 +81,35 @@ internal fun parseClashStatus(values: Map<String, Any?>): ClashStatus? {
 }
 
 /**
- * 决定这一刻的出口：只在「内核在跑、隧道没接管本进程」时才借用 Clash 的本地混合端口。
+ * 读出 CMFA 授予的层级。
+ *
+ * apiVersion 3 起 `accessTier` 明确回传 `denied` / `basic` / `full`；更早的 CMFA 不带这个字段，
+ * 但那时只要能读到内容就等于拿到了全部字段，所以按 [ClashAccess.Full] 处理。
+ */
+internal fun parseClashAccess(values: Map<String, Any?>): ClashAccess =
+    when (values["accessTier"] as? String) {
+        "denied" -> ClashAccess.Denied
+        "basic" -> ClashAccess.Basic
+        "full" -> ClashAccess.Full
+        else -> if (values.isEmpty()) ClashAccess.Unavailable else ClashAccess.Full
+    }
+
+/**
+ * 把 CMFA 的机器可读 `deniedReason` 翻成用户能照着做的一句中文。
+ *
+ * 这些取值来自 CMFA 的 `PartnerAccessResolver`；未知取值原样带出，便于对着 logcat 排查。
+ */
+internal fun describeDeniedReason(reason: String?): String = when (reason) {
+    "pending_user_approval" -> "等待在 Clash 中确认配对：打开 Clash 主页或点击配对通知即可授权"
+    "denied_by_user" -> "已在 Clash 中拒绝授权，可在 Clash 主页「伙伴应用」里撤销"
+    "signer_unverified" -> "Clash 未登记 CDict 的签名证书，只开放基础状态；在「伙伴应用」里允许即可读取完整状态"
+    "not_partner" -> "Clash 没把 CDict 认成伙伴应用，请更新 Clash 到支持伙伴配对的版本"
+    "no_signature" -> "Clash 读不到 CDict 的签名信息，无法完成配对"
+    null -> "Clash 未说明原因"
+    else -> "Clash 返回原因：$reason"
+}
+
+
  *
  * 隧道已连接时必须直连——流量已经由 VPN 承载，再叠一层本地代理会绕回隧道自身。内核没在跑
  * 或本地端口连不上时同样直连，避免把 CDict 的在线翻译/朗读全部打死。
@@ -89,19 +126,26 @@ internal fun resolveClashRoute(
 }
 
 /** 关于页「伙伴应用」分区的一行状态文案。 */
-fun ClashPartnerState.summary(): String = when {
-    installedPackage == null -> "未安装 Clash Meta for Android（可选），联网请求直连"
-    !adaptEnabled -> "已关闭跟随，联网请求直连"
-    !statusReadable -> "已安装，但读不到伙伴状态（需同签名或已登记的伙伴身份）"
-    vpnConnected -> buildString {
-        append("隧道已连接，CDict 流量随 VPN 走 Clash")
-        if (!partnerAutoAdapt) append(" · 建议在 Clash 中开启伙伴应用自动适配")
-        profileName?.let { append(" · 配置：$it") }
+fun ClashPartnerState.summary(): String {
+    val base = when {
+        installedPackage == null -> "未安装 Clash Meta for Android（可选），联网请求直连"
+        !adaptEnabled -> "已关闭跟随，联网请求直连"
+        access == ClashAccess.Unavailable ->
+            "已安装，但这个 Clash 版本没有伙伴状态接口，请更新 Clash 后重试"
+        access == ClashAccess.Denied -> "读不到伙伴状态：${describeDeniedReason(deniedReason)}"
+        vpnConnected -> buildString {
+            append("隧道已连接，CDict 流量随 VPN 走 Clash")
+            if (!partnerAutoAdapt) append(" · 建议在 Clash 中开启伙伴应用自动适配")
+            profileName?.let { append(" · 配置：$it") }
+        }
+        route == ClashRoute.LocalProxy ->
+            "内核运行中，联网请求走本地混合端口 ${ClashPartner.LOCAL_PROXY_HOST}:${ClashPartner.LOCAL_PROXY_PORT}"
+        coreRunning -> "内核运行中，但本地混合端口连接失败，已回退直连"
+        else -> "Clash 已安装但内核未运行，联网请求直连"
     }
-    route == ClashRoute.LocalProxy ->
-        "内核运行中，联网请求走本地混合端口 ${ClashPartner.LOCAL_PROXY_HOST}:${ClashPartner.LOCAL_PROXY_PORT}"
-    coreRunning -> "内核运行中，但本地混合端口连接失败，已回退直连"
-    else -> "Clash 已安装但内核未运行，联网请求直连"
+
+    // 基础层能决定出口，但配置名/节点/流量都读不到，所以要顺带说明缺什么、怎么补。
+    return if (access == ClashAccess.Basic) "$base · ${describeDeniedReason(deniedReason)}" else base
 }
 
 /**
@@ -129,6 +173,15 @@ object ClashPartner {
     private const val TAG = "ClashPartner"
     private const val STATUS_AUTHORITY_SUFFIX = ".status"
     private const val STATUS_METHOD = "partnerStatus"
+
+    /** 一次 `partnerStatus` 查询的结果：层级、拒绝原因，以及真正读到的字段。 */
+    private data class PartnerRead(
+        val access: ClashAccess,
+        val deniedReason: String?,
+        val status: ClashStatus?,
+    )
+
+    private val UNAVAILABLE = PartnerRead(ClashAccess.Unavailable, null, null)
 
     private val _state = MutableStateFlow(ClashPartnerState())
     val state: StateFlow<ClashPartnerState> = _state.asStateFlow()
@@ -182,7 +235,8 @@ object ClashPartner {
     private fun refreshNow() {
         val context = appContext ?: return
         val installed = detectClashPackage(context)
-        val status = installed?.let { queryPartnerStatus(context, it) }
+        val read = installed?.let { queryPartnerStatus(context, it) } ?: UNAVAILABLE
+        val status = read.status
         if (status != null) {
             localProxyReachable = true
         }
@@ -190,7 +244,8 @@ object ClashPartner {
         route = resolved
         _state.value = ClashPartnerState(
             installedPackage = installed,
-            statusReadable = status != null,
+            access = read.access,
+            deniedReason = read.deniedReason,
             coreRunning = status?.coreRunning ?: false,
             vpnConnected = status?.vpnConnected ?: false,
             partnerAutoAdapt = status?.partnerAutoAdapt ?: false,
@@ -212,16 +267,32 @@ object ClashPartner {
         }
     }
 
-    private fun queryPartnerStatus(context: Context, packageName: String): ClashStatus? {
+    /**
+     * 查一次 `partnerStatus`。
+     *
+     * 三种失败要分开：Provider 缺失或 binder 异常（旧版 Clash，没有伙伴接口）、CMFA 明确拒绝
+     * （带 `deniedReason`，用户照着做就能解决）、以及只授予基础层。混成一句「读不到状态」时
+     * 用户无从下手，这也是先前那条无用提示的根因。
+     */
+    private fun queryPartnerStatus(context: Context, packageName: String): PartnerRead {
         val uri = Uri.parse("content://$packageName$STATUS_AUTHORITY_SUFFIX")
         val bundle = try {
             context.contentResolver.call(uri, STATUS_METHOD, null, null)
         } catch (t: Throwable) {
-            // 未授予伙伴身份、Provider 缺失或 binder 异常都只意味着「读不到状态」，不能影响联网。
             Log.d(TAG, "partnerStatus 查询失败：$packageName", t)
             null
-        } ?: return null
-        return parseClashStatus(bundle.toValueMap())
+        } ?: return UNAVAILABLE
+        val values = bundle.toValueMap()
+        val access = parseClashAccess(values)
+        val reason = values["deniedReason"] as? String
+        if (access != ClashAccess.Full) {
+            Log.d(TAG, "伙伴状态受限：$packageName tier=$access reason=$reason")
+        }
+        return PartnerRead(
+            access = access,
+            deniedReason = reason,
+            status = parseClashStatus(values).takeIf { access != ClashAccess.Denied },
+        )
     }
 
     @Suppress("DEPRECATION")

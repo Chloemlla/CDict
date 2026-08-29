@@ -92,14 +92,14 @@ class ClashPartnerTest {
                 .contains("已关闭跟随"),
         )
         assertTrue(
-            ClashPartnerState(installedPackage = PACKAGE, statusReadable = false)
+            ClashPartnerState(installedPackage = PACKAGE, access = ClashAccess.Unavailable)
                 .summary()
-                .contains("读不到伙伴状态"),
+                .contains("没有伙伴状态接口"),
         )
         assertTrue(
             ClashPartnerState(
                 installedPackage = PACKAGE,
-                statusReadable = true,
+                access = ClashAccess.Full,
                 coreRunning = true,
                 route = ClashRoute.LocalProxy,
             ).summary().contains("${ClashPartner.LOCAL_PROXY_HOST}:${ClashPartner.LOCAL_PROXY_PORT}"),
@@ -107,10 +107,49 @@ class ClashPartnerTest {
     }
 
     @Test
+    fun summary_tellsUserHowToAnswerPendingPairing() {
+        val summary = ClashPartnerState(
+            installedPackage = PACKAGE,
+            access = ClashAccess.Denied,
+            deniedReason = "pending_user_approval",
+        ).summary()
+
+        assertTrue(summary.contains("等待在 Clash 中确认配对"))
+    }
+
+    @Test
+    fun summary_explainsBasicTierWithoutHidingTheRoute() {
+        val summary = ClashPartnerState(
+            installedPackage = PACKAGE,
+            access = ClashAccess.Basic,
+            deniedReason = "signer_unverified",
+            coreRunning = true,
+            route = ClashRoute.LocalProxy,
+        ).summary()
+
+        assertTrue(summary.contains("本地混合端口"))
+        assertTrue(summary.contains("未登记 CDict 的签名证书"))
+    }
+
+    @Test
+    fun parseClashAccess_readsTierAndTreatsOlderBuildsAsFull() {
+        assertEquals(ClashAccess.Denied, parseClashAccess(mapOf("accessTier" to "denied")))
+        assertEquals(ClashAccess.Basic, parseClashAccess(mapOf("accessTier" to "basic")))
+        assertEquals(ClashAccess.Full, parseClashAccess(mapOf("accessTier" to "full")))
+        assertEquals(ClashAccess.Full, parseClashAccess(mapOf("apiVersion" to 2, "running" to true)))
+        assertEquals(ClashAccess.Unavailable, parseClashAccess(emptyMap()))
+    }
+
+    @Test
+    fun describeDeniedReason_keepsUnknownReasonsVisible() {
+        assertTrue(describeDeniedReason("something_new").contains("something_new"))
+    }
+
+    @Test
     fun summary_hintsAtAutoAdaptWhenTunnelUpButPartnerIncludeOff() {
         val summary = ClashPartnerState(
             installedPackage = PACKAGE,
-            statusReadable = true,
+            access = ClashAccess.Full,
             coreRunning = true,
             vpnConnected = true,
             partnerAutoAdapt = false,
