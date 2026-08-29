@@ -109,7 +109,8 @@ internal fun describeDeniedReason(reason: String?): String = when (reason) {
     else -> "Clash 返回原因：$reason"
 }
 
-
+/**
+ * 决定这一刻的出口：只在「内核在跑、隧道没接管本进程」时才借用 Clash 的本地混合端口。
  *
  * 隧道已连接时必须直连——流量已经由 VPN 承载，再叠一层本地代理会绕回隧道自身。内核没在跑
  * 或本地端口连不上时同样直连，避免把 CDict 的在线翻译/朗读全部打死。
