@@ -37,6 +37,21 @@ object AboutData {
             purpose = "连接互联网，用于可选的在线翻译与发音（在线合成 / 有道）。",
             scope = "INTERNET",
         ),
+        AppPermission(
+            name = "网络状态",
+            purpose = "判断当前有没有可用网络，联网功能失败时给出对应提示，不读取具体网络标识。",
+            scope = "ACCESS_NETWORK_STATE",
+        ),
+        AppPermission(
+            name = "安装应用",
+            purpose = "在你确认更新后，安装应用内下载的新版本安装包；不会在后台自动安装任何东西。",
+            scope = "REQUEST_INSTALL_PACKAGES",
+        ),
+        AppPermission(
+            name = "存储",
+            purpose = "把赞赏页的收款码图片保存到相册；仅 Android 9 及以下需要此权限，且只在你点击保存时请求，不读取相册里的其他文件。",
+            scope = "WRITE_EXTERNAL_STORAGE",
+        ),
     )
 
     data class OssCredit(

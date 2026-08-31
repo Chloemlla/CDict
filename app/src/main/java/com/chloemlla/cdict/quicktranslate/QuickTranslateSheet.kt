@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.chloemlla.cdict.core.data.QuickWord
 import com.chloemlla.cdict.core.translate.TranslationDirection
 import com.chloemlla.cdict.ui.about.UrlOpener
+import com.chloemlla.cdict.ui.friendlyFailureHint
 import kotlinx.coroutines.launch
 
 /**
@@ -225,17 +226,11 @@ private fun ErrorRow(message: String, onRetry: () -> Unit) {
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp),
             )
+            // 原始错误串可能是网关的 HTML 报错，摆在别人的应用界面上既看不懂也泄露后端细节。
             Text(
-                text = "翻译失败，请检查网络后重试",
+                text = friendlyFailureHint(message),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
-            )
-        }
-        SelectionContainer {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {

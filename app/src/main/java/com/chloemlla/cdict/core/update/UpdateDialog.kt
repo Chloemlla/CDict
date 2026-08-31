@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -653,7 +654,9 @@ private fun UpdateInstallAuthDialog(
     context: android.content.Context,
 ) {
     val release = candidate.release
-    val permissionGranted = updateInstaller.canInstallPackages()
+    // canInstallPackages() 是一次 binder IPC，直接写在组合体里每帧都要付一次；授权后由
+    // AboutOverlayHost 的 ON_RESUME 观察者接管，这里只需要进入组合时的那一次结果。
+    val permissionGranted = remember { updateInstaller.canInstallPackages() }
 
     AlertDialog(
         onDismissRequest = onDismiss,

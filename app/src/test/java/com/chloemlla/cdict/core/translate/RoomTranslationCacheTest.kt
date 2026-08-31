@@ -5,6 +5,7 @@ import com.chloemlla.cdict.core.data.TranslationCacheEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,6 +24,14 @@ class RoomTranslationCacheTest {
         dao.clear()
         val key = TranslationCacheKey.of("hello", TranslationDirection.AUTO_TO_ZH)
         assertNull(cache().get(key))
+    }
+
+    @Test
+    fun `key folds surrounding blanks but keeps case`() {
+        val dir = TranslationDirection.EN_TO_ZH
+        // US（美国）与 us（我们）、May 与 may 是不同的词，不能共用一条译文。
+        assertNotEquals(TranslationCacheKey.of("US", dir), TranslationCacheKey.of("us", dir))
+        assertEquals(TranslationCacheKey.of(" us\n", dir), TranslationCacheKey.of("us", dir))
     }
 
     @Test
@@ -89,7 +98,7 @@ class RoomTranslationCacheTest {
         val dir = TranslationDirection.AUTO_TO_EN
         val key = TranslationCacheKey.of("取决于", dir)
         val leak =
-            """[{"filename":"https://openapi.youdao.com/vivo/ttsapi?q=depending&appKey=48fd18fd98fb24b2","ttsId":"x-phonetic-0","text":"dɪˈpendɪŋ","type":"auto"}]"""
+            """[{"filename":"https://openapi.example.com/vivo/ttsapi?q=depending&appKey=TEST_APP_KEY","ttsId":"x-phonetic-0","text":"dɪˈpendɪŋ","type":"auto"}]"""
         dao.upsert(
             TranslationCacheEntity(
                 hashKey = key,
@@ -130,6 +139,8 @@ class RoomTranslationCacheTest {
         override suspend fun setFavorite(key: String, isFavorite: Boolean) {
             rows[key]?.let { rows[key] = it.copy(isFavorite = if (isFavorite) 1 else 0) }
         }
+
+        override suspend fun favoriteFlag(key: String): Int? = rows[key]?.isFavorite
 
         override suspend fun nonFavoriteCount(): Int = rows.values.count { it.isFavorite == 0 }
 

@@ -5,9 +5,10 @@ import com.chloemlla.cdict.core.data.WordEntity
 /**
  * Offline search ranking & typo tolerance (PRD §3.1).
  *
- * The database serves raw FTS5 results ordered by frequency; these helpers give the
- * *final* relevance ordering (Exact > Prefix > Frequency) and, when a query finds
- * nothing, a "Did you mean: …" suggestion within a bounded edit distance.
+ * The database already lifts an exact headword above the frequency ordering (so truncation by
+ * LIMIT cannot drop it); these helpers give the *final* relevance ordering
+ * (Exact > Prefix > Frequency) and, when a query finds nothing, a "Did you mean: …"
+ * suggestion within a bounded edit distance.
  */
 object SearchEngine {
 

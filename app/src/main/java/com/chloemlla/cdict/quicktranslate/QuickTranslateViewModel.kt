@@ -1,16 +1,17 @@
 package com.chloemlla.cdict.quicktranslate
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.chloemlla.cdict.core.data.QuickWord
 import com.chloemlla.cdict.core.data.QuickWordLookup
-import com.chloemlla.cdict.core.data.TranslationCacheDatabase
 import com.chloemlla.cdict.core.translate.RoomTranslationCache
 import com.chloemlla.cdict.core.translate.TranslationCache
 import com.chloemlla.cdict.core.translate.TranslationCacheKey
 import com.chloemlla.cdict.core.translate.TranslationDirection
+import com.chloemlla.cdict.core.translate.TranslationLimits
 import com.chloemlla.cdict.core.translate.TranslationOutcome
 import com.chloemlla.cdict.core.translate.TranslationRequest
 import com.chloemlla.cdict.core.translate.VivoTranslationClient
@@ -50,6 +51,10 @@ class QuickTranslateViewModel(
     private var started = false
     private var translateJob: Job? = null
 
+    // viewModelScope 跑在 Dispatchers.Main.immediate 上：内存缓存命中时协程体在 translateJob 被赋值
+    // 之前就同步跑完了，拿 job 判等永远为 false。世代号在 launch 之前自增，才是可靠的“我还是最新请求吗”。
+    private var translateGeneration = 0
+
     fun start(rawText: String) {
         if (started) return
         started = true
@@ -85,11 +90,19 @@ class QuickTranslateViewModel(
         if (text.isEmpty()) return
         val direction = current.direction
         translateJob?.cancel()
+        // 首帧就是「正在翻译…」：留到协程里再置会先闪一下「暂无译文」。
+        _state.update { it.copy(translating = true, error = null) }
+        val gen = ++translateGeneration
         translateJob = viewModelScope.launch {
-            val isCurrent = { coroutineContext[Job] === translateJob }
             val key = TranslationCacheKey.of(text, direction)
-            cache.get(key)?.let { cached ->
-                if (isCurrent()) {
+            // 缓存只是可选加速：磁盘写满时 Room 会抛 SQLiteFullException，不该把翻译功能一起拖崩。
+            val cached = try {
+                cache.get(key)
+            } catch (e: SQLiteException) {
+                null
+            }
+            if (cached != null) {
+                if (gen == translateGeneration) {
                     _state.update {
                         it.copy(
                             translating = false,
@@ -101,11 +114,14 @@ class QuickTranslateViewModel(
                 }
                 return@launch
             }
-            _state.update { it.copy(translating = true, error = null) }
             when (val outcome = client.translate(TranslationRequest(listOf(text), direction))) {
                 is TranslationOutcome.Success -> {
-                    cache.put(key, text, direction, outcome.result)
-                    if (isCurrent()) {
+                    try {
+                        cache.put(key, text, direction, outcome.result)
+                    } catch (e: SQLiteException) {
+                        // 写缓存失败不影响本次译文展示。
+                    }
+                    if (gen == translateGeneration) {
                         _state.update {
                             it.copy(
                                 translating = false,
@@ -117,7 +133,7 @@ class QuickTranslateViewModel(
                     }
                 }
                 is TranslationOutcome.Failure ->
-                    if (isCurrent()) {
+                    if (gen == translateGeneration) {
                         _state.update { it.copy(translating = false, error = outcome.message) }
                     }
             }
@@ -125,8 +141,8 @@ class QuickTranslateViewModel(
     }
 
     companion object {
-        /** 与翻译页一致的原文上限：超长选区截断后再送翻译，避免网关直接拒绝。 */
-        const val MAX_SOURCE_LENGTH = 2_000
+        /** 与翻译页共用的原文上限：超长选区截断后再送翻译，避免网关直接拒绝。 */
+        const val MAX_SOURCE_LENGTH = TranslationLimits.MAX_SOURCE_LENGTH
 
         fun normalizeSource(raw: String): String = raw.trim().take(MAX_SOURCE_LENGTH)
 
@@ -140,12 +156,11 @@ class QuickTranslateViewModel(
 class QuickTranslateViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         val appContext = context.applicationContext
-        val db = TranslationCacheDatabase.open(appContext)
         @Suppress("UNCHECKED_CAST")
         return QuickTranslateViewModel(
             appContext,
             VivoTranslationClient(),
-            RoomTranslationCache(db.translationCacheDao()),
+            RoomTranslationCache.shared(appContext),
         ) as T
     }
 }

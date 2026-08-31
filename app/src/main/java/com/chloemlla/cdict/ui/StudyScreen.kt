@@ -34,8 +34,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -60,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -98,23 +95,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.chloemlla.cdict.BuildConfig
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.data.WordEntity
 import com.chloemlla.cdict.ui.about.AboutScreenRoute
 import com.chloemlla.cdict.ui.about.AboutStore
 import com.chloemlla.cdict.ui.about.DonationPromptGate
 import com.chloemlla.cdict.ui.about.LocalAboutController
-
-/** 五次点击标题后解锁开发者测试面板。 */
-private const val DEVELOPER_KEY = "Chloemlla"
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -142,14 +137,13 @@ fun StudyScreen(
     )
     val phraseStates by phraseViewModel.states.collectAsStateWithLifecycle()
     val speakingKey by phraseViewModel.speakingKey.collectAsStateWithLifecycle()
-    // 连点标题五次仅用于开发测试，避免干扰正常学习流程。
+    // 开发者面板只在 debug 构建里存在：它唯一的作用是直接跳进复习界面做 UI 测试，
+    // release 包里不该为此留一个硬编码密钥。
     var devTaps by remember { mutableIntStateOf(0) }
     var lastDevTap by remember { mutableLongStateOf(0L) }
     var showDevDialog by remember { mutableStateOf(false) }
-    var devKey by remember { mutableStateOf("") }
-    var devKeyWrong by remember { mutableStateOf(false) }
-    var devUnlocked by remember { mutableStateOf(false) }
     fun onTitleTap() {
+        if (!BuildConfig.DEBUG) return
         val now = SystemClock.uptimeMillis()
         devTaps = if (now - lastDevTap < 2000L) devTaps + 1 else 1
         lastDevTap = now
@@ -252,61 +246,18 @@ fun StudyScreen(
             title = { Text("开发者模式") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (devUnlocked) {
-                        Text(
-                            "开发者已解锁。点击下方按钮直接进入「复习单词考试」界面，仅供开发测试，不改动真实学习数据。",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Button(
-                            onClick = {
-                                showDevDialog = false
-                                onDebugLaunchReview()
-                            },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) {
-                            Text("测试 复习单词考试页")
-                        }
-                    } else {
-                        Text(
-                            "请输入开发者密钥以解锁开发者模式。",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        // 回车即提交，避免输入完还要收起键盘去找按钮。
-                        val submitDevKey: () -> Unit = {
-                            if (devKey == DEVELOPER_KEY) {
-                                devUnlocked = true
-                                devKeyWrong = false
-                            } else {
-                                devKeyWrong = true
-                            }
-                        }
-                        OutlinedTextField(
-                            value = devKey,
-                            onValueChange = {
-                                devKey = it
-                                devKeyWrong = false
-                            },
-                            singleLine = true,
-                            label = { Text("开发者密钥") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Done,
-                            ),
-                            keyboardActions = KeyboardActions(onDone = { submitDevKey() }),
-                            isError = devKeyWrong,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        if (devKeyWrong) {
-                            Text("密钥错误", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
-                        }
-                        Button(
-                            onClick = submitDevKey,
-                            enabled = devKey.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        ) {
-                            Text("解锁")
-                        }
+                    Text(
+                        "点击下方按钮直接进入「复习单词考试」界面，仅供开发测试，不改动真实学习数据。",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(
+                        onClick = {
+                            showDevDialog = false
+                            onDebugLaunchReview()
+                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) {
+                        Text("测试 复习单词考试页")
                     }
                 }
             },
@@ -515,6 +466,15 @@ private fun ReviewFlow(
     }
     // 每次进入新题、重试或释义展示完毕后重置犹豫计时，供错因归因使用。
     LaunchedEffect(question.wordId, question.attempt) { onQuestionPresented() }
+    // 切出去接个电话的等待时间不该算成「完全陌生」，回到前台就重新起算。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, question.wordId, question.attempt) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) onQuestionPresented()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // 完全陌生的重试先展示释义，再显示作答选项。
     var reveal by remember(question.wordId, question.attempt, question.forceReveal) {
         mutableStateOf(!question.forceReveal)
@@ -526,12 +486,15 @@ private fun ReviewFlow(
             onQuestionPresented()
         }
     }
-    // 提示音随复习界面释放，避免离开复习后仍占用音频资源。
+    // 提示音随复习界面释放，避免离开复习后仍占用音频资源。ToneGenerator 的构造要申请
+    // AudioTrack，音频资源被占满时会抛 RuntimeException；提示音是装饰，拿不到就静音。
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val tone = remember(context) { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) }
+    val tone = remember(context) {
+        runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 70) }.getOrNull()
+    }
     DisposableEffect(tone) {
-        onDispose { tone.release() }
+        onDispose { tone?.release() }
     }
     // 手机小屏：整列可滚动避免裁剪；换题时回到顶部。
     val scrollState = rememberScrollState()
@@ -567,6 +530,7 @@ private fun ReviewFlow(
         } else {
             ReviewProgressHeader(state)
         }
+        StudyNotice(state.notice)
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -666,7 +630,7 @@ private fun ReviewFlow(
                 // 答对后短暂停留，确保视觉和声音反馈都能被感知。
                 LaunchedEffect(feedback) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
+                    tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
                     kotlinx.coroutines.delay(650)
                     onAdvance()
                 }
@@ -684,17 +648,39 @@ private fun ReviewFlow(
                 }
             }
         }
-        // 实在不会的词必须有出口，否则用户会被永久卡在这一道题上。
-        if (isLearnQuiz) {
-            TextButton(
-                onClick = onQuitQuiz,
-                enabled = feedback?.correct != true,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) {
-                Text("暂时跳过 · 退回学习队列，不计入进度")
-            }
+        // 实在不会的词、以及积压过多的复习批次都必须有出口，否则用户会被永久卡住：纯复习态下
+        // 答错只会把题挪到队尾，队列长度永不下降。
+        TextButton(
+            onClick = onQuitQuiz,
+            enabled = feedback?.correct != true,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        ) {
+            Text(
+                if (isLearnQuiz) "暂时跳过 · 退回学习队列，不计入进度"
+                else "本轮先到这里 · 未答完的词明天照旧排队",
+            )
         }
     }
+    }
+}
+
+/** 一次性提示条：写入失败、队列已到底一类需要用户知道但不该打断流程的信息。 */
+@Composable
+private fun StudyNotice(text: String?) {
+    if (text.isNullOrBlank()) return
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+        )
     }
 }
 
@@ -1013,6 +999,7 @@ private fun LearnFlow(
             )
             GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
             StudyProgressBar(state)
+            StudyNotice(state.notice)
             if (!isFree && card != null) {
                 Text(
                     text = "本轮还剩 ${state.queueRemaining} 个新词",
@@ -1057,6 +1044,7 @@ private fun LearnFlow(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = onDefer,
+                    enabled = !state.busy,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp),
                 ) {
                     Text("稍后再看", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1066,6 +1054,7 @@ private fun LearnFlow(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onMarkLearned()
                     },
+                    enabled = !state.busy,
                     modifier = Modifier.weight(1f).heightIn(min = 52.dp),
                 ) {
                     Text(if (isFree) "刷完" else "我已背会", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1297,6 +1286,7 @@ private fun DoneFlow(
             )
             GoalStepper(goal = state.dailyGoal, onSetGoal = onSetGoal)
             StudyProgressBar(state)
+            StudyNotice(state.notice)
             Card(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),

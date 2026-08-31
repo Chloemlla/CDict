@@ -3,6 +3,8 @@ package com.chloemlla.cdict.core.update
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -14,27 +16,28 @@ class UpdateChecker(
     private val context: Context,
     private val githubReleaseApiUrl: String = CDICT_RELEASE_API,
 ) {
-    suspend fun checkForUpdate(currentBuild: BuildMetadata = BuildMetadata.current()): UpdateCandidate? {
-        val latest = fetchLatestGitHubRelease() ?: return null
+    suspend fun checkForUpdate(currentBuild: BuildMetadata = BuildMetadata.current()): UpdateCandidate? =
+        withContext(Dispatchers.IO) {
+            val latest = fetchLatestGitHubRelease() ?: return@withContext null
 
-        val localVersion = parseVersionDescriptor("${currentBuild.versionName}-${currentBuild.shortHash}")
-            ?: parseVersionDescriptor(currentBuild.versionName)
-            ?: return null
-        if (isExactVersionMatch(latest.tagName, localVersion)) return null
+            val localVersion = parseVersionDescriptor("${currentBuild.versionName}-${currentBuild.shortHash}")
+                ?: parseVersionDescriptor(currentBuild.versionName)
+                ?: return@withContext null
+            if (isExactVersionMatch(latest.tagName, localVersion)) return@withContext null
 
-        val versionComparison = compareReleaseVersion(latest.tagName, localVersion)
-        val publishTimeNewer = latest.publishedAtUtcMillis > currentBuild.buildTimeUtcMillis + PUBLISH_TIME_TOLERANCE_MILLIS
+            val versionComparison = compareReleaseVersion(latest.tagName, localVersion)
+            val publishTimeNewer = latest.publishedAtUtcMillis > currentBuild.buildTimeUtcMillis + PUBLISH_TIME_TOLERANCE_MILLIS
 
-        val shouldUpdate = versionComparison > 0 || publishTimeNewer
-        if (!shouldUpdate) return null
+            val shouldUpdate = versionComparison > 0 || publishTimeNewer
+            if (!shouldUpdate) return@withContext null
 
-        return UpdateCandidate(
-            currentBuild = currentBuild,
-            release = latest,
-            matchedAsset = selectBestApkAsset(latest.assets, Build.SUPPORTED_ABIS.toList()),
-            matchReason = if (versionComparison > 0) UpdateMatchReason.SEMANTIC_VERSION else UpdateMatchReason.PUBLISHED_AT,
-        )
-    }
+            UpdateCandidate(
+                currentBuild = currentBuild,
+                release = latest,
+                matchedAsset = selectBestApkAsset(latest.assets, Build.SUPPORTED_ABIS.toList()),
+                matchReason = if (versionComparison > 0) UpdateMatchReason.SEMANTIC_VERSION else UpdateMatchReason.PUBLISHED_AT,
+            )
+        }
 
     private fun fetchLatestGitHubRelease(): ReleaseInfo? {
         val connection = openHttpConnection(githubReleaseApiUrl).apply {
@@ -131,8 +134,7 @@ class UpdateChecker(
 
     private fun fetchReleaseManifest(assets: List<ReleaseAsset>): Map<String, ManifestAsset> {
         val manifestAsset = assets.firstOrNull { isReleaseManifestAsset(it.name) } ?: return emptyMap()
-        val text = fetchTextAsset(manifestAsset.downloadUrl) ?: return emptyMap()
-        return parseReleaseManifest(text)
+        return parseReleaseManifest(fetchTextAsset(manifestAsset.downloadUrl))
     }
 
     private fun fetchSha256ChecksumAssets(assets: List<ReleaseAsset>): Map<String, String> {
@@ -142,14 +144,15 @@ class UpdateChecker(
                     normalizeAssetName(asset.name).let { it.contains("checksum") || it.contains("sha256") }
             }
             .fold(emptyMap()) { checksums, asset ->
-                val assetChecksums = fetchTextAsset(asset.downloadUrl)
-                    ?.let(::parseSha256Checksums)
-                    .orEmpty()
-                checksums + assetChecksums
+                checksums + parseSha256Checksums(fetchTextAsset(asset.downloadUrl))
             }
     }
 
-    private fun fetchTextAsset(url: String): String? {
+    /**
+     * 校验信息拉取失败必须抛出：把它咽成 null 会让最新那条发布因「没有带校验和的 APK」被跳过，
+     * 最终把一次网络故障报告成「已是最新版本」。
+     */
+    private fun fetchTextAsset(url: String): String {
         val connection = openHttpConnection(url).apply {
             requestMethod = "GET"
             connectTimeout = REQUEST_TIMEOUT_MILLIS
@@ -159,12 +162,9 @@ class UpdateChecker(
         }
         return try {
             if (connection.responseCode !in 200..299) {
-                null
-            } else {
-                connection.inputStream.bufferedReader().use { it.readText() }
+                throw IOException("Update asset request failed with HTTP ${connection.responseCode}")
             }
-        } catch (_: IOException) {
-            null
+            connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
             connection.disconnect()
         }

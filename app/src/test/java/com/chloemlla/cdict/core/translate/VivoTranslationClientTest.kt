@@ -79,7 +79,7 @@ class VivoTranslationClientTest {
     fun `phonetic json blob is normalized to its text field`() {
         val resp = HttpResponse(
             200,
-            """{"retcode":0,"code":0,"data":{"translation":"服务器","from":"auto","to":"zh-CHS","phonetic":"[{\"filename\":\"https://openapi.youdao.com/vivo/ttsapi?q=%E6%9C%8D%E5%8A%A1%E5%99%A8&langType=zh-CHS&appKey=48fd18fd98fb24b2\",\"ttsId\":\"x-phonetic-0\",\"text\":\"fú wù qì\",\"type\":\"auto\"}]"}}""",
+            """{"retcode":0,"code":0,"data":{"translation":"服务器","from":"auto","to":"zh-CHS","phonetic":"[{\"filename\":\"https://openapi.example.com/vivo/ttsapi?q=%E6%9C%8D%E5%8A%A1%E5%99%A8&langType=zh-CHS&appKey=TEST_APP_KEY\",\"ttsId\":\"x-phonetic-0\",\"text\":\"fú wù qì\",\"type\":\"auto\"}]"}}""",
         )
         val outcome = parseTranslationResponse(resp) as TranslationOutcome.Success
         assertEquals("fú wù qì", outcome.result.phonetic)
@@ -98,10 +98,10 @@ class VivoTranslationClientTest {
         assertNull(normalizePhonetic("""[{"text":""]"""))
         assertNull(
             normalizePhonetic(
-                """[{"filename":"https://openapi.youdao.com/vivo/ttsapi?q=depending&appKey=48fd18fd98fb24b2","ttsId":"x-phonetic-0","type":"auto"}]""",
+                """[{"filename":"https://openapi.example.com/vivo/ttsapi?q=depending&appKey=TEST_APP_KEY","ttsId":"x-phonetic-0","type":"auto"}]""",
             ),
         )
-        assertNull(normalizePhonetic("https://openapi.youdao.com/vivo/ttsapi?q=depending"))
+        assertNull(normalizePhonetic("https://openapi.example.com/vivo/ttsapi?q=depending"))
     }
 
     @Test

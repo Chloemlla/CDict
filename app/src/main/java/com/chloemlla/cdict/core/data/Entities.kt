@@ -19,6 +19,9 @@ data class GroupEntity(
     indices = [
         Index(value = ["translation"], name = "idx_words_translation"),
         Index(value = ["frequencyGroup", "frequency", "word"], name = "idx_words_group_frequency"),
+        // 该索引在库里是 word COLLATE NOCASE（@Index 无法表达排序规则，见 MIGRATION_5_6
+        // 与 DatabaseExtractor.CREATE_WORD_NOCASE_INDEX）；PRAGMA 不暴露排序规则，校验仍一致。
+        Index(value = ["word"], name = "idx_words_word_nocase"),
     ],
 )
 data class WordEntity(

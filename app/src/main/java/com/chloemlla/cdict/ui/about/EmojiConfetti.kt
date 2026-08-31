@@ -13,10 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.PI
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -67,23 +70,38 @@ fun EmojiConfetti(burstKey: Int, modifier: Modifier = Modifier, onFinished: () -
             .fillMaxSize()
             .clearAndSetSemantics {},
     ) {
-        val travel = maxHeight + 96.dp
+        val density = LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }
+        val travelPx = with(density) { (maxHeight + 96.dp).toPx() }
+        val liftPx = with(density) { 48.dp.toPx() }
         particles.forEach { particle ->
-            val local = ((progress.value - particle.delay) / (1f - particle.delay)).coerceIn(0f, 1f)
-            if (local <= 0f) return@forEach
-            val sway = maxWidth * particle.drift * sin(local * 2f * PI.toFloat())
             Text(
                 text = particle.emoji,
                 fontSize = 26.sp,
                 modifier = Modifier
-                    .offset(x = maxWidth * particle.startX + sway, y = travel * local - 48.dp)
+                    .offset {
+                        val local = particle.localProgress(progress.value)
+                        val sway = widthPx * particle.drift * sin(local * 2f * PI.toFloat())
+                        IntOffset(
+                            (widthPx * particle.startX + sway).roundToInt(),
+                            (travelPx * local - liftPx).roundToInt(),
+                        )
+                    }
                     .graphicsLayer {
+                        val local = particle.localProgress(progress.value)
                         rotationZ = particle.spin * local
                         scaleX = particle.scale
                         scaleY = particle.scale
-                        alpha = if (local > 0.8f) ((1f - local) / 0.2f).coerceIn(0f, 1f) else 1f
+                        alpha = when {
+                            local <= 0f -> 0f
+                            local > 0.8f -> ((1f - local) / 0.2f).coerceIn(0f, 1f)
+                            else -> 1f
+                        }
                     },
             )
         }
     }
 }
+
+private fun ConfettiParticle.localProgress(progress: Float): Float =
+    ((progress - delay) / (1f - delay)).coerceIn(0f, 1f)

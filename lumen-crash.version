@@ -1,0 +1,19 @@
+# lumen-crash SDK pin (com.chloemlla.lumen:lumen-crash / lumen-crash-core).
+# The first non-comment line is the version; every file the fetch script downloads must
+# have its sha256 recorded below, otherwise the script refuses to run. Upgrading the SDK
+# is therefore a reviewable commit instead of "whatever Project-Lumen published last".
+#
+# To upgrade:
+#   gh release list --repo Chloemlla/Project-Lumen | grep lumen-crash-v
+#   gh api repos/Chloemlla/Project-Lumen/releases/tags/lumen-crash-v<version> \
+#     --jq '.assets[] | [.name, .digest] | @tsv'
+0.1.0-0d60b15e
+
+sha256 lumen-crash-0.1.0-0d60b15e.aar 1c5725b0c52c2fcd678cc7e31807738af62db325b3e02fe7783367ada59329a7
+sha256 lumen-crash-0.1.0-0d60b15e.pom 7dfc4a8779cef3c2fb8fead2cc20c7fc2cc766d781c1a1e91ca61ffec3d8da45
+sha256 lumen-crash-0.1.0-0d60b15e.module 26e36f34cf1ef9a79dd1087884553fcdd9cdbe1fc24d372d3912d4b4df273d70
+sha256 lumen-crash-0.1.0-0d60b15e-sources.jar f9eac7788d0f1b9ede10bb470678f1d05aa878594d70d5bde4286eda637c85bf
+sha256 lumen-crash-core-0.1.0-0d60b15e.aar 1d3a884c25b23c63865ec0002c35f03b3081f6129daa0f13ffd0de81dfe3af77
+sha256 lumen-crash-core-0.1.0-0d60b15e.pom 31e386ad8f8a872d5dade2f4dda53be6a366ecedbd266e43e9ce35b11beed1ed
+sha256 lumen-crash-core-0.1.0-0d60b15e.module 7303f659e0d87b370703e1db0fa13cfda3ec271f04584bd766aa334f3de305b2
+sha256 lumen-crash-core-0.1.0-0d60b15e-sources.jar 34921517ae7466f6f83d5387eae8d345075b4fe9496ea1a8dd89a1e89999e95f

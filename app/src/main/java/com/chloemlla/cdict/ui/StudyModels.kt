@@ -21,7 +21,8 @@ data class ReviewFeedback(
  * plan (优化项五). Each wrong answer bumps [attempt] so the presenter knows it is a new
  * showing; [forceReveal] marks a 完全陌生 case that must re-show the 释义 card before the
  * options; [confusionRetry] marks a 形近混淆 case that pins the same option set for a
- * focused re-discrimination pass.
+ * focused re-discrimination pass. [frequencyGroup] rides along so the scheduling write does
+ * not have to query dict.db again for every answered question.
  */
 data class ReviewQuestion(
     val wordId: Long,
@@ -29,6 +30,7 @@ data class ReviewQuestion(
     val phonetic: String?,
     val options: List<String>,
     val correctIndex: Int,
+    val frequencyGroup: Int,
     val attempt: Int = 0,
     val forceReveal: Boolean = false,
     val confusionRetry: Boolean = false,
@@ -55,6 +57,10 @@ sealed interface StudyScreenState {
         val isImmediateTest: Boolean = false,
         val scope: StudyScope = StudyScope(),
         val availableCurriculumTags: List<String> = emptyList(),
+        // 一次性提示（写入失败、队列已到底…），下一次状态推送即清空。
+        val notice: String? = null,
+        // 「我已背会」的入库 / 组题在途：两个按钮都要停下，否则推迟的词会被拉去做检测。
+        val busy: Boolean = false,
     ) : StudyScreenState
 }
 
@@ -163,7 +169,10 @@ fun buildReviewDistractors(
     pool: List<WordEntity>,
     k: Int = 3,
 ): List<String> {
-    val correctText = target.translation?.takeIf(String::isNotBlank) ?: return emptyList()
+    // 与出题处同一套回退：只有 definition 的词也要能凑出选项，否则它永远出不了题，
+    // 又因为到期日最旧而恒排复习窗口最前，把其它到期词全饿死。
+    val correctText = target.translation?.takeIf(String::isNotBlank)
+        ?: target.definition?.takeIf(String::isNotBlank) ?: return emptyList()
     val pos = primaryPartOfSpeech(correctText)
     val targetGroup = target.frequencyGroup
 

@@ -9,7 +9,7 @@ import com.chloemlla.cdict.core.translate.VivoTranslationClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -26,7 +26,9 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class TranslationViewModelTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    // 必须是 Unconfined：真机上 viewModelScope 跑在 Dispatchers.Main.immediate 上，协程体会在
+    // launch 返回前同步执行；StandardTestDispatcher 把协程排队，会掩盖“命中内存缓存不渲染”这类 bug。
+    private val dispatcher = UnconfinedTestDispatcher()
 
     @Before
     fun setUp() {
@@ -153,6 +155,8 @@ class TranslationViewModelTest {
             ) = Unit
 
             override suspend fun markFavorite(key: String, favorite: Boolean) = Unit
+
+            override suspend fun isFavorite(key: String) = false
         }
         val vm = TranslationViewModel(client, hitCache)
         vm.onQueryChange("hello")
@@ -180,6 +184,8 @@ class TranslationViewModelTest {
             }
 
             override suspend fun markFavorite(key: String, favorite: Boolean) = Unit
+
+            override suspend fun isFavorite(key: String) = false
         }
         val vm = TranslationViewModel(okClient("你好"), recordingCache)
         vm.onQueryChange("hello")

@@ -11,11 +11,12 @@
     <issue id="NotShrinkingResources">
         <ignore path="build.gradle.kts" />
     </issue>
-    <!-- lifecycle-runtime-compose / lifecycle-viewmodel-compose stay on 2.8.7 to match
-         compose-bom 2024.12.01 (compose 1.7.6): lifecycle 2.9+ requires compose
-         runtime 1.8+, and mixing a newer lifecycle with the pinned BOM yields an
-         inconsistent compose classpath. -->
+    <!-- lifecycle-runtime-compose / lifecycle-viewmodel-compose are still on 2.8.7. The
+         original reason (matching compose-bom 2024.12.01) no longer applies — the BOM is
+         now 2026.08.00 — they simply have not been upgraded and verified yet. Scoped to
+         the lifecycle coordinates so every other dependency still gets its outdated-version
+         (and security update) warning. -->
     <issue id="GradleDependency">
-        <ignore path="build.gradle.kts" />
+        <ignore regexp="androidx\.lifecycle" />
     </issue>
 </lint>

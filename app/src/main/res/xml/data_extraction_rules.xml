@@ -7,11 +7,18 @@
         <exclude
             domain="database"
             path="dict.db" />
+        <!-- 网络限流分桶用的安装标识：不随备份跨设备迁移，否则它的生命周期比这次安装更长。 -->
+        <exclude
+            domain="sharedpref"
+            path="cdict_network.xml" />
     </cloud-backup>
     <!-- Device-to-device transfer keeps the same exclusions to match cloud backups. -->
     <device-transfer>
         <exclude
             domain="database"
             path="dict.db" />
+        <exclude
+            domain="sharedpref"
+            path="cdict_network.xml" />
     </device-transfer>
 </data-extraction-rules>

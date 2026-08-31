@@ -16,7 +16,7 @@ data class QuickWord(
 )
 
 /**
- * 选中文字快速翻译弹窗使用的只读词条查询。
+ * 选中文字快速翻译弹窗使用的词条查询。
  *
  * 刻意绕开 Room：弹窗属于系统级轻量入口，既不能触发首次启动才做的近百兆词库解压，
  * 也不能在主界面已持有同一文件时再建一个可能触发迁移的 Room 实例。词库文件不存在
@@ -43,7 +43,9 @@ object QuickWordLookup {
         val file = DatabaseExtractor.databaseFile(context)
         if (!file.exists()) return@withContext null
         runCatching {
-            SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+            // 必须以读写方式打开：Room 已把库头标记成 WAL，缺少 -shm 时只读连接根本打不开，
+            // 弹窗会永远查不到本地词条。
+            SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
                 keys.firstNotNullOfOrNull { key -> queryExact(db, key) }
             }
         }.getOrNull()
@@ -52,7 +54,7 @@ object QuickWordLookup {
     private fun queryExact(db: SQLiteDatabase, key: String): QuickWord? =
         db.rawQuery(
             "SELECT id, word, phoneticUs, phoneticUk, translation, definition " +
-                "FROM words WHERE LOWER(word) = ? LIMIT 1",
+                "FROM words WHERE word = ? COLLATE NOCASE LIMIT 1",
             arrayOf(key),
         ).use { cursor ->
             if (!cursor.moveToFirst()) {

@@ -188,7 +188,9 @@ fun AboutOverlayHost(content: @Composable () -> Unit) {
                 forced = true,
                 onFinished = {
                     store.ossNoticeSeen = true
-                    maybeShowWhatsNew()
+                    // 首次安装没有"上一版"可对比，更新说明写的全是增量，直接记为已确认。
+                    store.acknowledgedCommitHash = BuildInfo.commitHash
+                    store.acknowledgedBuildTime = BuildInfo.buildTimeSeconds
                 },
             )
         } else {

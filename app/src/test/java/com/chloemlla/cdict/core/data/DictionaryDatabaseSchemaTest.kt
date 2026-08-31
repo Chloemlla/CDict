@@ -26,7 +26,7 @@ class DictionaryDatabaseSchemaTest {
                 List(3) { async { DatabaseExtractor.ensureDatabaseExists(context) } }.awaitAll()
             }
         }
-        assertTrue(extractionResults.all { it })
+        assertTrue(extractionResults.all { it is ExtractionResult.Ok })
 
         val db = DictionaryDatabase.open(context)
         db.openHelper.writableDatabase

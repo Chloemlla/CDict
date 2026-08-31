@@ -73,7 +73,9 @@ fun fieldSupplemented(word: WordEntity, field: String): Boolean = field in suppl
 
 /** 任一标注字段有可展示内容时返回 true。 */
 fun wordHasAnnotations(word: WordEntity): Boolean =
-    word.emotionColor?.isNotBlank() == true ||
+    // 判断口径必须与 WordAnnotationBadges 的渲染条件一致：枚举外的 emotion_color 渲染不出徽章，
+    // 只按“非空白”判断会让整段标注区变成一个空容器。
+    emotionColorLabel(word.emotionColor) != null ||
         word.register?.isNotBlank() == true ||
         word.nuanceDescription?.isNotBlank() == true ||
         word.usageWarning?.isNotBlank() == true ||

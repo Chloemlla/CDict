@@ -28,20 +28,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          lfs: true
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
-      - name: Download and decompress distribution source
+      # Baseline is the published asset, not the git copy: the git copy is not updated by
+      # the merge workflows, so starting from it would drop everything the other merge
+      # workflow has already added to dictionary-asset.
+      - name: Download current dictionary asset
         shell: bash
         run: |
           set -euo pipefail
-          curl -fL --retry 3 -o "$RUNNER_TEMP/distribution.sqlite.gz" "${{ inputs.distribution_url }}"
+          base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/CDict-dict-base.db" "$base_url/CDict-dict.db"
+          test -s "$RUNNER_TEMP/CDict-dict-base.db"
+
+      - name: Download and decompress distribution source
+        shell: bash
+        env:
+          DISTRIBUTION_URL: ${{ inputs.distribution_url }}
+        run: |
+          set -euo pipefail
+          case "$DISTRIBUTION_URL" in
+            https://*) ;;
+            *) echo "::error::distribution_url must be an https:// URL"; exit 1 ;;
+          esac
+          curl -fL --retry 3 -o "$RUNNER_TEMP/distribution.sqlite.gz" "$DISTRIBUTION_URL"
           python - "$RUNNER_TEMP/distribution.sqlite.gz" "$RUNNER_TEMP/distribution.sqlite" <<'PY'
           import gzip
           import pathlib
@@ -61,22 +76,29 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/merge_distribution.py \
-            scripts/CDict-dict.db \
+            "$RUNNER_TEMP/CDict-dict-base.db" \
             "$RUNNER_TEMP/distribution.sqlite" \
             "$RUNNER_TEMP/CDict-dict-merged.db" \
-            --expected-word-count 49213 \
             --expected-groups 7
 
       - name: Apply curriculum tags to merged asset
+        shell: bash
+        env:
+          CURRICULUM_URL: ${{ inputs.curriculum_url }}
+          CURRICULUM_TAG: ${{ inputs.curriculum_tag }}
         run: |
           set -euo pipefail
-          curl -fL --retry 3 -o "$RUNNER_TEMP/curriculum.txt" "${{ inputs.curriculum_url }}"
+          case "$CURRICULUM_URL" in
+            https://*) ;;
+            *) echo "::error::curriculum_url must be an https:// URL"; exit 1 ;;
+          esac
+          curl -fL --retry 3 -o "$RUNNER_TEMP/curriculum.txt" "$CURRICULUM_URL"
           test -s "$RUNNER_TEMP/curriculum.txt"
           python scripts/apply_curriculum_tags.py \
             "$RUNNER_TEMP/CDict-dict-merged.db" \
             "$RUNNER_TEMP/curriculum.txt" \
-            --tag "${{ inputs.curriculum_tag }}" \
-            --source "${{ inputs.curriculum_url }}"
+            --tag "$CURRICULUM_TAG" \
+            --source "$CURRICULUM_URL"
 
       - name: Verify merged dictionary asset integrity
         run: |
@@ -104,10 +126,20 @@ jobs:
           test -s "$RUNNER_TEMP/dict.db.br"
 
       - name: Rename and checksum release assets
+        shell: bash
         run: |
           set -euo pipefail
           cp "$RUNNER_TEMP/CDict-dict-merged.db" "$RUNNER_TEMP/CDict-dict.db"
           (cd "$RUNNER_TEMP" && sha256sum CDict-dict.db dict.db.br dict.signature > checksums.txt && cat checksums.txt)
+          # The app build checks the downloaded dictionary against digests committed in
+          # build.yml, so republishing the asset needs a follow-up commit there.
+          {
+            echo "### Update .github/workflows/build.yml before the next app build"
+            echo '```yaml'
+            echo "  DICT_DB_BR_SHA256: \"$(sha256sum "$RUNNER_TEMP/dict.db.br" | cut -d' ' -f1)\""
+            echo "  DICT_SIGNATURE_SHA256: \"$(sha256sum "$RUNNER_TEMP/dict.signature" | cut -d' ' -f1)\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish dictionary release
         env:
@@ -127,7 +159,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
 
       - name: Upload merged dictionary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: CDict-dict-merged
           path: ${{ runner.temp }}/CDict-dict-merged.db

@@ -53,6 +53,7 @@ CREATE TABLE heatmap_entries (wordId INTEGER NOT NULL, period TEXT NOT NULL, sco
 CREATE VIRTUAL TABLE word_search USING fts4(content=`words`, translation, word, definition);
 CREATE INDEX idx_words_group_frequency ON words(frequencyGroup, frequency, word);
 CREATE INDEX idx_words_translation ON words(translation);
+CREATE INDEX idx_words_word_nocase ON words(word COLLATE NOCASE);
 CREATE INDEX idx_links_word ON word_sentence_links(wordId);
 """
 

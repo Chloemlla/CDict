@@ -84,14 +84,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -125,6 +128,19 @@ import com.chloemlla.cdict.core.data.WordFormEntity
 import com.chloemlla.cdict.core.data.WordRelationEntity
 import com.chloemlla.cdict.ui.about.AboutScreenRoute
 import com.chloemlla.cdict.ui.about.LocalAboutController
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+
+// 列表入场动画：整段 280ms，前 8 项各错开 24ms 起步，每项在剩余时间里淡入到位。
+private const val ENTRANCE_DURATION_MS = 280
+private const val ENTRANCE_STAGGER_MS = 24
+private const val ENTRANCE_STAGGER_STEPS = 8
+private val ENTRANCE_ITEM_SPAN =
+    1f - ENTRANCE_STAGGER_STEPS * ENTRANCE_STAGGER_MS / ENTRANCE_DURATION_MS.toFloat()
+
+/** 「加入背词计划」等库写入的等待上限：超时即复位按钮并提示，避免永久转圈。 */
+private const val MASTERED_TOGGLE_TIMEOUT_MS = 3_000L
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -132,17 +148,14 @@ fun DictionaryApp(
     state: DictionaryScreenState,
     onQueryChanged: (String) -> Unit,
     onSelect: (WordEntity) -> Unit,
-    onOpenDerivedWord: (WordEntity) -> Unit = {},
-    onBackFromDetail: () -> Unit = {
-        // Default: close the detail and return to the browse list.
-        (state as? DictionaryScreenState.Ready)?.selected?.let { onSelect(it.copy(id = -1)) }
-    },
+    onOpenDerivedWord: (WordEntity) -> Unit,
+    onBackFromDetail: () -> Unit,
     onPlayPronunciation: (WordEntity, Accent) -> Unit,
     onLoadMore: () -> Unit,
     onSortModeChanged: (SortMode) -> Unit,
     onCurriculumTagChanged: (String?) -> Unit,
-    masteredIds: Set<Long> = emptySet(),
-    onToggleMastered: (WordEntity) -> Unit = {},
+    masteredIds: Set<Long>,
+    onToggleMastered: (WordEntity) -> Unit,
 ) {
     val context = LocalContext.current
     val phraseViewModel: PhraseSpeechViewModel = viewModel(
@@ -155,11 +168,26 @@ fun DictionaryApp(
         is DictionaryScreenState.Error -> ErrorScreen(state.message)
         is DictionaryScreenState.Ready -> {
             val selected = state.selected
+            val aboutOpen = LocalAboutController.current.isOpen
             // System back (button or edge-swipe gesture) leaves the word detail. Whether it
             // returns to the browse list or to another tab depends on how the detail was opened;
-            // the shell owns that decision via onBackFromDetail.
-            BackHandler(enabled = selected != null) {
+            // the shell owns that decision via onBackFromDetail. 浮层可见时让位给浮层自己的返回处理。
+            BackHandler(enabled = selected != null && !aboutOpen) {
                 onBackFromDetail()
+            }
+            // 词头发音与句子朗读各有一个播放器：开一条前先按“同键再点即停止”把另一条停掉，
+            // 否则两段音频会叠着放、两个播放指示同时亮。
+            val playPronunciation: (WordEntity, Accent) -> Unit = { target, accent ->
+                speakingKey?.let(phraseViewModel::speak)
+                onPlayPronunciation(target, accent)
+            }
+            val speakPhrase: (String) -> Unit = { text ->
+                val playing = state.playingKey
+                if (playing != null && selected != null) {
+                    Accent.entries.firstOrNull { playing == "${selected.id}:${it.name}" }
+                        ?.let { accent -> onPlayPronunciation(selected, accent) }
+                }
+                phraseViewModel.speak(text)
             }
             // Save the browse list's state (scroll position, search text) while a detail is
             // showing, so going back lands where the user left off instead of at the top.
@@ -184,6 +212,13 @@ fun DictionaryApp(
                 },
                 label = "word detail navigation",
             ) { sel ->
+                if (sel != null) {
+                    // 每访问一个词条都会新增一份保存槽，离开详情时清掉自己那份，
+                    // 否则一次会话里浏览过的每个词都会各留一份、随浏览量无上限增长。
+                    DisposableEffect(sel.id) {
+                        onDispose { detailStateHolder.removeState("detail-${sel.id}") }
+                    }
+                }
                 detailStateHolder.SaveableStateProvider(
                     key = if (sel != null) "detail-${sel.id}" else "list",
                 ) {
@@ -195,11 +230,11 @@ fun DictionaryApp(
                             onBack = onBackFromDetail,
                             onRetryDetail = { onSelect(sel) },
                             onOpenWord = onOpenDerivedWord,
-                            onPlayPronunciation = onPlayPronunciation,
+                            onPlayPronunciation = playPronunciation,
                             playingKey = state.playingKey,
                             phraseStates = phraseStates,
                             onPhraseTranslate = phraseViewModel::translate,
-                            onPhraseSpeak = phraseViewModel::speak,
+                            onPhraseSpeak = speakPhrase,
                             speakingKey = speakingKey,
                             masteredIds = masteredIds,
                             onToggleMastered = onToggleMastered,
@@ -347,22 +382,24 @@ private fun WordList(
     // 查询文本与已提交条件不一致时，避免展示上一轮结果造成误导。
     val isSearchPending = state.query != query
 
-    // Staggered entrance animation: re-trigger only on initial load, filter, sort, or query
-    // change — not on every scroll. A keyed reset gives each list refresh its own fade+slide pass.
-    val entranceKey = "${state.sortMode.name}:${state.curriculumTag}:${state.query}"
+    // Staggered entrance animation: re-trigger only on initial load, filter or sort change —
+    // 不含搜索词：每次防抖提交都重放一遍会让整屏先变透明再淡入，边打字边闪。
+    val entranceKey = "${state.sortMode.name}:${state.curriculumTag}"
     val entranceProgress = remember(entranceKey) {
         androidx.compose.animation.core.Animatable(0f)
     }
     LaunchedEffect(entranceKey) {
         entranceProgress.snapTo(0f)
-        entranceProgress.animateTo(1f, animationSpec = tween(durationMillis = 280))
+        entranceProgress.animateTo(1f, animationSpec = tween(durationMillis = ENTRANCE_DURATION_MS))
     }
 
     // System back (button or edge-swipe gesture) with a non-blank query clears the search
     // before exiting, mirroring standard search-box behaviour. Dismiss once blank.
     // Key on the live text-field value, not the debounced committed query, so a search the
     // user just typed (but the view model hasn't yet applied) still clears on back.
-    BackHandler(enabled = query.isNotBlank()) {
+    // 浮层可见时让位给浮层自己的返回处理，否则返回键会在浮层背后悄悄清空搜索。
+    val aboutOpen = LocalAboutController.current.isOpen
+    BackHandler(enabled = query.isNotBlank() && !aboutOpen) {
         clearSearch()
     }
 
@@ -381,7 +418,8 @@ private fun WordList(
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            lastVisible >= layoutInfo.totalItemsCount - 3
+            // 首次测量前 totalItemsCount 为 0，不加这个前提会在启动时就白拉一页。
+            layoutInfo.totalItemsCount > 0 && lastVisible >= layoutInfo.totalItemsCount - 3
         }
     }
     LaunchedEffect(shouldLoadMore, state.words.size) {
@@ -551,112 +589,98 @@ private fun WordList(
                     onCurriculumTagChanged = onCurriculumTagChanged,
                 )
             } else {
-                // Crossfade (~200ms) when the query is cleared: search results hand off to the
-                // browse list without a hard pop. Binds to the query presence, not the text itself.
-                Crossfade(
-                    targetState = query.isNotBlank(),
-                    animationSpec = tween(durationMillis = 200),
-                    label = "search-clear-crossfade",
-                ) { isSearching ->
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        if (!chromeInList) {
-                            DictionaryListHeading(
-                                isSearching = isSearching,
-                                modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
-                            )
+                if (!chromeInList) {
+                    DictionaryListHeading(
+                        isSearching = query.isNotBlank(),
+                        modifier = Modifier.padding(start = 20.dp, end = 16.dp, bottom = 8.dp),
+                    )
+                }
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    state = listState,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (chromeInList) {
+                        if (query.isBlank()) {
+                            item(key = "filter-row") {
+                                DictionaryFilterRow(
+                                    state = state,
+                                    onSortModeChanged = onSortModeChanged,
+                                    onCurriculumTagChanged = onCurriculumTagChanged,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
-                        LazyColumn(
+                        item(key = "list-heading") {
+                            DictionaryListHeading(isSearching = query.isNotBlank())
+                        }
+                    }
+                    itemsIndexed(state.words, key = { _, word -> word.id }) { index, word ->
+                        // 入场进度只在 graphicsLayer 的 lambda 里读：图层失效即可，不必让每张
+                        // 可见卡片每帧重组。每项按位置错开起点，最后一档也能在动画结束前到位。
+                        val itemStart = index.coerceAtMost(ENTRANCE_STAGGER_STEPS) *
+                            ENTRANCE_STAGGER_MS / ENTRANCE_DURATION_MS.toFloat()
+                        WordResultCard(
+                            word = word,
+                            onSelect = onSelect,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            state = listState,
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            if (chromeInList) {
-                                if (query.isBlank()) {
-                                    item(key = "filter-row") {
-                                        DictionaryFilterRow(
-                                            state = state,
-                                            onSortModeChanged = onSortModeChanged,
-                                            onCurriculumTagChanged = onCurriculumTagChanged,
-                                            modifier = Modifier.fillMaxWidth(),
+                                .graphicsLayer {
+                                    val shown = ((entranceProgress.value - itemStart) / ENTRANCE_ITEM_SPAN)
+                                        .coerceIn(0f, 1f)
+                                    alpha = shown
+                                    translationY = (1f - shown) * 24f
+                                },
+                        )
+                    }
+                    if (state.query.isBlank() && state.words.isNotEmpty()) {
+                        item(key = "browse-footer") {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                AnimatedVisibility(
+                                    visible = state.isLoadingMore,
+                                    enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                        Text(
+                                            text = "加载更多…",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
-                                item(key = "list-heading") {
-                                    DictionaryListHeading(isSearching = isSearching)
+                                AnimatedVisibility(
+                                    visible = !state.isLoadingMore && state.hasMore,
+                                    enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+                                ) {
+                                    Text(
+                                        text = "继续下滑加载更多",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
-                            }
-                            itemsIndexed(state.words, key = { _, word -> word.id }) { index, word ->
-                                // Stagger: each item fades in with a tiny vertical slide, capped so
-                                // long lists don't drag the entrance past the animation duration.
-                                val itemDelay = index.coerceAtMost(8) * 24
-                                val itemAlpha by animateFloatAsState(
-                                    targetValue = if (entranceProgress.value >= 1f ||
-                                        entranceProgress.value >= (itemDelay + 1) / 281f
-                                    ) 1f else 0f,
-                                    animationSpec = tween(durationMillis = 220),
-                                    label = "item-alpha-$index",
-                                )
-                                WordResultCard(
-                                    word = word,
-                                    onSelect = onSelect,
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            alpha = itemAlpha
-                                            translationY = (1f - itemAlpha) * 24f
-                                        },
-                                )
-                            }
-                            if (state.query.isBlank() && state.words.isNotEmpty()) {
-                                item(key = "browse-footer") {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 16.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                    ) {
-                                        AnimatedVisibility(
-                                            visible = state.isLoadingMore,
-                                            enter = fadeIn(animationSpec = tween(durationMillis = 200)),
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(18.dp),
-                                                    strokeWidth = 2.dp,
-                                                )
-                                                Text(
-                                                    text = "加载更多…",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        }
-                                        AnimatedVisibility(
-                                            visible = !state.isLoadingMore && state.hasMore,
-                                            enter = fadeIn(animationSpec = tween(durationMillis = 200)),
-                                        ) {
-                                            Text(
-                                                text = "继续下滑加载更多",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        AnimatedVisibility(
-                                            visible = !state.isLoadingMore && !state.hasMore,
-                                            enter = fadeIn(animationSpec = tween(durationMillis = 200)),
-                                        ) {
-                                            Text(
-                                                text = "已展示全部 ${state.words.size} 个词条",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
+                                AnimatedVisibility(
+                                    visible = !state.isLoadingMore && !state.hasMore,
+                                    enter = fadeIn(animationSpec = tween(durationMillis = 200)),
+                                ) {
+                                    Text(
+                                        text = "已展示全部 ${state.words.size} 个词条",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                             }
                         }
@@ -788,15 +812,25 @@ private fun DictionaryFilterRow(
     }
 }
 
-/** 列表分组标题：搜索中显示「匹配词条」，浏览时显示「全部词条」。 */
+/**
+ * 列表分组标题：搜索中显示「匹配词条」，浏览时显示「全部词条」。
+ * 清空搜索时交叉淡入的就只有这行标题，因此过渡只包住它，列表不跟着多组合一遍。
+ */
 @Composable
 private fun DictionaryListHeading(isSearching: Boolean, modifier: Modifier = Modifier) {
-    Text(
-        text = if (isSearching) "匹配词条" else "全部词条",
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.semantics { heading() },
-    )
+    Crossfade(
+        targetState = isSearching,
+        modifier = modifier,
+        animationSpec = tween(durationMillis = 200),
+        label = "search-clear-crossfade",
+    ) { searching ->
+        Text(
+            text = if (searching) "匹配词条" else "全部词条",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { heading() },
+        )
+    }
 }
 
 @Composable
@@ -1157,9 +1191,17 @@ private fun WordDetail(
     val curriculumTags = parseCurriculumTags(word.curriculumTags)
     val haptic = LocalHapticFeedback.current
     var togglingWordId by remember { mutableStateOf<Long?>(null) }
+    var toggleFailed by remember { mutableStateOf(false) }
+    val masteredIdsState = rememberUpdatedState(masteredIds)
 
-    // Clear toggling state when masteredIds updates (database operation completed).
-    LaunchedEffect(masteredIds) {
+    // 写入成功后 masteredIds 会变；但 study.db 未打开、写入失败等路径不会有任何发射，
+    // 只等发射的话按钮会永久停在转圈且禁用，所以以超时兜底并把失败告诉用户。
+    LaunchedEffect(togglingWordId) {
+        val pending = togglingWordId ?: return@LaunchedEffect
+        val applied = withTimeoutOrNull(MASTERED_TOGGLE_TIMEOUT_MS) {
+            snapshotFlow { pending in masteredIdsState.value }.drop(1).first()
+        }
+        toggleFailed = applied == null
         togglingWordId = null
     }
 
@@ -1304,6 +1346,7 @@ private fun WordDetail(
                         OutlinedButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                toggleFailed = false
                                 togglingWordId = word.id
                                 onToggleMastered(word)
                             },
@@ -1334,6 +1377,14 @@ private fun WordDetail(
                             }
                             Spacer(Modifier.size(8.dp))
                             Text(if (mastered) "已掌握 · 移出背词计划" else "加入背词计划")
+                        }
+                        if (toggleFailed) {
+                            Text(
+                                text = "操作未生效，请重试",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
                         }
                     }
                 }

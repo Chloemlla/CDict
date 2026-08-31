@@ -1,7 +1,10 @@
 package com.chloemlla.cdict.core.net
 
+import java.net.URL
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CDictRequestSignerTest {
@@ -75,4 +78,38 @@ class CDictRequestSignerTest {
             timestamp = timestamp,
             nonce = nonce,
         )["X-CDict-Sig"]
+
+    /**
+     * 每个 [CDictBackend] 端点都必须被判成后端地址，否则 [CDictRequestSigner.sign] 会静默跳过
+     * 签名，线上表现只是「经常被限流」。后端换路径前缀时这条测试先红。
+     */
+    @Test
+    fun `every backend endpoint is recognised as signable`() {
+        val base = CDictBackend.BASE_URL
+        listOf(
+            base + CDictBackend.TRANSLATE_PATH,
+            base + CDictBackend.LANGUAGES_PATH,
+            base + CDictBackend.TTS_PATH,
+            base + CDictBackend.TTS_PATH + "?source=engine&text=hello",
+            base + CDictBackend.DONATE_PATH,
+            base + CDictBackend.DONATE_PATH + "/alipay",
+            base + CDictBackend.DONATE_PATH + CDictBackend.DONATE_CLAIM_SUFFIX,
+        ).forEach { url ->
+            assertTrue(url, CDictRequestSigner.isBackendUrl(URL(url)))
+        }
+    }
+
+    @Test
+    fun `foreign hosts and unrelated paths are never signed`() {
+        listOf(
+            "https://tts.chloemlla.com",
+            "https://tts.chloemlla.com/api/other",
+            "https://tts.chloemlla.com/api/cdictx/translate",
+            "https://tts.chloemlla.com.example.invalid/api/cdict/translate",
+            "https://example.invalid/api/cdict/translate",
+            "http://tts.chloemlla.com/api/cdict/translate",
+        ).forEach { url ->
+            assertFalse(url, CDictRequestSigner.isBackendUrl(URL(url)))
+        }
+    }
 }

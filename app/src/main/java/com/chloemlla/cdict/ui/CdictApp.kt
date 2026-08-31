@@ -48,6 +48,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,8 +71,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.core.audio.Accent
+import com.chloemlla.cdict.core.data.DictionaryRepository
 import com.chloemlla.cdict.core.data.WordEntity
 import com.chloemlla.cdict.ui.about.AboutScreenRoute
 import com.chloemlla.cdict.ui.about.AboutStore
@@ -125,7 +130,10 @@ fun CdictApp(
     var navStack by rememberSaveable(stateSaver = IntListSaver) { mutableStateOf<List<Int>>(emptyList()) }
     // 仅在从其他标签跳转到词典详情时记录来源，以便关闭详情后原路返回。
     var dictionaryJumpFrom by rememberSaveable { mutableStateOf<Int?>(null) }
-    BackHandler(enabled = navStack.isNotEmpty()) {
+    // 浮层（关于 / 赞赏 / 更新说明）的返回处理注册得更早，优先级反而最低：浮层可见时内层的返回
+    // 处理必须让位，否则第一次按返回只会在浮层背后悄悄切走标签。
+    val aboutController = LocalAboutController.current
+    BackHandler(enabled = navStack.isNotEmpty() && !aboutController.isOpen) {
         selectedTab = navStack.last()
         navStack = navStack.dropLast(1)
     }
@@ -137,10 +145,7 @@ fun CdictApp(
         ?: WindowWidthSizeClass.Compact
     val useRail = widthClass == WindowWidthSizeClass.Medium || widthClass == WindowWidthSizeClass.Expanded
 
-    val destination =
-        CdictDestination.entries.getOrElse(selectedTab.coerceIn(0, CdictDestination.entries.lastIndex)) {
-            CdictDestination.Study
-        }
+    val destination = CdictDestination.entries[selectedTab.coerceIn(0, CdictDestination.entries.lastIndex)]
     val needsStatusBarPadding =
         selectedTab == CdictDestination.Dictionary.ordinal && dictionaryState !is DictionaryScreenState.Ready
 
@@ -185,19 +190,39 @@ fun CdictApp(
             selectedTab = CdictDestination.Dictionary.ordinal
         }
     }
-    // 背词与探索共用同一份今日额度与 study.db 状态：切回任一页时按库对齐今日进度，并把已在
-    // 另一页处理过的词从内存队列剔除，避免同一个词被两页各展示一次。
-    LaunchedEffect(selectedTab) {
+    // 回到前台也要重新对齐：进程没死却跨过零点时，内存里的「今日」进度还是昨天的。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumeTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) resumeTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // 背词与探索共用同一份今日额度与 study.db 状态：切回任一页或回到前台时按库对齐今日进度，
+    // 并把已在另一页处理过的词从内存队列剔除，避免同一个词被两页各展示一次。
+    LaunchedEffect(selectedTab, resumeTick) {
         when (selectedTab) {
             CdictDestination.Study.ordinal -> studyViewModel.syncFromStore()
             CdictDestination.Recommendation.ordinal -> recommendationViewModel.syncFromStore()
         }
     }
+    // 词库重建会关掉旧的数据库实例：世代号变化时让背词与探索重新取 dao 并重建队列，用户不必重启
+    // 应用。已同步的世代号存进 rememberSaveable，配置变更不会把同一世代再同步一次（否则旋转屏幕
+    // 会把正在做的题清掉）。
+    val dictionaryGeneration by DictionaryRepository.generation.collectAsStateWithLifecycle()
+    var syncedGeneration by rememberSaveable { mutableIntStateOf(dictionaryGeneration) }
+    LaunchedEffect(dictionaryGeneration) {
+        if (dictionaryGeneration == syncedGeneration) return@LaunchedEffect
+        syncedGeneration = dictionaryGeneration
+        studyViewModel.reload()
+        recommendationViewModel.reload()
+    }
     // 赞赏提示只在回到主标签时判定一次；划词弹窗走独立的 QuickTranslateActivity，不经过这里。
     val appContext = LocalContext.current.applicationContext
     val aboutStore = remember(appContext) { AboutStore(appContext) }
     val donationTipVisible by DonationPromptGate.visible.collectAsStateWithLifecycle()
-    val aboutController = LocalAboutController.current
     LaunchedEffect(selectedTab) { DonationPromptGate.evaluate(aboutStore) }
     val openDonation: () -> Unit = {
         DonationPromptGate.dismiss(aboutStore)
@@ -258,8 +283,8 @@ fun CdictApp(
                 }
                 if (!useRail) {
                     CdictNavigationBar(
-                        selectedTab = selectedTab,
-                        onTabSelected = switchTab,
+                        selected = destination,
+                        onSelect = { switchTab(it.ordinal) },
                         pendingReviewCount = pendingReviewCount,
                     )
                 }
@@ -281,10 +306,11 @@ fun CdictApp(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxSize()
+                        .consumeWindowInsets(innerPadding)
                         .then(if (needsStatusBarPadding) Modifier.statusBarsPadding() else Modifier),
                 ) {
                     DestinationContent(
-                        tab = selectedTab,
+                        destination = destination,
                         wideLayout = wideLayout,
                         stateHolder = tabStateHolder,
                         dictionaryState = dictionaryState,
@@ -318,7 +344,7 @@ fun CdictApp(
                     .then(if (needsStatusBarPadding) Modifier.statusBarsPadding() else Modifier),
             ) {
                 DestinationContent(
-                    tab = selectedTab,
+                    destination = destination,
                     wideLayout = wideLayout,
                     stateHolder = tabStateHolder,
                     dictionaryState = dictionaryState,
@@ -348,7 +374,7 @@ fun CdictApp(
 
 @Composable
 private fun DestinationContent(
-    tab: Int,
+    destination: CdictDestination,
     wideLayout: Boolean,
     stateHolder: SaveableStateHolder,
     dictionaryState: DictionaryScreenState,
@@ -372,10 +398,10 @@ private fun DestinationContent(
     modifier: Modifier = Modifier,
 ) {
     AnimatedContent(
-        targetState = tab,
+        targetState = destination,
         modifier = modifier,
         transitionSpec = {
-            val direction = if (targetState > initialState) 1 else -1
+            val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
             (
                 fadeIn(animationSpec = tween(durationMillis = 180)) +
                     slideInHorizontally(
@@ -391,11 +417,11 @@ private fun DestinationContent(
                     ).using(SizeTransform(clip = true))
         },
         label = "Destination transition",
-    ) { t ->
+    ) { target ->
         // 保留标签内状态，切换后可回到原来的滚动位置、输入内容与详情。
-        stateHolder.SaveableStateProvider(key = t) {
-        when (t) {
-            0 -> StudyScreen(
+        stateHolder.SaveableStateProvider(key = target.name) {
+        when (target) {
+            CdictDestination.Study -> StudyScreen(
                 state = studyState,
                 onReload = studyViewModel::reload,
                 onAnswer = studyViewModel::answerReview,
@@ -412,7 +438,7 @@ private fun DestinationContent(
                 onScopeChange = studyViewModel::onScopeChange,
                 playingKey = playingKey,
             )
-            1 -> DictionaryApp(
+            CdictDestination.Dictionary -> DictionaryApp(
                 state = dictionaryState,
                 onQueryChanged = onDictionaryQueryChanged,
                 onSelect = onDictionarySelect,
@@ -425,8 +451,8 @@ private fun DestinationContent(
                 masteredIds = masteredIds,
                 onToggleMastered = onToggleMastered,
             )
-            2 -> TranslateScreen(translationViewModel)
-            else -> RecommendationScreen(
+            CdictDestination.Translation -> TranslateScreen(translationViewModel)
+            CdictDestination.Recommendation -> RecommendationScreen(
                 state = recommendationState,
                 onReload = recommendationViewModel::reload,
                 onMarkLearned = recommendationViewModel::markLearned,
@@ -447,14 +473,10 @@ private fun DestinationContent(
 
 @Composable
 private fun CdictNavigationBar(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
+    selected: CdictDestination,
+    onSelect: (CdictDestination) -> Unit,
     pendingReviewCount: Int?,
 ) {
-    val selectedDestination =
-        CdictDestination.entries.getOrElse(selectedTab.coerceIn(0, CdictDestination.entries.lastIndex)) {
-            CdictDestination.Study
-        }
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
         selectedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -472,17 +494,17 @@ private fun CdictNavigationBar(
     ) {
         Column(
             modifier = Modifier.semantics {
-                paneTitle = "CDict 主导航，当前为 ${selectedDestination.label}"
+                paneTitle = "CDict 主导航，当前为 ${selected.label}"
             },
         ) {
             NavigationBar(
                 windowInsets = WindowInsets.navigationBars,
                 tonalElevation = 0.dp,
             ) {
-                CdictDestination.entries.forEachIndexed { index, dest ->
+                CdictDestination.entries.forEach { dest ->
                     NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { onTabSelected(index) },
+                        selected = dest == selected,
+                        onClick = { onSelect(dest) },
                         icon = {
                             NavigationDestinationIcon(
                                 destination = dest,

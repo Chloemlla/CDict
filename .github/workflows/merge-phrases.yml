@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -44,10 +44,17 @@ jobs:
           test -s "$RUNNER_TEMP/CDict-dict.db"
 
       - name: Download phrase docx source
+        shell: bash
+        env:
+          DOCX_URL: ${{ inputs.docx_url }}
         run: |
           set -euo pipefail
-          if [ -n "${{ inputs.docx_url }}" ]; then
-            curl -fL --retry 3 -o "$RUNNER_TEMP/phrases.docx" "${{ inputs.docx_url }}"
+          if [ -n "$DOCX_URL" ]; then
+            case "$DOCX_URL" in
+              https://*) ;;
+              *) echo "::error::docx_url must be an https:// URL"; exit 1 ;;
+            esac
+            curl -fL --retry 3 -o "$RUNNER_TEMP/phrases.docx" "$DOCX_URL"
           else
             # Use the committed docx if available, otherwise skip
             if [ -f "scripts/phrases.docx" ]; then
@@ -60,13 +67,16 @@ jobs:
           test -s "$RUNNER_TEMP/phrases.docx"
 
       - name: Merge phrase entries into dictionary asset
+        shell: bash
+        env:
+          CURRICULUM_TAG: ${{ inputs.curriculum_tag }}
         run: |
           set -euo pipefail
           python scripts/build_phrase_db.py \
             "$RUNNER_TEMP/phrases.docx" \
             "$RUNNER_TEMP/phrase-tmp.db" \
             --merge-into "$RUNNER_TEMP/CDict-dict.db" \
-            --curriculum-tag "${{ inputs.curriculum_tag }}"
+            --curriculum-tag "$CURRICULUM_TAG"
 
       - name: Verify merged dictionary asset integrity
         run: |
@@ -93,9 +103,19 @@ jobs:
           PY
 
       - name: Rename and checksum release assets
+        shell: bash
         run: |
           set -euo pipefail
           (cd "$RUNNER_TEMP" && sha256sum CDict-dict.db dict.db.br dict.signature > checksums.txt && cat checksums.txt)
+          # The app build checks the downloaded dictionary against digests committed in
+          # build.yml, so republishing the asset needs a follow-up commit there.
+          {
+            echo "### Update .github/workflows/build.yml before the next app build"
+            echo '```yaml'
+            echo "  DICT_DB_BR_SHA256: \"$(sha256sum "$RUNNER_TEMP/dict.db.br" | cut -d' ' -f1)\""
+            echo "  DICT_SIGNATURE_SHA256: \"$(sha256sum "$RUNNER_TEMP/dict.signature" | cut -d' ' -f1)\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish dictionary release
         env:
@@ -115,7 +135,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
 
       - name: Upload merged dictionary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: CDict-dict-merged-phrases
           path: ${{ runner.temp }}/CDict-dict.db

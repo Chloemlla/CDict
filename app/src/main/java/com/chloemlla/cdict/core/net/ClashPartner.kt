@@ -9,14 +9,17 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ProxySelector
+import java.net.Socket
 import java.net.SocketAddress
 import java.net.URI
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +29,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** CDict 联网请求的出口选择。 */
 enum class ClashRoute { Direct, LocalProxy }
@@ -165,6 +170,19 @@ object ClashPartner {
     const val LOCAL_PROXY_PORT = 7890
     internal const val VPN_STATE_CONNECTED = 2
 
+    /** 本地混合端口的探测超时：目标是环回地址，连得上就是毫秒级。 */
+    private const val LOCAL_PROXY_PROBE_TIMEOUT_MS = 300
+
+    /**
+     * CMFA 官方构建的签名证书 SHA-256（CN=Clash Meta；正式版与 Alpha 共用同一把 key）。
+     *
+     * 只按包名识别的话，任何侧载应用都能冒充 Clash，把本进程的全局出口接到自己的端口上，
+     * 所以证书对不上就当作没装。
+     */
+    private val TRUSTED_SIGNER_SHA256 = setOf(
+        "5f5571af767fe0f611292aa088b445a05f725fb8262fb80a13b69e4d809ae1f1",
+    )
+
     /** CMFA 导出的伙伴配对确认窗：类名固定在 com.github.kr328.clash 命名空间，applicationId 随 flavor 变化。 */
     private const val PARTNER_PAIRING_ACTIVITY = "com.github.kr328.clash.PartnerPairingActivity"
 
@@ -199,6 +217,8 @@ object ClashPartner {
     /** 每进程只发起一次配对确认；CMFA 侧在用户已作答时会静默关闭。 */
     private val pairingRequested = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** 多个入口（VPN 回调、关于页、跟随开关）会并发刷新，串行化后状态才不会互相覆盖。 */
+    private val refreshMutex = Mutex()
     // 字面量 IP，构造时不会触发 DNS 解析；解析后的地址才能与 connectFailed 回传的地址相等。
     private val localProxyAddress = InetSocketAddress(LOCAL_PROXY_HOST, LOCAL_PROXY_PORT)
 
@@ -260,14 +280,17 @@ object ClashPartner {
             .onFailure { error -> Log.w(TAG, "拉起 Clash 配对确认失败：$clashPackage", error) }
     }
 
-    private fun refreshNow() {
-        val context = appContext ?: return
+    private suspend fun refreshNow() = refreshMutex.withLock {
+        val context = appContext ?: return@withLock
         val installed = detectClashPackage(context)
         val read = installed?.let { queryPartnerStatus(context, it) } ?: UNAVAILABLE
         val status = read.status
-        if (status != null) {
-            localProxyReachable = true
-        }
+        // 切到本地代理之前必须真的连一次：混合端口是用户可配的，partnerStatus 不回传端口号。
+        localProxyReachable = adaptEnabled &&
+            status != null &&
+            status.coreRunning &&
+            !status.vpnConnected &&
+            probeLocalProxy()
         val resolved = resolveClashRoute(status, adaptEnabled, localProxyReachable)
         route = resolved
         _state.value = ClashPartnerState(
@@ -281,19 +304,49 @@ object ClashPartner {
             adaptEnabled = adaptEnabled,
             route = resolved,
         )
+        // connectFailed 可能在探测之后才把端口标记为不可用，用最新值再收敛一次，
+        // 否则这次刷新会把它刚做出的直连回退覆盖掉。
+        if (resolved == ClashRoute.LocalProxy && !localProxyReachable) {
+            route = ClashRoute.Direct
+            _state.update { it.copy(route = ClashRoute.Direct) }
+        }
     }
+
+    private fun probeLocalProxy(): Boolean = runCatching {
+        Socket().use { socket ->
+            socket.connect(localProxyAddress, LOCAL_PROXY_PROBE_TIMEOUT_MS)
+            true
+        }
+    }.getOrDefault(false)
 
     private fun detectClashPackage(context: Context): String? {
         val pm = context.packageManager
-        return knownPackages.firstOrNull { pkg ->
-            try {
-                pm.getApplicationInfo(pkg, 0)
-                true
-            } catch (_: PackageManager.NameNotFoundException) {
-                false
-            }
-        }
+        return knownPackages.firstOrNull { pkg -> hasTrustedSigner(pm, pkg) }
     }
+
+    private fun hasTrustedSigner(pm: PackageManager, packageName: String): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            TRUSTED_SIGNER_SHA256.any { digest ->
+                runCatching {
+                    pm.hasSigningCertificate(packageName, digest.hexToBytes(), PackageManager.CERT_INPUT_SHA256)
+                }.getOrDefault(false)
+            }
+        } else {
+            legacySignerDigests(pm, packageName).any { it in TRUSTED_SIGNER_SHA256 }
+        }
+
+    /** API 26/27 没有 hasSigningCertificate，只能自己摘要证书字节。 */
+    @Suppress("DEPRECATION")
+    private fun legacySignerDigests(pm: PackageManager, packageName: String): List<String> = runCatching {
+        pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+            ?.map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).toHexLower() }
+            .orEmpty()
+    }.getOrDefault(emptyList())
+
+    private fun String.hexToBytes(): ByteArray =
+        ByteArray(length / 2) { index -> substring(index * 2, index * 2 + 2).toInt(16).toByte() }
+
+    private fun ByteArray.toHexLower(): String = joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
     /**
      * 查一次 `partnerStatus`。
@@ -332,7 +385,9 @@ object ClashPartner {
             ProxySelector.setDefault(object : ProxySelector() {
                 override fun select(uri: URI?): List<Proxy> {
                     if (route == ClashRoute.LocalProxy) {
-                        return listOf(Proxy(Proxy.Type.HTTP, localProxyAddress))
+                        // 带上直连兜底：本地端口这一刻连不上时，同一条请求就地回落，
+                        // 而不是等 connectFailed 之后的下一条请求才恢复。
+                        return listOf(Proxy(Proxy.Type.HTTP, localProxyAddress), Proxy.NO_PROXY)
                     }
                     if (uri == null || fallback == null) return listOf(Proxy.NO_PROXY)
                     return runCatching { fallback.select(uri) }.getOrNull() ?: listOf(Proxy.NO_PROXY)

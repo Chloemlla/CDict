@@ -1,6 +1,8 @@
 package com.chloemlla.cdict.core.translate
 
+import android.content.Context
 import com.chloemlla.cdict.core.data.TranslationCacheDao
+import com.chloemlla.cdict.core.data.TranslationCacheDatabase
 import com.chloemlla.cdict.core.data.TranslationCacheEntity
 import org.json.JSONArray
 
@@ -35,6 +37,8 @@ class RoomTranslationCache(
     ) {
         memory.put(key, result)
         val now = System.currentTimeMillis()
+        // upsert 用 REPLACE（DELETE+INSERT）实现，重译同一条会丢掉收藏标记与首次写入时间，须先读回来。
+        val existing = dao.getByKey(key)
         dao.upsert(
             TranslationCacheEntity(
                 hashKey = key,
@@ -44,8 +48,8 @@ class RoomTranslationCache(
                 to = result.to,
                 translationsJson = JSONArray(result.translations).toString(),
                 phonetic = result.phonetic,
-                isFavorite = 0,
-                createdAt = now,
+                isFavorite = existing?.isFavorite ?: 0,
+                createdAt = existing?.createdAt ?: now,
                 lastAccessedAt = now,
             ),
         )
@@ -57,6 +61,8 @@ class RoomTranslationCache(
     override suspend fun markFavorite(key: String, favorite: Boolean) {
         dao.setFavorite(key, favorite)
     }
+
+    override suspend fun isFavorite(key: String): Boolean = dao.favoriteFlag(key) == 1
 
     private fun TranslationCacheEntity.toResult(): TranslationResult {
         val translations = runCatching {
@@ -71,5 +77,16 @@ class RoomTranslationCache(
         const val DEFAULT_MEMORY_ENTRIES = 30
         const val DEFAULT_DISK_ENTRIES = 500
         const val DEFAULT_EVICT_BATCH = 50
+
+        @Volatile
+        private var instance: RoomTranslationCache? = null
+
+        /** 进程级单例：多个入口（翻译页、快译弹窗、词条详情）共用同一个连接池与内存 LRU。 */
+        fun shared(context: Context): RoomTranslationCache =
+            instance ?: synchronized(this) {
+                instance ?: RoomTranslationCache(
+                    TranslationCacheDatabase.open(context.applicationContext).translationCacheDao(),
+                ).also { instance = it }
+            }
     }
 }

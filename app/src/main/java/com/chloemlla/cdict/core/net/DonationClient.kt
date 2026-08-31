@@ -1,11 +1,14 @@
 package com.chloemlla.cdict.core.net
 
+import android.util.Log
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+
+private const val TAG = "DonationClient"
 
 /** 一个赞赏渠道；[id] 同时用于拼接图片地址，客户端不接受服务端下发的绝对 URL。 */
 data class DonationChannel(
@@ -191,7 +194,11 @@ private fun executeGet(url: String, redirectsRemaining: Int): DonationHttpRespon
         val status = connection.responseCode
         val location = connection.getHeaderField("Location")
         if (status in 300..399 && location != null && redirectsRemaining > 0) {
-            redirectUrl = URL(URL(url), location).takeIf { it.protocol == "https" }?.toString()
+            val target = URL(URL(url), location)
+            redirectUrl = target.toString().takeIf { target.protocol == "https" }
+            if (redirectUrl == null) {
+                Log.w(TAG, "拒绝跟随非 https 跳转：${target.protocol}://${target.host}")
+            }
         }
         if (redirectUrl == null) {
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
@@ -210,6 +217,8 @@ private suspend fun httpPostJson(url: String, body: String): DonationHttpRespons
         connectTimeout = 15_000
         readTimeout = 15_000
         doOutput = true
+        // 自动跟随会把签名头连同安装标识转发给 Location 指向的主机，并按 POST→GET 丢掉请求体。
+        instanceFollowRedirects = false
         setRequestProperty("Accept", "application/json")
         setRequestProperty("Content-Type", "application/json; charset=utf-8")
         CDictRequestSigner.sign(this, "POST", url, body)

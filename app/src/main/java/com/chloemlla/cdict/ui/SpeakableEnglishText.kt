@@ -15,7 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -25,9 +24,12 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 
 /**
- * 一段英文文字的「朗读 + 自动翻译」展示。词典词条与背词卡片共用：
+ * 一段英文文字的「朗读 + 中文译文」展示。词典词条与背词卡片共用：
  * 顶部是原文与朗读按钮，下方据 [ui] 展示加载中 / 译文 / 失败重试；已内联
  * 中文（[pinnedZh]）时不再请求网络翻译。
+ *
+ * 译文按需请求：组合出来不发请求，用户点「看中文」才走翻译管线。一屏词条上挂着十几段英文，
+ * 自动请求等于每次露出就打十几次网关，弱网下全部停在「翻译中…」。
  */
 @Composable
 internal fun SpeakableEnglishText(
@@ -40,9 +42,6 @@ internal fun SpeakableEnglishText(
     speakingKey: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    LaunchedEffect(en) {
-        if (pinnedZh == null && ui == null) onTranslate(en)
-    }
     val speaking = speakingKey == en
     Column(
         modifier = modifier,
@@ -92,6 +91,14 @@ internal fun SpeakableEnglishText(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            ui == null -> TextButton(
+                onClick = { onTranslate(en) },
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .semantics { contentDescription = "查看 $en 的中文译文" },
+            ) {
+                Text("看中文")
+            }
             ui is PhraseUiState.Loading -> Text(
                 text = "翻译中…",
                 style = MaterialTheme.typography.bodyMedium,

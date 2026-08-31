@@ -1,8 +1,6 @@
 package com.chloemlla.cdict.core.data
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
@@ -31,9 +29,6 @@ interface DictionaryDao {
     @Query("SELECT DISTINCT curriculumTags FROM words WHERE curriculumTags IS NOT NULL AND length(curriculumTags) > 0")
     suspend fun distinctCurriculumTags(): List<String>
 
-    @Query("SELECT * FROM words WHERE id = :id")
-    fun observeWord(id: Long): Flow<WordEntity?>
-
     @Query("SELECT * FROM words WHERE frequencyGroup = :group ORDER BY frequency, word LIMIT :limit OFFSET :offset")
     fun browseGroup(group: Int, limit: Int, offset: Int): Flow<List<WordEntity>>
 
@@ -45,8 +40,17 @@ interface DictionaryDao {
     )
     fun browseGroupFiltered(tag: String?, group: Int, limit: Int, offset: Int): Flow<List<WordEntity>>
 
-    @Query("SELECT words.* FROM words JOIN word_search ON words.id = word_search.rowid WHERE word_search MATCH :query ORDER BY words.frequencyGroup, words.frequency, words.word LIMIT :limit")
-    fun searchEnglish(query: String, limit: Int = 100): Flow<List<WordEntity>>
+    // 精确命中必须在 LIMIT 之前参与排序：查询词本身是低频词时，以它为前缀的高频词能把它挤出
+    // 前 100 行，事后重排也救不回来。FTS 前缀表达式就是 `<原词>*`，剥掉尾部 * 即原词；带引号的
+    // 复合表达式比不中任何词条，退化为原来的频次排序。
+    @Query(
+        "SELECT words.* FROM words JOIN word_search ON words.id = word_search.rowid " +
+            "WHERE word_search MATCH :query " +
+            "AND (:tag IS NULL OR INSTR(',' || words.curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "ORDER BY (words.word = RTRIM(:query, '*') COLLATE NOCASE) DESC, " +
+            "words.frequencyGroup, words.frequency, words.word LIMIT :limit",
+    )
+    fun searchEnglish(query: String, tag: String? = null, limit: Int = 100): Flow<List<WordEntity>>
 
     // Typo-tolerance candidate pool (优化项): edit distance <= 2 implies the corrected word
     // and the query differ in length by at most 2, so bounding word length shrinks the
@@ -55,8 +59,13 @@ interface DictionaryDao {
     @Query("SELECT * FROM words WHERE length(word) BETWEEN :minLength AND :maxLength ORDER BY frequencyGroup, frequency, word LIMIT :limit")
     suspend fun wordsInLengthRange(minLength: Int, maxLength: Int, limit: Int): List<WordEntity>
 
-    @Query("SELECT * FROM words WHERE word LIKE '%' || :query || '%' OR translation LIKE '%' || :query || '%' ORDER BY frequencyGroup, frequency, word LIMIT :limit")
-    fun searchChinese(query: String, limit: Int = 100): Flow<List<WordEntity>>
+    // ESCAPE 让调用方转义后的 % / _ 按字面匹配，否则用户输入的通配符会命中整张表。
+    @Query(
+        "SELECT * FROM words WHERE (:tag IS NULL OR INSTR(',' || curriculumTags || ',', ',' || :tag || ',') > 0) " +
+            "AND (word LIKE '%' || :query || '%' ESCAPE '\\' OR translation LIKE '%' || :query || '%' ESCAPE '\\') " +
+            "ORDER BY frequencyGroup, frequency, word LIMIT :limit",
+    )
+    fun searchChinese(query: String, tag: String? = null, limit: Int = 100): Flow<List<WordEntity>>
 
     @Query("SELECT * FROM words WHERE frequencyGroup = :group AND frequency < :frequency ORDER BY frequency DESC, word DESC LIMIT 1")
     suspend fun previous(group: Int, frequency: Int): WordEntity?
@@ -144,11 +153,9 @@ interface DictionaryDao {
     )
     suspend fun wordsSharingRootsFiltered(tag: String?, roots: List<String>, limit: Int): List<WordEntity>
 
-    @Query("SELECT * FROM words WHERE LOWER(word) IN (:words)")
+    // COLLATE NOCASE 让大小写无关的批量取词能走 idx_words_word_nocase；LOWER(word) 包在列上则索引失效。
+    @Query("SELECT * FROM words WHERE word COLLATE NOCASE IN (:words)")
     suspend fun wordsByText(words: List<String>): List<WordEntity>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertWords(words: List<WordEntity>)
 
     @Query("SELECT value FROM metadata WHERE key = :key")
     suspend fun metadataValue(key: String): String?

@@ -32,6 +32,10 @@ data class StudyWordEntity(
     val lastInterval: Int = 0,
     val addedAt: Long = 0L,
     val masteredAt: Long? = null,
+    // Day the word last advanced the ladder. The immediate test can be replayed without limit,
+    // so a same-day gate is what stops five rounds from promoting a word straight to mastered.
+    val lastReviewedDate: String? = null,
+    val lapses: Int = 0,
 )
 
 const val STUDY_STATUS_LEARNING = "learning"

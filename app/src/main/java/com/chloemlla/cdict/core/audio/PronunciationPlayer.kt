@@ -1,16 +1,21 @@
 package com.chloemlla.cdict.core.audio
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.chloemlla.cdict.BuildConfig
 import com.chloemlla.cdict.core.net.CDictBackend
 import com.chloemlla.cdict.core.net.CDictRequestSigner
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -20,6 +25,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 文本朗读能力抽象，便于注入与测试；[PronunciationPlayer] 为其默认实现。 */
 interface PronunciationSpeaker {
@@ -58,8 +67,22 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     private val youdaoFirst: Boolean
         get() = preferenceStore.getBoolean("youdao_first", true)
 
-    /** 同 <音色>:<文本> 的进行中下载共享；只由 Main 线程访问。 */
-    private val inFlight = mutableMapOf<String, Deferred<YoudaoFetch>>()
+    private val audioManager = context.applicationContext.getSystemService(AudioManager::class.java)
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+    private val focusRequest = AudioFocusRequest
+        .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        .setAudioAttributes(audioAttributes)
+        .build()
+    private var focusHeld = false
+
+    /** 同 <音色>:<文本> 的进行中下载共享；invokeOnCompletion 可能在 IO 线程摘除条目，故用并发表。 */
+    private val inFlight = ConcurrentHashMap<String, Deferred<YoudaoFetch>>()
+
+    /** 预取并发闸门：打开词条会连着触发多个预取，压住并发避免自有后端被自己打满。 */
+    private val prefetchGate = Semaphore(2)
 
     /** Called when the current audio playback completes naturally (not via stop()). */
     override var onCompletion: (() -> Unit)? = null
@@ -71,34 +94,72 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         playJob?.cancel()
         releasePlayer()
         tts?.stop()
+        abandonFocus()
         onCompletion = null
     }
 
     fun play(word: String, accent: Accent) {
-        playGeneration++
+        val generation = ++playGeneration
         playJob?.cancel()
         releasePlayer()
+        // 世代号只让旧 TTS 的回调失效，不会让引擎闭嘴；不停就会与新音频叠着播。
+        tts?.stop()
+        requestFocus()
         playJob = scope.launch {
-            if (youdaoFirst) {
-                playYoudaoFirst(playGeneration, word, accent)
-            } else {
-                playVivoFirst(playGeneration, word, accent)
+            val reached = withTimeoutOrNull(PLAY_DEADLINE_MS) {
+                if (youdaoFirst) {
+                    playYoudaoFirst(generation, word, accent)
+                } else {
+                    playVivoFirst(generation, word, accent)
+                }
+                true
+            }
+            if (reached == null && generation == playGeneration) {
+                speak(generation, word, accent, null, "朗读链路超时")
             }
         }
     }
 
     /**
-     * Pre-fetch (PRD §3.4): pull a word's dictionary audio into the disk LRU cache in the
-     * background so an imminent play hits the cached file instead of the network. The
-     * origin tier is the dictionary accent (UK/US) so cache keys align with real playback.
+     * Pre-fetch (PRD §3.4): pull a word's audio into the disk LRU cache in the background so an
+     * imminent play hits the cached file instead of the network. The tier matches the user's
+     * preferred playback tier, otherwise the bytes would only ever be used on fallback.
      */
     fun prefetch(word: String, accent: Accent) {
+        // 整句例句超出在线合成的长度上限，注定失败；预取只对词条级文本有意义。
+        if (word.length > MAX_PREFETCH_CHARS) return
+        val source = if (youdaoFirst) SOURCE_YOUDAO else SOURCE_VIVO
         scope.launch {
-            if (cache.find(word, accent, SOURCE_YOUDAO) == null) {
-                val bytes = downloadYoudao(word, accent)
-                if (bytes != null && bytes.isNotEmpty()) cache.put(word, accent, SOURCE_YOUDAO, bytes)
+            prefetchGate.withPermit {
+                if (findCached(word, accent, source) != null) return@withPermit
+                val bytes = if (source == SOURCE_YOUDAO) {
+                    downloadYoudao(word, accent)?.takeIf { it.isNotEmpty() }
+                } else {
+                    (vivoClient.synthesize(word, langType = accent.ttsLangType) as? VivoTtsResult.Audio)
+                        ?.bytes?.takeIf { it.isNotEmpty() }?.let(::preparePlayable)
+                }
+                if (bytes != null) putCached(word, accent, source, bytes)
             }
         }
+    }
+
+    /** 缓存的查找与落盘都是文件 IO，不能落在主线程（scope 的调度器是 Main）。 */
+    private suspend fun findCached(word: String, accent: Accent, source: String): File? =
+        withContext(Dispatchers.IO) { cache.find(word, accent, source) }
+
+    private suspend fun putCached(word: String, accent: Accent, source: String, bytes: ByteArray): File =
+        withContext(Dispatchers.IO) { cache.put(word, accent, source, bytes) }
+
+    private fun requestFocus() {
+        if (focusHeld) return
+        focusHeld = audioManager?.requestAudioFocus(focusRequest) ==
+            AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonFocus() {
+        if (!focusHeld) return
+        audioManager?.abandonAudioFocusRequest(focusRequest)
+        focusHeld = false
     }
 
     private fun releasePlayer() {
@@ -109,7 +170,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     /** 在线合成优先时的第一级：命中缓存直接播；未命中合成并写缓存；失败落到词典静态音频。 */
     private suspend fun playVivoFirst(generation: Int, word: String, accent: Accent) {
         if (generation != playGeneration) return
-        val cached = cache.find(word, accent, SOURCE_VIVO)
+        val cached = findCached(word, accent, SOURCE_VIVO)
         if (cached != null) {
             playFile(generation, cached) {
                 scope.launch { playYoudaoFallback(generation, word, accent, "在线合成缓存音频播放失败") }
@@ -129,7 +190,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             }
             return
         }
-        val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
+        val file = putCached(word, accent, SOURCE_VIVO, preparePlayable(audio))
         if (generation == playGeneration) {
             playFile(generation, file) {
                 scope.launch {
@@ -147,7 +208,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         vivoReason: String,
     ) {
         if (generation != playGeneration) return
-        val cached = cache.find(word, accent, SOURCE_YOUDAO)
+        val cached = findCached(word, accent, SOURCE_YOUDAO)
         if (cached != null) {
             playFile(generation, cached) {
                 scope.launch {
@@ -163,7 +224,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             }
             return
         }
-        val file = cache.put(word, accent, SOURCE_YOUDAO, fetched.bytes)
+        val file = putCached(word, accent, SOURCE_YOUDAO, fetched.bytes)
         if (generation == playGeneration) {
             playFile(generation, file) {
                 scope.launch {
@@ -176,7 +237,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     /** 第一级：词典静态音频。命中缓存直接播；未命中下载并写缓存；失败落到在线合成。 */
     private suspend fun playYoudaoFirst(generation: Int, word: String, accent: Accent) {
         if (generation != playGeneration) return
-        val cached = cache.find(word, accent, SOURCE_YOUDAO)
+        val cached = findCached(word, accent, SOURCE_YOUDAO)
         if (cached != null) {
             playFile(generation, cached) {
                 scope.launch { playVivoFallback(generation, word, accent, "有道（缓存）播放失败") }
@@ -188,7 +249,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             if (generation == playGeneration) playVivoFallback(generation, word, accent, fetched.reason ?: "有道无返回值")
             return
         }
-        val file = cache.put(word, accent, SOURCE_YOUDAO, fetched.bytes)
+        val file = putCached(word, accent, SOURCE_YOUDAO, fetched.bytes)
         if (generation == playGeneration) {
             playFile(generation, file) {
                 scope.launch { playVivoFallback(generation, word, accent, "有道音频播放失败") }
@@ -204,7 +265,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         youdaoReason: String,
     ) {
         if (generation != playGeneration) return
-        val cached = cache.find(word, accent, SOURCE_VIVO)
+        val cached = findCached(word, accent, SOURCE_VIVO)
         if (cached != null) {
             playFile(generation, cached) {
                 scope.launch { speak(generation, word, accent, "在线合成缓存音频播放失败", youdaoReason) }
@@ -222,7 +283,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
             if (generation == playGeneration) speak(generation, word, accent, vivoReason, youdaoReason)
             return
         }
-        val file = cache.put(word, accent, SOURCE_VIVO, preparePlayable(audio))
+        val file = putCached(word, accent, SOURCE_VIVO, preparePlayable(audio))
         if (generation == playGeneration) {
             playFile(generation, file) {
                 scope.launch { speak(generation, word, accent, "在线合成音频播放失败", youdaoReason) }
@@ -240,11 +301,9 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         inFlight[key]?.let { return it.await() }
         val deferred = scope.async(Dispatchers.IO) { fetchYoudaoDetailed(word, accent) }
         inFlight[key] = deferred
-        try {
-            return deferred.await()
-        } finally {
-            inFlight.remove(key)
-        }
+        // 摘除必须挂在 deferred 自己身上：调用方被取消时请求仍在跑，放在 finally 里会让单飞失效。
+        deferred.invokeOnCompletion { inFlight.remove(key) }
+        return deferred.await()
     }
 
     /** 词典静态音频（经自有后端代理）。只接受 200 且 content-type 为 audio 类型、或缺失 content-type 但可识别音频容器的响应；错误页/空体返回 null 触发回退。 */
@@ -277,12 +336,14 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
 
     private fun playFile(generation: Int, file: File, onFailure: () -> Unit) {
         val media = MediaPlayer().apply {
+            setAudioAttributes(audioAttributes)
             setOnPreparedListener {
                 if (generation == playGeneration && player === this) start()
             }
             setOnCompletionListener {
                 if (player === this) {
                     releasePlayer()
+                    abandonFocus()
                     onCompletion?.invoke()
                 }
             }
@@ -364,28 +425,44 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
     ) {
         if (generation != playGeneration) return
         PronunciationDiagnostics.record(FallbackDiagnostics(word, accent, vivoReason, youdaoReason))
-        // 可通过 adb 拉取：adb logcat -s CDictAudio:I
-        Log.w(
-            TAG,
-            "朗读回退系统TTS text=$word accent=$accent vivo=${vivoReason ?: "-"} youdao=$youdaoReason",
-        )
+        // release 包不记原文：朗读的可能是用户在别的应用里选中的整句。debug 下可 adb logcat -s CDictAudio:I
+        if (BuildConfig.DEBUG) {
+            Log.w(
+                TAG,
+                "朗读回退系统TTS text=$word accent=$accent vivo=${vivoReason ?: "-"} youdao=$youdaoReason",
+            )
+        } else {
+            Log.w(
+                TAG,
+                "朗读回退系统TTS len=${word.length} accent=$accent vivo=${vivoReason ?: "-"} youdao=$youdaoReason",
+            )
+        }
         val locale = if (accent == Accent.UK) Locale.UK else Locale.US
         tts?.shutdown()
         var newTts: TextToSpeech? = null
         newTts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS && generation == playGeneration && tts === newTts) {
                 newTts?.language = locale
+                newTts?.setAudioAttributes(audioAttributes)
                 newTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {}
                     override fun onDone(utteranceId: String?) {
-                        if (generation == playGeneration && tts === newTts) onCompletion?.invoke()
+                        if (generation == playGeneration && tts === newTts) {
+                            abandonFocus()
+                            onCompletion?.invoke()
+                        }
                     }
                     @Suppress("OVERRIDE_DEPRECATION")
                     override fun onError(utteranceId: String?) {
-                        if (generation == playGeneration && tts === newTts) onCompletion?.invoke()
+                        if (generation == playGeneration && tts === newTts) {
+                            abandonFocus()
+                            onCompletion?.invoke()
+                        }
                     }
                 })
                 newTts?.speak(word, TextToSpeech.QUEUE_FLUSH, null, word)
+            } else if (status != TextToSpeech.SUCCESS && generation == playGeneration) {
+                abandonFocus()
             }
         }
         tts = newTts
@@ -398,6 +475,7 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         player = null
         tts?.shutdown()
         tts = null
+        abandonFocus()
     }
 
     private fun String.encodeUrl() = java.net.URLEncoder.encode(this, Charsets.UTF_8.name())
@@ -406,6 +484,10 @@ class PronunciationPlayer(private val context: Context) : PronunciationSpeaker {
         private const val TAG = "CDictAudio"
         private const val SOURCE_VIVO = "vivo"
         private const val SOURCE_YOUDAO = "youdao"
+
+        /** 三级回退串行叠加最坏可达数十秒；超过这个预算直接落系统 TTS，别让用户对着静音的停止图标干等。 */
+        private const val PLAY_DEADLINE_MS = 6_000L
+        private const val MAX_PREFETCH_CHARS = 30
     }
 }
 

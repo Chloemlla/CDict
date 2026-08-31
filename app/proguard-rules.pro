@@ -7,51 +7,28 @@
 
 # FileProvider for in-app update APK installation.
 -keep class androidx.core.content.FileProvider { *; }
--keep class com.chloemlla.cdict.core.update.** { *; }
 
 # Room reflection plumbing: entity/DAO/database accessors are reached through
-# generated *_Impl classes at runtime, so they must survive obfuscation.
+# generated *_Impl classes at runtime, so they must survive obfuscation. Room
+# instantiates the *_Impl via getDeclaredConstructor().newInstance(), so the
+# no-arg constructor has to be kept as well — <methods> does not cover <init>.
 -keep @androidx.room.Entity class * { *; }
 -keep @androidx.room.Dao class * { *; }
 -keep @androidx.room.Database class * { *; }
 -keepclassmembers class * extends androidx.room.RoomDatabase {
+    <init>();
     <methods>;
 }
 
 # Lumen Crash SDK (com.chloemlla.lumen:lumen-crash). The AAR also ships
 # consumer-rules.pro which AGP merges automatically; this copy is a backup so a
 # custom shrinker / stripped consumer rules cannot let R8 drop the crash
-# pipeline (gate would white-screen or the file provider would 404). From
+# pipeline (gate would white-screen or the file provider would 404). The whole
+# package is kept on purpose: the SDK reaches its own entry points reflectively
+# and CI has no way to exercise the shrunk crash path, so an enumerated list
+# would only be verified by users' devices. From
 # Project-Lumen/lumen-crash/host-proguard-template.pro.
 -keepattributes *Annotation*, InnerClasses, EnclosingMethod, Signature, RuntimeVisibleAnnotations
-
--keep class com.chloemlla.lumen.crash.CrashAuthorAttribution {
-    public static final java.lang.String *;
-    public static *** payload();
-}
--keepclassmembers class com.chloemlla.lumen.crash.CrashAuthorAttribution {
-    public static final java.lang.String *;
-}
-
--keep class com.chloemlla.lumen.crash.AuthorIntegrity {
-    public static *** verifyOrThrow(...);
-    public static *** fingerprintHex();
-    public static *** verifiedAuthorBlock();
-}
--keep class com.chloemlla.lumen.crash.AuthorBlock { *; }
-
--keep class com.chloemlla.lumen.crash.LumenCrash { *; }
--keep class com.chloemlla.lumen.crash.LumenCrashConfig { *; }
--keep class com.chloemlla.lumen.crash.LumenCrashConfigBuilder { *; }
--keep class com.chloemlla.lumen.crash.LumenCrashDefaults { *; }
--keep class com.chloemlla.lumen.crash.LumenCrashFileProvider { *; }
--keep class com.chloemlla.lumen.crash.CrashReport { *; }
--keep class com.chloemlla.lumen.crash.CrashAppInfo { *; }
--keep class com.chloemlla.lumen.crash.CrashReportStore { *; }
--keep class com.chloemlla.lumen.crash.CrashBreadcrumbs { *; }
--keep class com.chloemlla.lumen.crash.CrashReportPasteUploader { *; }
--keep class com.chloemlla.lumen.crash.ui.LumenCrashReportScreenKt { *; }
--keep class com.chloemlla.lumen.crash.ui.LumenCrashGateKt { *; }
 
 -keep class com.chloemlla.lumen.crash.** { *; }
 -keepclassmembers class com.chloemlla.lumen.crash.** { *; }

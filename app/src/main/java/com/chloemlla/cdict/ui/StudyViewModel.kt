@@ -2,6 +2,7 @@ package com.chloemlla.cdict.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.SystemClock
 import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -10,10 +11,10 @@ import com.chloemlla.cdict.core.data.DatabaseState
 import com.chloemlla.cdict.core.data.DictionaryDatabase
 import com.chloemlla.cdict.core.data.DictionaryRepository
 import com.chloemlla.cdict.core.data.RecommendationEngine
-import com.chloemlla.cdict.core.data.STUDY_STATUS_FREE
 import com.chloemlla.cdict.core.data.STUDY_STATUS_LEARNING
 import com.chloemlla.cdict.core.data.STUDY_STATUS_MASTERED
 import com.chloemlla.cdict.core.data.STUDY_STATUS_REVIEW
+import com.chloemlla.cdict.core.data.StudyDao
 import com.chloemlla.cdict.core.data.StudyDatabase
 import com.chloemlla.cdict.core.data.StudyWordEntity
 import com.chloemlla.cdict.core.data.WordEntity
@@ -34,6 +35,8 @@ private val REVIEW_INTERVALS = intArrayOf(1, 3, 7, 15, 30)
 private const val MASTER_REPETITIONS = 5
 private const val EASE_DELTA = 0.15
 private const val EASE_MAX = 3.0
+private const val EASE_MIN = 1.3
+private const val EASE_DEFAULT = 2.5
 
 // Ebbinghaus decay weighting (PRD §3.3): a per-band multiplier bends the base ladder by the
 // word's IELTS frequency. DAO frequencyGroup runs 1 (core 真题高频) .. 7 (生僻低频):
@@ -56,12 +59,17 @@ private const val UNKNOWN_MIN_MS = 6000L
 // Smart-cool-down insertion slot for 稍后再看 (优化项三).
 private const val DEFER_INSERT_SLOT = 4
 
+// 自由刷词的队列水位：低于阈值才一次性补满。每刷完一张就补 1 个会让推荐引擎（含两次
+// ORDER BY RANDOM() 全表扫描）在每一次翻卡时都跑一遍。
+private const val FREE_PLAY_QUEUE_TARGET = 12
+private const val FREE_PLAY_REFILL_AT = 4
+
 private const val PREF_KEY_GOAL = "study_daily_goal"
 private const val PREFS_NAME = "cdict_study_settings"
 private const val PREF_KEY_SCOPE_TAG = "study_scope_curriculum_tag"
 private const val PREF_KEY_SCOPE_GROUP = "study_scope_frequency_group"
 
-class StudyViewModel(context: Context) : ViewModel() {
+class StudyViewModel(private val context: Context) : ViewModel() {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -79,6 +87,12 @@ class StudyViewModel(context: Context) : ViewModel() {
     private var dictDb: DictionaryDatabase? = null
     private var studyDb: StudyDatabase? = null
 
+    // 词典单例的世代号。「重建词库」会关掉旧实例，缓存下来的 dao 全部作废。
+    private var dictGeneration: Int = DictionaryRepository.generation.value
+
+    // 新词投喂与推荐页共用一台引擎；它无状态，每次抽词新建一台只是白跑一遍构造。
+    private var recommender: RecommendationEngine? = null
+
     private val reviewQueue = ArrayDeque<ReviewQuestion>()
     private val learnQueue = ArrayDeque<WordEntity>()
 
@@ -89,13 +103,22 @@ class StudyViewModel(context: Context) : ViewModel() {
     // 干扰项词池按会话缓存：每张新词卡都重跑一次 randomWords(400) 会拖慢翻卡。
     private var cachedDistractorPool: List<WordEntity>? = null
 
+    // 自由刷词不落库，只在本次会话内去重，避免同一张卡反复出现。
+    private val freePlayed = mutableSetOf<Long>()
+
     private var learnedToday = mutableListOf<WordEntity>()
-    private var todayDone = 0
     private var reviewTotal = 0
 
-    // Wall-clock when the current review question last became answerable; feeds the
-    // Error-Attribution engine's hesitation measurement.
+    // 今日进度只有 study.db 一份真相；内存里再记一个计数就必然会和清单对不上。
+    private val todayDone: Int get() = learnedToday.size
+
+    // 「我已背会」的查库与组题在途：期间不接受第二次提交，也不接受把这张卡推迟掉。
+    private var committing = false
+
+    // Monotonic clock (not wall clock) for when the current review question became answerable,
+    // and the hesitation it was finally answered with; feeds the Error-Attribution engine.
     private var questionShownAt = 0L
+    private var lastAnswerElapsed = 0L
 
     // True while running an on-demand immediate test of today's newly-learned words, so the
     // review header labels it as such rather than as "昨日复习". Reset when the review exits.
@@ -103,28 +126,54 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     private val today: String get() = LocalDate.now().toString()
 
+    // 会话开始时的日期。跨过零点后 today 会变，而队列与今日清单仍是旧日期的，必须整体重载。
+    private var sessionDate: String = LocalDate.now().toString()
+
     init {
         viewModelScope.launch {
-            when (val result = DictionaryRepository(context).open()) {
-                is DatabaseState.Ready -> {
-                    dictDb = result.database
-                    studyDb = StudyDatabase.open(context)
-                    val dao = studyDb!!.studyDao()
-                    // 加载可用课程标签
-                    _availableTags.value = result.database.dictionaryDao().distinctCurriculumTags()
-                        .flatMap { it.split(",").map(String::trim).filter(String::isNotEmpty) }
-                        .distinct()
-                        .sorted()
-                    viewModelScope.launch {
-                        dao.masteredIds().collect { _masteredIds.value = it.toSet() }
-                    }
-                    reload()
-                }
-                is DatabaseState.Failed -> _state.value = StudyScreenState.NoDictionary(result.message)
-                DatabaseState.Loading -> Unit
+            val dao = openDictionary() ?: return@launch
+            viewModelScope.launch {
+                dao.masteredIds().collect { _masteredIds.value = it.toSet() }
+            }
+            runCatching { reloadNow() }.onFailure {
+                _state.value = StudyScreenState.NoDictionary("学习进度读取失败：${failureText(it)}")
             }
         }
     }
+
+    /**
+     * 打开词典库与学习库，并重建一切持有 dao 的对象。返回 null 表示词库不可用，此时状态已落成
+     * [StudyScreenState.NoDictionary]。单例的开关只归 [DictionaryRepository] 管，这里不自行 close。
+     */
+    private suspend fun openDictionary(): StudyDao? {
+        val result = DictionaryRepository(context).open()
+        if (result is DatabaseState.Failed) {
+            _state.value = StudyScreenState.NoDictionary(result.message)
+            return null
+        }
+        val database = (result as? DatabaseState.Ready)?.database ?: return null
+        return runCatching {
+            dictDb = database
+            val dictDao = database.dictionaryDao()
+            val studyDatabase = studyDb ?: StudyDatabase.open(context)
+            studyDb = studyDatabase
+            val dao = studyDatabase.studyDao()
+            // 引擎持有 dictDao，不一起重建就会继续打在已关闭的旧库上。
+            recommender = RecommendationEngine(dictDao, dao)
+            _availableTags.value = dictDao.distinctCurriculumTags()
+                .flatMap { it.split(",").map(String::trim).filter(String::isNotEmpty) }
+                .distinct()
+                .sorted()
+            dictGeneration = DictionaryRepository.generation.value
+            dao
+        }.getOrElse {
+            _state.value = StudyScreenState.NoDictionary("学习数据打开失败：${failureText(it)}")
+            null
+        }
+    }
+
+    private fun failureText(error: Throwable): String =
+        error.message?.takeIf(String::isNotBlank) ?: error::class.java.simpleName
 
     private fun dailyGoal(): Int = prefs.getInt(PREF_KEY_GOAL, DAILY_GOAL_DEFAULT).coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
 
@@ -140,47 +189,66 @@ class StudyViewModel(context: Context) : ViewModel() {
             if (scope.frequencyGroup != null) putInt(PREF_KEY_SCOPE_GROUP, scope.frequencyGroup)
             else remove(PREF_KEY_SCOPE_GROUP)
         }
-        viewModelScope.launch { reload() }
+        reload()
     }
 
     fun setGoal(value: Int) {
         val goal = value.coerceIn(DAILY_GOAL_MIN, DAILY_GOAL_MAX)
         prefs.edit { putInt(PREF_KEY_GOAL, goal) }
         viewModelScope.launch {
-            val cur = _state.value as? StudyScreenState.Ready ?: return@launch
-            when (cur.phase) {
-                StudyPhase.LEARN, StudyPhase.FREE_PLAY -> {
-                    topUpLearnQueue(isFree = cur.phase == StudyPhase.FREE_PLAY)
-                    emit(cur.phase, card = learnQueue.firstOrNull())
+            runCatching {
+                val cur = _state.value as? StudyScreenState.Ready ?: return@runCatching
+                when {
+                    cur.phase == StudyPhase.LEARN || cur.phase == StudyPhase.FREE_PLAY -> {
+                        topUpLearnQueue(isFree = cur.phase == StudyPhase.FREE_PLAY)
+                        emit(cur.phase, card = learnQueue.firstOrNull())
+                    }
+                    // 总结页的目标步进器是常驻控件：调高后若还停在总结态，进度条会显示 20/30
+                    // 而同屏文案仍写「今日学习已达标」，且页面上没有任何继续背词的入口。
+                    cur.phase == StudyPhase.DONE && todayDone < goal -> {
+                        topUpLearnQueue(isFree = false)
+                        emit(StudyPhase.LEARN, card = learnQueue.firstOrNull())
+                    }
+                    else -> emit(cur.phase, question = cur.question, card = cur.card)
                 }
-                else -> emit(cur.phase, card = cur.card)
-            }
+            }.onFailure { notifyUser("调整每日目标失败：${failureText(it)}") }
         }
     }
 
     /** Resets the whole in-memory session from persisted state, e.g. on entering the tab. */
     fun reload() {
         viewModelScope.launch {
-            val dao = studyDb?.studyDao() ?: return@launch
-            learnQueue.clear()
-            reviewQueue.clear()
-            quizCard = null
-            quizQuestion = null
-            todayDone = dao.learnedTodayCount(today)
-            refreshLearnedToday()
-            val cap = (dailyGoal() * REVIEW_CAP_MULTIPLIER).toInt()
-                .coerceAtMost(REVIEW_ABSENCE_HARD_CAP)
-                .coerceAtLeast(DAILY_GOAL_MIN)
-            val pending = dao.pendingReview(today, cap)
-            if (pending.isNotEmpty()) {
-                buildReview(pending)
-            } else if (todayDone >= dailyGoal()) {
-                emit(StudyPhase.DONE, learnedList = learnedToday.toList())
-            } else {
-                buildLearn()
-            }
+            runCatching { reloadNow() }.onFailure { notifyUser("刷新背词计划失败：${failureText(it)}") }
         }
     }
+
+    private suspend fun reloadNow() {
+        // 「重建词库」关掉了旧的词典单例，缓存的 dictDb 与 recommender 会一路抛 SQLiteException，
+        // 背词页此后既拿不到新词也组不出复习题，必须先整套重取。
+        if (DictionaryRepository.generation.value != dictGeneration) {
+            openDictionary() ?: return
+        }
+        val dao = studyDb?.studyDao() ?: return
+        isImmediateTest = false
+        sessionDate = today
+        learnQueue.clear()
+        reviewQueue.clear()
+        quizCard = null
+        quizQuestion = null
+        refreshLearnedToday()
+        val pending = dao.pendingReview(today, reviewCap())
+        if (pending.isNotEmpty()) {
+            buildReview(pending)
+        } else if (todayDone >= dailyGoal()) {
+            emit(StudyPhase.DONE)
+        } else {
+            buildLearn()
+        }
+    }
+
+    private fun reviewCap(): Int = (dailyGoal() * REVIEW_CAP_MULTIPLIER).toInt()
+        .coerceAtMost(REVIEW_ABSENCE_HARD_CAP)
+        .coerceAtLeast(DAILY_GOAL_MIN)
 
     /**
      * 回到背词标签时的轻量同步：今日进度以 study.db 为准重算，并把已在推荐页处理过的词从
@@ -191,18 +259,30 @@ class StudyViewModel(context: Context) : ViewModel() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
         if (cur.phase == StudyPhase.REVIEW || cur.phase == StudyPhase.LEARN_QUIZ) return
         viewModelScope.launch {
-            val dao = studyDb?.studyDao() ?: return@launch
-            val handled = dao.allStudiedIds().toSet()
-            learnQueue.retainAll { it.id !in handled }
-            todayDone = dao.learnedTodayCount(today)
-            refreshLearnedToday()
-            val isFree = cur.phase == StudyPhase.FREE_PLAY
-            if (!isFree && todayDone >= dailyGoal()) {
-                emit(StudyPhase.DONE, learnedList = learnedToday.toList())
-                return@launch
-            }
-            topUpLearnQueue(isFree)
-            emit(if (isFree) StudyPhase.FREE_PLAY else StudyPhase.LEARN, card = learnQueue.firstOrNull())
+            runCatching {
+                // 挂在后台过夜后切回来：队列与今日清单都还是昨天的，只重算计数会直接开始发新词。
+                if (today != sessionDate) {
+                    reloadNow()
+                    return@runCatching
+                }
+                val dao = studyDb?.studyDao() ?: return@runCatching
+                val handled = dao.allStudiedIds().toSet()
+                learnQueue.retainAll { it.id !in handled }
+                refreshLearnedToday()
+                val isFree = cur.phase == StudyPhase.FREE_PLAY
+                // 到期复习优先于新词。自由刷词是用户主动选的旁路，不在那里打断他。
+                val pending = if (isFree) emptyList() else dao.pendingReview(today, reviewCap())
+                if (pending.isNotEmpty()) {
+                    buildReview(pending)
+                    return@runCatching
+                }
+                if (!isFree && todayDone >= dailyGoal()) {
+                    emit(StudyPhase.DONE)
+                    return@runCatching
+                }
+                topUpLearnQueue(isFree)
+                emit(if (isFree) StudyPhase.FREE_PLAY else StudyPhase.LEARN, card = learnQueue.firstOrNull())
+            }.onFailure { notifyUser("同步学习进度失败：${failureText(it)}") }
         }
     }
 
@@ -210,63 +290,67 @@ class StudyViewModel(context: Context) : ViewModel() {
 
     private suspend fun buildReview(pending: List<StudyWordEntity>) {
         val dictDao = dictDb?.dictionaryDao() ?: return
+        val dao = studyDb?.studyDao() ?: return
         reviewQueue.clear()
         reviewTotal = 0
-        val ids = pending.map { it.wordId }
-        val words = dictDao.wordsByIds(ids)
-        val byId = words.groupBy { it.id }
-        val distractorPool = dictDao.randomWords(400)
+        val byId = dictDao.wordsByIds(pending.map { it.wordId }).associateBy { it.id }
+        val pool = distractorPool()
         // Prioritise core IELTS words first (PRD §3.3): the review batch is drawn from the
         // decayed pool but re-ordered by frequencyGroup so high-frequency words surface
         // before obscure ones when the backlog exceeds a single session.
-        val ordered = pending.sortedBy { byId[it.wordId]?.firstOrNull()?.frequencyGroup ?: Int.MAX_VALUE }
+        val ordered = pending.sortedBy { byId[it.wordId]?.frequencyGroup ?: Int.MAX_VALUE }
         for (entry in ordered) {
-            val word = byId[entry.wordId]?.firstOrNull() ?: continue
-            val correctText = word.translation?.takeIf(String::isNotBlank) ?: word.definition?.takeIf(String::isNotBlank) ?: continue
-            val distractors = buildReviewDistractors(word, distractorPool)
-            if (distractors.size < 3) continue
-            val options = (listOf(correctText) + distractors).shuffled()
-            reviewQueue.addLast(
-                ReviewQuestion(
-                    wordId = word.id,
-                    english = word.word,
-                    phonetic = phoneticsOf(word),
-                    options = options,
-                    correctIndex = options.indexOf(correctText),
-                ),
-            )
+            val question = byId[entry.wordId]?.let { buildQuestion(it, pool) }
+            if (question == null) {
+                // 出不了题的词若原地留在队列里，它的到期日永远不前进，而 pendingReview 按到期日
+                // 排序，于是它每天都优先占住复习窗口的名额，把真正的到期词全部饿死。
+                dao.postpone(entry.wordId, plusDays(1))
+                continue
+            }
+            reviewQueue.addLast(question)
         }
         reviewTotal = reviewQueue.size
         if (reviewQueue.isEmpty()) startLearningPhase() else emit(StudyPhase.REVIEW, question = reviewQueue.firstOrNull())
     }
 
+    /**
+     * 四选一题目：正确答案允许由 translation 回退到 definition，凑不满三个干扰项则出不了题。
+     * 复习、当堂检测、立即测试与开发者面板共用这一处组题，题目里带上 frequencyGroup，
+     * 排程写入就不必为每道答对的题再回 dict.db 查一次整行。
+     */
+    private fun buildQuestion(word: WordEntity, pool: List<WordEntity>): ReviewQuestion? {
+        val correctText = word.translation?.takeIf(String::isNotBlank)
+            ?: word.definition?.takeIf(String::isNotBlank) ?: return null
+        val distractors = buildReviewDistractors(word, pool)
+        if (distractors.size < 3) return null
+        val options = (listOf(correctText) + distractors).shuffled()
+        return ReviewQuestion(
+            wordId = word.id,
+            english = word.word,
+            phonetic = phoneticsOf(word),
+            options = options,
+            correctIndex = options.indexOf(correctText),
+            frequencyGroup = word.frequencyGroup,
+        )
+    }
+
     fun answerReview(index: Int) {
         val cur = _state.value as? StudyScreenState.Ready ?: return
         val question = cur.question ?: return
+        if (cur.phase != StudyPhase.REVIEW && cur.phase != StudyPhase.LEARN_QUIZ) return
+        // 错因归因要的是「看到题目到作答」的时长。重试题改由 advanceAfterFeedback 换上，
+        // 到那时已经混进了读错误提示的时间，所以在这里就把它定下来。
+        lastAnswerElapsed = SystemClock.elapsedRealtime() - questionShownAt
         val chosen = question.options.getOrNull(index)
         val correct = index == question.correctIndex
-        when (cur.phase) {
-            StudyPhase.REVIEW -> {
-                if (correct) {
-                    emit(StudyPhase.REVIEW, question = question, feedback = ReviewFeedback(true, question.correctText, chosen))
-                } else {
-                    val retry = retryPlanFor(question)
-                    reviewQueue[0] = retry
-                    emit(StudyPhase.REVIEW, question = retry, feedback = ReviewFeedback(false, question.correctText, chosen))
-                }
-            }
-            StudyPhase.LEARN_QUIZ -> {
-                val shown = if (correct) question else retryPlanFor(question)
-                quizQuestion = shown
-                emit(
-                    StudyPhase.LEARN_QUIZ,
-                    question = shown,
-                    card = cur.card,
-                    feedback = ReviewFeedback(correct, question.correctText, chosen),
-                )
-            }
-            else -> return
-        }
+        // 答错时不替换题目：question.attempt 一变，页面就会滚回顶部、犹豫计时被重置，
+        // 而错误横幅和「继续」按钮都在选项下方，小屏上用户看不到自己错在哪。
+        emit(
+            cur.phase,
+            question = question,
+            card = cur.card,
+            feedback = ReviewFeedback(correct, question.correctText, chosen),
+        )
     }
 
     /**
@@ -275,20 +359,17 @@ class StudyViewModel(context: Context) : ViewModel() {
      * pinned for a focused re-discrimination); a slow wrong answer signals an unfamiliar word,
      * so the retry re-shows the 释义 card first.
      */
-    private fun retryPlanFor(question: ReviewQuestion): ReviewQuestion {
-        val elapsed = System.currentTimeMillis() - questionShownAt
-        return when {
-            elapsed < CONFUSION_MAX_MS -> question.copy(attempt = question.attempt + 1, confusionRetry = true)
-            elapsed > UNKNOWN_MIN_MS -> question.copy(attempt = question.attempt + 1, forceReveal = true)
-            else -> question.copy(attempt = question.attempt + 1)
-        }
-    }
+    private fun retryPlanFor(question: ReviewQuestion): ReviewQuestion = question.copy(
+        attempt = question.attempt + 1,
+        confusionRetry = lastAnswerElapsed < CONFUSION_MAX_MS,
+        forceReveal = lastAnswerElapsed > UNKNOWN_MIN_MS,
+    )
 
     /**
      * Progresses past the displayed feedback. In the review phase a correct answer promotes the
-     * word up the adaptive spacing ladder and a wrong answer requeues the (attribution-tailored)
-     * retry to the end; in the 当堂检测 phase a correct answer finally commits the new word and a
-     * wrong answer re-presents the same question.
+     * word up the adaptive spacing ladder and a wrong answer knocks it back a rung and requeues
+     * the (attribution-tailored) retry to the end; in the 当堂检测 phase a correct answer finally
+     * commits the new word and a wrong answer re-presents the same question.
      */
     fun advanceAfterFeedback() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
@@ -296,16 +377,25 @@ class StudyViewModel(context: Context) : ViewModel() {
         when (cur.phase) {
             StudyPhase.REVIEW -> {
                 val question = reviewQueue.firstOrNull() ?: return
+                reviewQueue.removeFirst()
                 if (feedback.correct) {
-                    viewModelScope.launch { scheduleReview(question.wordId) }
-                    reviewQueue.removeFirst()
+                    viewModelScope.launch {
+                        runCatching { scheduleReview(question) }
+                            .onFailure { notifyUser("本题进度未保存：${failureText(it)}") }
+                    }
                     if (reviewQueue.isEmpty()) {
                         aboutStore.reviewRoundDone = true
-                        viewModelScope.launch { startLearningPhase() }
+                        viewModelScope.launch {
+                            runCatching { startLearningPhase() }
+                                .onFailure { notifyUser("进入学习失败：${failureText(it)}") }
+                        }
                     } else emit(StudyPhase.REVIEW, question = reviewQueue.first())
                 } else {
-                    reviewQueue.removeFirst()
-                    reviewQueue.addLast(question)
+                    reviewQueue.addLast(retryPlanFor(question))
+                    viewModelScope.launch {
+                        runCatching { recordLapse(question.wordId) }
+                            .onFailure { notifyUser("本题进度未保存：${failureText(it)}") }
+                    }
                     emit(StudyPhase.REVIEW, question = reviewQueue.first())
                 }
             }
@@ -315,9 +405,14 @@ class StudyViewModel(context: Context) : ViewModel() {
                 if (feedback.correct) {
                     quizCard = null
                     quizQuestion = null
-                    viewModelScope.launch { commitLearned(card, isFree = false) }
+                    viewModelScope.launch {
+                        runCatching { commitLearned(card, isFree = false) }
+                            .onFailure { notifyUser("进度未保存：${failureText(it)}") }
+                    }
                 } else {
-                    emit(StudyPhase.LEARN_QUIZ, question = question, card = card)
+                    val retry = retryPlanFor(question)
+                    quizQuestion = retry
+                    emit(StudyPhase.LEARN_QUIZ, question = retry, card = card)
                 }
             }
             else -> return
@@ -329,61 +424,64 @@ class StudyViewModel(context: Context) : ViewModel() {
      * The base 1/3/7/15/30-day ladder is bent by the word's IELTS frequency band (PRD §3.3)
      * so core words are re-tested sooner and obscure words spread further apart.
      */
-    private suspend fun scheduleReview(wordId: Long) {
+    private suspend fun scheduleReview(question: ReviewQuestion) {
+        val dao = studyDb?.studyDao() ?: return
+        val row = dao.word(question.wordId) ?: return
+        // 同日幂等：「立即测试今日所学」可以无限重复，同一天再答对不能把阶梯再推一格，
+        // 否则连做 5 轮就把今天刚背的词全判成已掌握、此后再也不复习。
+        if (row.lastReviewedDate == today) return
+        val slot = row.repetitions.coerceIn(0, REVIEW_INTERVALS.lastIndex)
+        val ease = (row.ease + EASE_DELTA).coerceIn(EASE_MIN, EASE_MAX)
+        val interval = decayedInterval(REVIEW_INTERVALS[slot], question.frequencyGroup, ease)
+        val repetitions = row.repetitions + 1
+        val status = if (repetitions >= MASTER_REPETITIONS) STUDY_STATUS_MASTERED else STUDY_STATUS_REVIEW
+        dao.schedule(question.wordId, status, plusDays(interval), ease, repetitions, interval, today)
+    }
+
+    /**
+     * 答错的写入。此前答错完全不落库，于是连续答错 5 天的词照样每天前进一格、第 5 天被判为
+     * 已掌握。这里把阶梯打回首格、下调 ease 并累计失败次数，明天重来。
+     */
+    private suspend fun recordLapse(wordId: Long) {
         val dao = studyDb?.studyDao() ?: return
         val row = dao.word(wordId) ?: return
-        val slot = row.repetitions.coerceIn(0, REVIEW_INTERVALS.lastIndex)
-        val interval = decayedInterval(REVIEW_INTERVALS[slot], frequencyGroupOf(wordId))
-        val repetitions = row.repetitions + 1
-        val ease = (row.ease + EASE_DELTA).coerceAtMost(EASE_MAX)
-        val status = if (repetitions >= MASTER_REPETITIONS) STUDY_STATUS_MASTERED else STUDY_STATUS_REVIEW
-        dao.schedule(wordId, status, plusDays(interval), ease, repetitions, interval)
+        dao.lapse(
+            wordId = wordId,
+            status = STUDY_STATUS_LEARNING,
+            nextReviewDate = plusDays(1),
+            ease = (row.ease - EASE_DELTA).coerceIn(EASE_MIN, EASE_MAX),
+            lapses = row.lapses + 1,
+        )
     }
 
-    /** Linear interpolation of the decay multiplier across the 7 frequency bands. */
-    private suspend fun frequencyGroupOf(wordId: Long): Int {
-        val group = dictDb?.dictionaryDao()?.wordsByIds(listOf(wordId))?.firstOrNull()?.frequencyGroup ?: 3
-        return group.coerceIn(1, 7)
-    }
-
-    private fun decayedInterval(baseDays: Int, frequencyGroup: Int): Int {
-        val t = (frequencyGroup - 1) / 6.0 // 0.0 (core) .. 1.0 (obscure)
+    /**
+     * Linear interpolation of the decay multiplier across the 7 frequency bands, scaled by the
+     * word's own [ease] so repeatedly failed words really do come back sooner.
+     */
+    private fun decayedInterval(baseDays: Int, frequencyGroup: Int, ease: Double): Int {
+        val t = (frequencyGroup.coerceIn(1, 7) - 1) / 6.0 // 0.0 (core) .. 1.0 (obscure)
         val mult = GROUP_DECAY_MULT_MIN + t * (GROUP_DECAY_MULT_MAX - GROUP_DECAY_MULT_MIN)
-        return maxOf(1, (baseDays * mult).toInt())
+        return maxOf(1, (baseDays * mult * (ease / EASE_DEFAULT)).toInt())
     }
 
     /** Marks the current question as just presented, restarting the hesitation clock. */
     fun noteQuestionPresented() {
-        questionShownAt = System.currentTimeMillis()
+        questionShownAt = SystemClock.elapsedRealtime()
     }
 
     /**
      * Developer backdoor: launches the next-day review exam with a randomly sampled word so
      * the review UI can be exercised without a real due queue. Invisible to normal use
-     * (only reachable via the five-tap developer panel in the study top bar).
+     * (only reachable via the developer panel in the study top bar, debug builds only).
      */
     fun debugLaunchReview() {
         viewModelScope.launch {
-            val dictDao = dictDb?.dictionaryDao() ?: return@launch
-            val pool = dictDao.randomWords(300)
-            val target = pool.firstOrNull() ?: return@launch
-            val correctText = target.translation?.takeIf(String::isNotBlank)
-                ?: target.definition?.takeIf(String::isNotBlank) ?: return@launch
-            val distractors = buildReviewDistractors(target, pool)
-            if (distractors.size < 3) return@launch
-            val options = (listOf(correctText) + distractors).shuffled()
+            val pool = distractorPool()
+            val question = pool.firstNotNullOfOrNull { buildQuestion(it, pool) } ?: return@launch
             reviewQueue.clear()
             reviewTotal = 1
-            reviewQueue.addLast(
-                ReviewQuestion(
-                    wordId = target.id,
-                    english = target.word,
-                    phonetic = phoneticsOf(target),
-                    options = options,
-                    correctIndex = options.indexOf(correctText),
-                ),
-            )
-            emit(StudyPhase.REVIEW, question = reviewQueue.first())
+            reviewQueue.addLast(question)
+            emit(StudyPhase.REVIEW, question = question)
         }
     }
 
@@ -396,35 +494,30 @@ class StudyViewModel(context: Context) : ViewModel() {
      */
     fun startImmediateTest() {
         viewModelScope.launch {
-            val dictDao = dictDb?.dictionaryDao() ?: return@launch
-            refreshLearnedToday()
-            val targets = learnedToday.toList()
-            if (targets.isEmpty()) return@launch
-            val distractorPool = dictDao.randomWords(400)
-            reviewQueue.clear()
-            reviewTotal = 0
-            for (word in targets) {
-                val correctText = word.translation?.takeIf(String::isNotBlank)
-                    ?: word.definition?.takeIf(String::isNotBlank) ?: continue
-                val distractors = buildReviewDistractors(word, distractorPool)
-                if (distractors.size < 3) continue
-                val options = (listOf(correctText) + distractors).shuffled()
-                reviewQueue.addLast(
-                    ReviewQuestion(
-                        wordId = word.id,
-                        english = word.word,
-                        phonetic = phoneticsOf(word),
-                        options = options,
-                        correctIndex = options.indexOf(correctText),
-                    ),
-                )
-            }
-            reviewTotal = reviewQueue.size
-            // Nothing testable (all learned words failed to assemble a full option set): stay
-            // put rather than stranding the UI on a ghost "preparing" review screen.
-            if (reviewQueue.isEmpty()) return@launch
-            isImmediateTest = true
-            emit(StudyPhase.REVIEW, question = reviewQueue.first())
+            runCatching {
+                val dao = studyDb?.studyDao() ?: return@runCatching
+                refreshLearnedToday()
+                // 今天已经排程过的词再测一遍只会重复推进阶梯，测满 5 轮就全变成已掌握。
+                val alreadyReviewed = dao.reviewedTodayIds(today).toSet()
+                val targets = learnedToday.filter { it.id !in alreadyReviewed }
+                if (targets.isEmpty()) {
+                    notifyUser("今日所学都已测过一轮，明天会安排正式复习")
+                    return@runCatching
+                }
+                val pool = distractorPool()
+                val questions = targets.mapNotNull { buildQuestion(it, pool) }
+                // Nothing testable (no word could assemble a full option set): stay put rather
+                // than stranding the UI on a ghost "preparing" review screen.
+                if (questions.isEmpty()) {
+                    notifyUser("这些词暂时凑不出四个选项，无法测试")
+                    return@runCatching
+                }
+                reviewQueue.clear()
+                reviewQueue.addAll(questions)
+                reviewTotal = reviewQueue.size
+                isImmediateTest = true
+                emit(StudyPhase.REVIEW, question = reviewQueue.first())
+            }.onFailure { notifyUser("无法开始测试：${failureText(it)}") }
         }
     }
 
@@ -442,12 +535,13 @@ class StudyViewModel(context: Context) : ViewModel() {
      */
     private suspend fun topUpLearnQueue(isFree: Boolean) {
         val dao = studyDb?.studyDao() ?: return
-        val goal = dailyGoal()
-        val occupied = learnQueue.mapTo(mutableSetOf()) { it.id }
-        occupied.addAll(dao.allStudiedIds())
-        val target = if (isFree) 12 else (goal - todayDone).coerceAtLeast(0)
+        if (isFree && learnQueue.size > FREE_PLAY_REFILL_AT) return
+        val target = if (isFree) FREE_PLAY_QUEUE_TARGET else (dailyGoal() - todayDone).coerceAtLeast(0)
         val need = (target - learnQueue.size).coerceAtLeast(0)
         if (need <= 0) return
+        val occupied = learnQueue.mapTo(mutableSetOf()) { it.id }
+        occupied.addAll(dao.allStudiedIds())
+        occupied.addAll(freePlayed)
         sampleNewWords(need, occupied).forEach { learnQueue.addLast(it) }
     }
 
@@ -457,11 +551,9 @@ class StudyViewModel(context: Context) : ViewModel() {
      */
     private suspend fun sampleNewWords(need: Int, occupied: Set<Long>): List<WordEntity> {
         if (need <= 0) return emptyList()
-        val dictDao = dictDb?.dictionaryDao() ?: return emptyList()
-        val dao = studyDb?.studyDao() ?: return emptyList()
+        val engine = recommender ?: return emptyList()
         val scope = savedScope()
-        return RecommendationEngine(dictDao, dao)
-            .generateFeed(need, today, occupied, scope.curriculumTag, scope.frequencyGroup)
+        return engine.generateFeed(need, today, occupied, scope.curriculumTag, scope.frequencyGroup)
             .items
             .map { it.word }
     }
@@ -475,37 +567,31 @@ class StudyViewModel(context: Context) : ViewModel() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
         val card = cur.card ?: return
         if (cur.phase != StudyPhase.LEARN && cur.phase != StudyPhase.FREE_PLAY) return
+        // 组题前要查库、首次还要抽 400 词干扰项池，几百毫秒里两个按钮原本都还能点：
+        // 不挡住的话「稍后再看」会先把这张卡挪走，随后弹出的却仍是它的检测题。
+        if (committing) return
         val isFree = cur.phase == StudyPhase.FREE_PLAY
+        setBusy(true)
         viewModelScope.launch {
-            val dao = studyDb?.studyDao() ?: return@launch
-            if (!isFree && dao.word(card.id) == null) {
-                val question = buildLearnQuiz(card)
-                // 凑不出完整选项集时退回旧行为，别把用户留在残缺的选项列表前。
-                if (question != null) {
-                    quizCard = card
-                    quizQuestion = question
-                    emit(StudyPhase.LEARN_QUIZ, question = question, card = card)
-                    return@launch
-                }
+            try {
+                runCatching {
+                    val dao = studyDb?.studyDao() ?: return@runCatching
+                    if (!isFree && dao.word(card.id) == null) {
+                        val question = buildQuestion(card, distractorPool())
+                        // 凑不出完整选项集时退回旧行为，别把用户留在残缺的选项列表前。
+                        if (question != null) {
+                            quizCard = card
+                            quizQuestion = question
+                            emit(StudyPhase.LEARN_QUIZ, question = question, card = card)
+                            return@runCatching
+                        }
+                    }
+                    commitLearned(card, isFree)
+                }.onFailure { notifyUser("进度未保存：${failureText(it)}") }
+            } finally {
+                setBusy(false)
             }
-            commitLearned(card, isFree)
         }
-    }
-
-    /** 当堂检测题：干扰项复用复习那套四层筛选，词池按会话缓存。 */
-    private suspend fun buildLearnQuiz(card: WordEntity): ReviewQuestion? {
-        val correctText = card.translation?.takeIf(String::isNotBlank)
-            ?: card.definition?.takeIf(String::isNotBlank) ?: return null
-        val distractors = buildReviewDistractors(card, distractorPool())
-        if (distractors.size < 3) return null
-        val options = (listOf(correctText) + distractors).shuffled()
-        return ReviewQuestion(
-            wordId = card.id,
-            english = card.word,
-            phonetic = phoneticsOf(card),
-            options = options,
-            correctIndex = options.indexOf(correctText),
-        )
     }
 
     private suspend fun distractorPool(): List<WordEntity> {
@@ -520,47 +606,38 @@ class StudyViewModel(context: Context) : ViewModel() {
      * 入门门槛，不能替代明日首轮复习去推进 ASR 阶梯。
      */
     private suspend fun commitLearned(card: WordEntity, isFree: Boolean) {
+        // 自由刷词不落库。写一行 status='free' 会让这个词此后既不复习、也永远不再作为新词
+        // 出现在任何一页（两处投喂都按 allStudiedIds 排除），与「不计入今日进度与明日复习」
+        // 的文案完全相反，而且没有任何撤销入口。本次会话内去重即可。
+        if (isFree) {
+            freePlayed.add(card.id)
+            learnQueue.remove(card)
+            topUpLearnQueue(isFree = true)
+            emit(StudyPhase.FREE_PLAY, card = learnQueue.firstOrNull())
+            return
+        }
         val dao = studyDb?.studyDao() ?: return
-        val wordId = card.id
         // 该词可能已在推荐页「纳入复习计划」时入库。REPLACE 写入会把排好的 ASR 进度
         // 重置回首轮，所以已有记录时只把卡片摘出队列，不覆盖既有状态。
-        val existing = dao.word(wordId)
-        if (existing == null) {
+        if (dao.word(card.id) == null) {
             dao.upsert(
                 StudyWordEntity(
-                    wordId = wordId,
-                    status = if (isFree) STUDY_STATUS_FREE else STUDY_STATUS_LEARNING,
-                    learnedDate = if (isFree) null else today,
-                    nextReviewDate = if (isFree) null else plusDays(1),
-                    ease = 2.5,
+                    wordId = card.id,
+                    status = STUDY_STATUS_LEARNING,
+                    learnedDate = today,
+                    nextReviewDate = plusDays(1),
+                    ease = EASE_DEFAULT,
                     repetitions = 0,
                     lastInterval = 1,
                     addedAt = System.currentTimeMillis(),
                 ),
             )
         }
-        // dao.upsert is a suspend point; a double-tap can reach here after an
-        // earlier invocation already removed and bookkept the card. Only count
-        // progress on a successful removal to avoid double-counting todayDone
-        // and duplicating the learnedToday entry.
-        val removed = learnQueue.remove(card)
-        if (removed && !isFree) {
-            if (existing == null) {
-                todayDone++
-                learnedToday.add(card)
-            } else {
-                // 已在别处入库：以库为准重算今日进度，避免把同一个词记两次。
-                todayDone = dao.learnedTodayCount(today)
-                refreshLearnedToday()
-            }
-        }
-        topUpLearnQueue(isFree)
-        if (!isFree && todayDone >= dailyGoal()) {
-            refreshLearnedToday()
-            emit(StudyPhase.DONE, learnedList = learnedToday.toList())
-        } else {
-            emit(if (isFree) StudyPhase.FREE_PLAY else StudyPhase.LEARN, card = learnQueue.firstOrNull())
-        }
+        learnQueue.remove(card)
+        refreshLearnedToday()
+        topUpLearnQueue(isFree = false)
+        if (todayDone >= dailyGoal()) emit(StudyPhase.DONE)
+        else emit(StudyPhase.LEARN, card = learnQueue.firstOrNull())
     }
 
     /**
@@ -568,12 +645,24 @@ class StudyViewModel(context: Context) : ViewModel() {
      * re-inserted at slot 4 of the remaining queue rather than bouncing straight back to the
      * front; short queues (fewer than 4 remaining) drop it to the end. 当堂检测里它同时是退出口：
      * 实在不会的词不该把人永久卡在同一道题上，放弃作答即退回队列，不入库、不计进度。
+     * 纯复习态下同一个按钮是「本轮先到这里」，见 [pauseReview]。
      */
     fun deferWord() {
         val cur = _state.value as? StudyScreenState.Ready ?: return
+        if (cur.phase == StudyPhase.REVIEW) {
+            pauseReview()
+            return
+        }
         val quitQuiz = cur.phase == StudyPhase.LEARN_QUIZ
         if (!quitQuiz && cur.phase != StudyPhase.LEARN && cur.phase != StudyPhase.FREE_PLAY) return
+        if (committing) return
         val card = cur.card ?: return
+        // 队列里只剩这一张卡时原地放回，emit 出的状态与上一帧逐字段相等，会被 StateFlow 去重，
+        // 用户点了按钮却什么都没发生。
+        if (!quitQuiz && learnQueue.size <= 1) {
+            notifyUser("这是本轮最后一个词了")
+            return
+        }
         if (quitQuiz) {
             quizCard = null
             quizQuestion = null
@@ -584,36 +673,60 @@ class StudyViewModel(context: Context) : ViewModel() {
         emit(if (quitQuiz) StudyPhase.LEARN else cur.phase, card = learnQueue.firstOrNull())
     }
 
+    /**
+     * 复习态的出口。此前答错只会把题挪到队尾、队列长度永不下降，断刷一周后回来的 50 题积压
+     * 必须全部答对才能看到别的页面。清空本轮队列即可，不写库——这些词仍然到期，明天照旧排队。
+     */
+    private fun pauseReview() {
+        viewModelScope.launch {
+            runCatching {
+                reviewQueue.clear()
+                reviewTotal = 0
+                startLearningPhase()
+            }.onFailure { notifyUser("返回学习失败：${failureText(it)}") }
+        }
+    }
+
     fun continueFreePlay() {
         viewModelScope.launch {
-            topUpLearnQueue(isFree = true)
-            emit(StudyPhase.FREE_PLAY, card = learnQueue.firstOrNull())
+            runCatching {
+                topUpLearnQueue(isFree = true)
+                emit(StudyPhase.FREE_PLAY, card = learnQueue.firstOrNull())
+            }.onFailure { notifyUser("无法进入自由刷词：${failureText(it)}") }
         }
     }
 
     fun exitFreePlay() {
-        emit(StudyPhase.DONE, learnedList = learnedToday.toList())
+        emit(StudyPhase.DONE)
     }
 
     // ---- Shared / dictionary integration --------------------------------------------------
 
     fun toggleMastered(wordId: Long) {
         viewModelScope.launch {
-            val dao = studyDb?.studyDao() ?: return@launch
-            if (wordId in _masteredIds.value) dao.delete(wordId)
-            else dao.upsert(
-                StudyWordEntity(
-                    wordId = wordId,
-                    status = STUDY_STATUS_MASTERED,
-                    learnedDate = null,
-                    nextReviewDate = null,
-                    ease = 2.5,
-                    repetitions = 0,
-                    lastInterval = 0,
-                    addedAt = System.currentTimeMillis(),
-                    masteredAt = System.currentTimeMillis(),
-                ),
-            )
+            runCatching {
+                val dao = studyDb?.studyDao() ?: return@runCatching
+                when {
+                    // 取消掌握绝不能删行：整行删掉会连学习日期与复习次数一起丢掉，该词还会作为
+                    // 全新词重新进入投喂池，且没有任何撤销入口。
+                    wordId in _masteredIds.value -> dao.unmarkMastered(wordId, today)
+                    // 已有行只改状态：REPLACE 是整行替换，会把攒下的复习阶梯清零。
+                    dao.word(wordId) != null -> dao.markMastered(wordId, System.currentTimeMillis())
+                    else -> dao.upsert(
+                        StudyWordEntity(
+                            wordId = wordId,
+                            status = STUDY_STATUS_MASTERED,
+                            learnedDate = null,
+                            nextReviewDate = null,
+                            ease = EASE_DEFAULT,
+                            repetitions = 0,
+                            lastInterval = 0,
+                            addedAt = System.currentTimeMillis(),
+                            masteredAt = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+            }.onFailure { notifyUser("已掌握状态未保存：${failureText(it)}") }
         }
     }
 
@@ -622,9 +735,8 @@ class StudyViewModel(context: Context) : ViewModel() {
     private suspend fun startLearningPhase() {
         // Leaving the review phase (back to learn/done) resets the immediate-test label.
         isImmediateTest = false
-        val goal = dailyGoal()
         refreshLearnedToday()
-        if (todayDone >= goal) emit(StudyPhase.DONE, learnedList = learnedToday.toList())
+        if (todayDone >= dailyGoal()) emit(StudyPhase.DONE)
         else buildLearn()
     }
 
@@ -632,6 +744,18 @@ class StudyViewModel(context: Context) : ViewModel() {
         val ids = studyDb?.studyDao()?.learnedTodayIds(today).orEmpty()
         learnedToday = if (ids.isEmpty()) mutableListOf()
         else dictDb?.dictionaryDao()?.wordsByIds(ids).orEmpty().toMutableList()
+    }
+
+    /** 一次性提示：贴在当前状态上，下一次 [emit] 自然清掉。 */
+    private fun notifyUser(message: String) {
+        val cur = _state.value as? StudyScreenState.Ready ?: return
+        _state.value = cur.copy(notice = message)
+    }
+
+    private fun setBusy(value: Boolean) {
+        committing = value
+        val cur = _state.value as? StudyScreenState.Ready ?: return
+        if (cur.busy != value) _state.value = cur.copy(busy = value)
     }
 
     private fun plusDays(days: Int): String = LocalDate.now().plusDays(days.toLong()).toString()
@@ -657,6 +781,7 @@ class StudyViewModel(context: Context) : ViewModel() {
             isImmediateTest = isImmediateTest,
             scope = savedScope(),
             availableCurriculumTags = _availableTags.value,
+            busy = committing,
         )
     }
 

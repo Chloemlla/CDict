@@ -36,20 +36,20 @@ object DictionaryUpdateManager {
      *
      * @return true when the installed dictionary is stale and should be rebuilt.
      */
-    suspend fun check(context: Context, database: DictionaryDatabase): Boolean {
+    suspend fun check(context: Context, database: DictionaryDatabase): Boolean = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val version = runCatching {
             @Suppress("DEPRECATION")
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
             PackageInfoCompat.getLongVersionCode(info)
-        }.getOrNull() ?: return false
+        }.getOrNull() ?: return@withContext false
 
         val checked = prefs.getLong(KEY_CHECKED_VERSION, -1L)
         if (checked == version) {
-            return prefs.getBoolean(KEY_NEEDS_REBUILD, false)
+            return@withContext prefs.getBoolean(KEY_NEEDS_REBUILD, false)
         }
 
-        val bundled = bundledSignature(context) ?: return false
+        val bundled = bundledSignature(context) ?: return@withContext false
         val installed = installedSignature(database)
         val needs = bundled != installed
 
@@ -57,7 +57,7 @@ object DictionaryUpdateManager {
             putLong(KEY_CHECKED_VERSION, version)
             putBoolean(KEY_NEEDS_REBUILD, needs)
         }
-        return needs
+        needs
     }
 
     /**

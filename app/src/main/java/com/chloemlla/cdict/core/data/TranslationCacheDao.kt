@@ -19,6 +19,9 @@ interface TranslationCacheDao {
     @Query("UPDATE translation_cache SET isFavorite = :isFavorite WHERE hashKey = :key")
     suspend fun setFavorite(key: String, isFavorite: Boolean)
 
+    @Query("SELECT isFavorite FROM translation_cache WHERE hashKey = :key")
+    suspend fun favoriteFlag(key: String): Int?
+
     @Query("SELECT COUNT(*) FROM translation_cache WHERE isFavorite = 0")
     suspend fun nonFavoriteCount(): Int
 

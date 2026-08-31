@@ -39,12 +39,14 @@ class SpeechAudioCache(context: Context) {
         File(dir, "${md5("${accent.name}:$source:$text").take(16)}.$EXT")
 
     private fun trim() {
-        if (dirUsage() <= MAX_BYTES) return
+        var usage = dirUsage()
+        if (usage <= MAX_BYTES) return
         val files = dir.listFiles()?.filter { it.isFile }.orEmpty()
             .sortedBy { it.lastModified() } // oldest first = least recently used
         for (file in files) {
-            if (dirUsage() <= MAX_BYTES) break
-            file.delete()
+            if (usage <= MAX_BYTES) break
+            val size = file.length()
+            if (file.delete()) usage -= size
         }
     }
 

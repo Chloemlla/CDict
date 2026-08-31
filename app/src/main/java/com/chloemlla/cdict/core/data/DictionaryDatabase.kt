@@ -23,7 +23,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WordSearchEntity::class,
         MetadataEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class DictionaryDatabase : RoomDatabase() {
@@ -95,10 +95,38 @@ abstract class DictionaryDatabase : RoomDatabase() {
             }
         }
 
+        // v5 -> v6 adds the case-insensitive headword index that exact lookups and
+        // alphabetical paging depend on. Freshly extracted assets get it from
+        // DatabaseExtractor instead, because Room's own CREATE INDEX cannot carry a collation.
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(DatabaseExtractor.CREATE_WORD_NOCASE_INDEX)
+            }
+        }
+
+        @Volatile
+        private var instance: DictionaryDatabase? = null
+
+        /** The already-built instance, or null when nobody has opened the dictionary yet. */
+        val openedInstance: DictionaryDatabase?
+            get() = instance
+
         fun open(context: Context): DictionaryDatabase =
-            Room.databaseBuilder(context, DictionaryDatabase::class.java, "dict.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                .fallbackToDestructiveMigration(dropAllTables = true)
+            instance ?: synchronized(this) {
+                instance ?: build(context).also { instance = it }
+            }
+
+        /** Releases the shared instance so the database file can be deleted; only rebuild needs this. */
+        fun closeInstance() {
+            synchronized(this) {
+                instance?.close()
+                instance = null
+            }
+        }
+
+        private fun build(context: Context): DictionaryDatabase =
+            Room.databaseBuilder(context.applicationContext, DictionaryDatabase::class.java, "dict.db")
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
     }
 }

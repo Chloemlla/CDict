@@ -60,18 +60,26 @@ class RecommendationEngine(
         // （1-7）内，因此先用 browseGroupFiltered 尝试，不足时退回到 randomWordsFiltered
         // 全域随机抽样，保证 feed 不为空。
         if (studied.isEmpty()) {
-            val cold = if (tag == null) {
-                dictDao.browseGroup(group ?: 1, goal, 0).first()
+            val cold = mutableListOf<RecommendationItem>()
+            // browseGroup 是确定性排序，补卡时会原封不动地再取回同一批；多取一些后按
+            // used 过滤，才能让第二次请求拿到没出现过的词。
+            val overFetch = goal * COLD_OVERFETCH
+            val head = if (tag == null) {
+                dictDao.browseGroup(group ?: 1, overFetch, 0).first()
             } else {
-                val tagged = dictDao.browseGroupFiltered(tag, group ?: 1, goal, 0).first()
-                if (tagged.size < goal) {
-                    val fallback = dictDao.randomWordsFiltered(tag, goal)
-                    (tagged + fallback).take(goal)
-                } else {
-                    tagged
+                dictDao.browseGroupFiltered(tag, group ?: 1, overFetch, 0).first()
+            }
+            for (w in head) {
+                if (cold.size >= goal) break
+                if (used.add(w.id)) cold += RecommendationItem(w, RecommendationPool.CORE_NEW)
+            }
+            if (cold.size < goal) {
+                for (w in dictDao.randomWordsFiltered(tag, overFetch)) {
+                    if (cold.size >= goal) break
+                    if (used.add(w.id)) cold += RecommendationItem(w, RecommendationPool.CORE_NEW)
                 }
-            }.map { RecommendationItem(it, RecommendationPool.CORE_NEW) }
-            return RecommendationFeed(cold.take(goal), goal)
+            }
+            return RecommendationFeed(cold, goal)
         }
 
         val coreCount = goal * 5 / 10
@@ -92,7 +100,7 @@ class RecommendationEngine(
         }
 
         if (simpleCount > 0) {
-            items += sampleGroup(simpleCount, SIMPLE_GROUP, used, tag, group)
+            items += sampleGroup(simpleCount, SIMPLE_GROUP, used, tag)
                 .map { RecommendationItem(it, RecommendationPool.SIMPLE) }
         }
 
@@ -106,10 +114,13 @@ class RecommendationEngine(
         if (shortfall > 0) {
             var attempts = 0
             while (items.size < goal && attempts < SAMPLE_ATTEMPTS) {
-                for (w in dictDao.randomWordsFiltered(tag, 600)) {
+                val before = items.size
+                for (w in dictDao.randomScoped(tag, group, BLANKET_SAMPLE_LIMIT)) {
                     if (items.size >= goal) break
                     if (used.add(w.id)) items += RecommendationItem(w, RecommendationPool.CORE_NEW)
                 }
+                // 采样池已被 used 吃光时再抽也只会拿回同一批，继续重试纯是全表扫描。
+                if (items.size == before) break
                 attempts++
             }
         }
@@ -163,18 +174,21 @@ class RecommendationEngine(
             if (out.size >= n) break
             val remainingGroups = effectiveGroups.size - index
             val share = maxOf(1, (n - out.size) / remainingGroups)
-            out += sampleGroup(share, effectiveGroups[index], used, tag, group)
+            out += sampleGroup(share, effectiveGroups[index], used, tag)
         }
         if (out.size < n) {
-            out += sampleGroup(n - out.size, SIMPLE_GROUP, used, tag, group)
+            out += sampleGroup(n - out.size, SIMPLE_GROUP, used, tag)
         }
         if (out.size < n) {
             var attempts = 0
             while (out.size < n && attempts < SAMPLE_ATTEMPTS) {
-                for (w in dictDao.randomWordsFiltered(tag, 600)) {
+                val before = out.size
+                // 锁定频率组时把过滤下推到 SQL：查询后再过滤会让锁定组与随机样本不相交的那几轮全白跑。
+                for (w in dictDao.randomScoped(tag, group, BLANKET_SAMPLE_LIMIT)) {
                     if (out.size >= n) break
-                    if (matchesGroup(w, group) && used.add(w.id)) out.add(w)
+                    if (used.add(w.id)) out.add(w)
                 }
+                if (out.size == before) break
                 attempts++
             }
         }
@@ -187,24 +201,25 @@ class RecommendationEngine(
         group: Int,
         used: MutableSet<Long>,
         tag: String?,
-        explicitGroup: Int?,
     ): List<WordEntity> {
         if (target <= 0) return emptyList()
         val out = mutableListOf<WordEntity>()
         var attempts = 0
         while (out.size < target && attempts < SAMPLE_ATTEMPTS) {
-            val pool = if (tag == null) dictDao.randomWordsInGroup(group, 400)
-            else dictDao.randomWordsInGroupFiltered(tag, group, 400)
+            val before = out.size
+            val pool = if (tag == null) dictDao.randomWordsInGroup(group, GROUP_SAMPLE_LIMIT)
+            else dictDao.randomWordsInGroupFiltered(tag, group, GROUP_SAMPLE_LIMIT)
             for (w in pool) {
                 if (out.size >= target) break
                 if (used.add(w.id)) out.add(w)
             }
+            if (out.size == before) break
             attempts++
         }
         return out
     }
 
-    /** 广度优先全域兜底时，若锁定了频率组则只保留该组的词。 */
+    /** 词根派生兜底时，若锁定了频率组则只保留该组的词。 */
     private fun matchesGroup(w: WordEntity, group: Int?): Boolean =
         group == null || w.frequencyGroup == group
 
@@ -215,6 +230,9 @@ class RecommendationEngine(
         const val EXPANSION_STUDIED_SAMPLE = 60
         const val EXPANSION_ROOT_CAP = 300
         const val EXPANSION_QUERY_CAP = 400
-        const val SAMPLE_ATTEMPTS = 8
+        const val SAMPLE_ATTEMPTS = 3
+        const val GROUP_SAMPLE_LIMIT = 400
+        const val BLANKET_SAMPLE_LIMIT = 600
+        const val COLD_OVERFETCH = 3
     }
 }

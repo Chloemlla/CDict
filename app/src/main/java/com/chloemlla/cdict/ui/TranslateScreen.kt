@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -99,13 +100,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.chloemlla.cdict.core.audio.Accent
 import com.chloemlla.cdict.core.audio.PronunciationPlayer
 import com.chloemlla.cdict.core.translate.TranslationDirection
+import com.chloemlla.cdict.core.translate.TranslationLimits
 import com.chloemlla.cdict.core.translate.TranslationResult
 
-private const val MAX_QUERY_LENGTH = 2_000
+private const val MAX_QUERY_LENGTH = TranslationLimits.MAX_SOURCE_LENGTH
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,6 +119,7 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val direction by viewModel.direction.collectAsStateWithLifecycle()
     val supportedLanguages by viewModel.supportedLanguages.collectAsStateWithLifecycle()
+    val favorite by viewModel.favorite.collectAsStateWithLifecycle()
     val keyboardController = LocalSoftwareKeyboardController.current
     val haptic = LocalHapticFeedback.current
     val canTranslate = query.isNotBlank() && state !is TranslationUiState.Translating
@@ -143,7 +149,8 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
         }
     }
 
-    LaunchedEffect(Unit) { viewModel.loadSupportedLanguages() }
+    // 语种行请求失败时 supportedLanguages 仍为空，借每次状态变化重试一次（VM 侧已去重）。
+    LaunchedEffect(state) { viewModel.loadSupportedLanguages() }
 
     // 结果卡片消失（改输入 / 重新翻译）时停掉正在播放的朗读，避免"看不到来源的声音"。
     LaunchedEffect(state) {
@@ -151,6 +158,19 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
             pronunciationPlayer.stop()
             speakingText = null
         }
+    }
+
+    // 按 Home 退到后台时 onDispose 不会触发，朗读会在后台继续念完。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                pronunciationPlayer.stop()
+                speakingText = null
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -426,6 +446,8 @@ fun TranslateScreen(viewModel: TranslationViewModel) {
                         originalText = query,
                         speakingText = speakingText,
                         onSpeak = onSpeakTranslation,
+                        favorite = favorite,
+                        onToggleFavorite = viewModel::toggleFavorite,
                     )
                     is TranslationUiState.Failure -> FailureState(
                         message = currentState.message,
@@ -733,7 +755,7 @@ private fun FailureState(
 }
 
 // 把接口/网络层的技术性错误串翻成用户能读懂的中文提示；原始串仍可在"查看错误详情"里展开。
-private fun friendlyFailureHint(message: String): String = when {
+internal fun friendlyFailureHint(message: String): String = when {
     message.contains("网络请求失败") ||
         message.contains("网络异常") ||
         message.contains("timeout", ignoreCase = true) ||
@@ -751,6 +773,8 @@ private fun TranslationResultBlock(
     originalText: String,
     speakingText: String?,
     onSpeak: (String) -> Unit,
+    favorite: Boolean,
+    onToggleFavorite: () -> Unit,
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -805,6 +829,20 @@ private fun TranslationResultBlock(
                     )
                 }
                 if (copyText.isNotBlank()) {
+                    IconButton(
+                        onClick = onToggleFavorite,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (favorite) "取消收藏译文" else "收藏译文"
+                            stateDescription = if (favorite) "已收藏，离线也能查到" else "未收藏"
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                .copy(alpha = if (favorite) 1f else 0.45f),
+                        )
+                    }
                     IconButton(
                         onClick = {
                             context.getSystemService(ClipboardManager::class.java)

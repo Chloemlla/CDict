@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +69,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,7 +101,7 @@ import com.chloemlla.cdict.core.data.WordEntity
  * 探索页用于每日探索与发现。正文按 5:3:2 混排核心新词、派生拓展和高频过渡卡片与后续队列；
  * 探索页只负责“输入 / 预热”，复习权交还背词页，不再混入复习巩固；当前卡额外带例句、助记与
  * 真题热度，供无压力的轻度阅读，测验一律留给背词页。中等及以上宽度使用左侧
- * 大卡、右侧队列的两栏布局，紧凑宽度使用纵向滚动单列。英文释义复用应用的自动翻译管线。
+ * 大卡、右侧队列的两栏布局，紧凑宽度使用惰性单列。英文释义与例句的中文译文按需加载。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,8 +128,10 @@ fun RecommendationScreen(
     val onTranslate = phraseViewModel::translate
     val onSpeak = phraseViewModel::speak
 
-    // 词池筛选状态在重组期间保持不变。
-    val poolFilter = remember { mutableStateOf<RecommendationPool?>(null) }
+    // 用户显式点出来的筛选，配置变更与进程恢复后要保留。
+    val poolFilter = rememberSaveable(stateSaver = PoolFilterSaver) {
+        mutableStateOf<RecommendationPool?>(null)
+    }
 
     Scaffold(
         topBar = {
@@ -165,7 +170,12 @@ fun RecommendationScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onReload, modifier = Modifier.padding(end = 4.dp)) {
+                    IconButton(
+                        onClick = onReload,
+                        // 生成期间再点只会排队等锁，按钮先禁用，避免用户以为没点上而连点。
+                        enabled = state !is RecommendationScreenState.Loading,
+                        modifier = Modifier.padding(end = 4.dp),
+                    ) {
                         Icon(Icons.Filled.Refresh, contentDescription = "重新生成今日探索流")
                     }
                 },
@@ -180,6 +190,11 @@ fun RecommendationScreen(
                 RecommendationScreenState.Loading -> RecommendationLoading()
                 RecommendationScreenState.NoDictionary -> RecommendationNoDictionary(onReload)
                 is RecommendationScreenState.Ready -> {
+                    val filter = poolFilter.value
+                    // 组合期里重新分配两个列表会跟着每次 emit 走，这里只在队列或筛选变化时重算。
+                    val upcoming = remember(state.items, filter) {
+                        state.items.drop(1).filter { filter == null || it.pool == filter }
+                    }
                     if (state.items.isEmpty()) {
                         RecommendationEmpty(
                             state = state,
@@ -205,7 +220,7 @@ fun RecommendationScreen(
                                     onSetGoal = onSetGoal,
                                     onScopeChange = onScopeChange,
                                     onFilterPool = { poolFilter.value = it },
-                                    currentPoolFilter = poolFilter.value,
+                                    currentPoolFilter = filter,
                                 )
                                 // 当前卡永远是队列真实头部：底部操作走 ViewModel 的队首，
                                 // 若这里改用筛选后的头部，操作的词会与卡面显示的词不一致。
@@ -225,47 +240,54 @@ fun RecommendationScreen(
                             }
                             // 图例筛选只作用于「接下来」预览队列（只读，点击进词典详情）。
                             RecommendationUpcomingList(
-                                upcoming = state.items.drop(1)
-                                    .filter { poolFilter.value == null || it.pool == poolFilter.value },
-                                filtered = poolFilter.value != null,
+                                upcoming = upcoming,
+                                filtered = filter != null,
                                 onClearFilter = { poolFilter.value = null },
                                 onOpenWord = onOpenWord,
                                 modifier = Modifier.weight(2f),
                             )
                         }
                     } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+                        // 队列长度由每日目标决定（上限 200），整队组合会把几百行动画状态一次建完，
+                        // 每次操作都要重排全表；紧凑分支必须惰性化。
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 16.dp,
+                                bottom = 24.dp,
+                            ),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            RecommendationHeader(
-                                state = state,
-                                onSetGoal = onSetGoal,
-                                onScopeChange = onScopeChange,
-                                onFilterPool = { poolFilter.value = it },
-                                currentPoolFilter = poolFilter.value,
-                            )
+                            item(key = "rec-header") {
+                                RecommendationHeader(
+                                    state = state,
+                                    onSetGoal = onSetGoal,
+                                    onScopeChange = onScopeChange,
+                                    onFilterPool = { poolFilter.value = it },
+                                    currentPoolFilter = filter,
+                                )
+                            }
                             // 当前卡永远是队列真实头部（同宽屏分支的理由）。
-                            RecommendationCurrentCard(
-                                state = state,
-                                phraseStates = phraseStates,
-                                onTranslate = onTranslate,
-                                onSpeak = onSpeak,
-                                onMarkLearned = onMarkLearned,
-                                onMarkMastered = onMarkMastered,
-                                onDefer = onDefer,
-                                onOpenWord = onOpenWord,
-                                onPlayPronunciation = onPlayPronunciation,
-                                playingKey = playingKey,
-                                speakingKey = speakingKey,
-                            )
-                            RecommendationUpcomingBlock(
-                                upcoming = state.items.drop(1)
-                                    .filter { poolFilter.value == null || it.pool == poolFilter.value },
-                                filtered = poolFilter.value != null,
+                            item(key = "rec-current") {
+                                RecommendationCurrentCard(
+                                    state = state,
+                                    phraseStates = phraseStates,
+                                    onTranslate = onTranslate,
+                                    onSpeak = onSpeak,
+                                    onMarkLearned = onMarkLearned,
+                                    onMarkMastered = onMarkMastered,
+                                    onDefer = onDefer,
+                                    onOpenWord = onOpenWord,
+                                    onPlayPronunciation = onPlayPronunciation,
+                                    playingKey = playingKey,
+                                    speakingKey = speakingKey,
+                                )
+                            }
+                            recommendationUpcomingItems(
+                                upcoming = upcoming,
+                                filtered = filter != null,
                                 onClearFilter = { poolFilter.value = null },
                                 onOpenWord = onOpenWord,
                             )
@@ -276,6 +298,12 @@ fun RecommendationScreen(
         }
     }
 }
+
+/** 筛选按枚举名存取，横竖屏切换或进程恢复后不会被清空。 */
+private val PoolFilterSaver: Saver<RecommendationPool?, String> = Saver(
+    save = { it?.name },
+    restore = { name -> RecommendationPool.entries.firstOrNull { it.name == name } },
+)
 
 @Composable
 private fun RecommendationLoading() {
@@ -566,9 +594,8 @@ private fun RecommendationCurrentCard(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            @Suppress("UnusedContentLambdaTargetStateParameter")
             AnimatedContent(
-                targetState = word.id,
+                targetState = head,
                 modifier = Modifier.fillMaxWidth(),
                 transitionSpec = {
                     (slideInVertically(animationSpec = tween(220)) { it / 4 } + fadeIn(tween(200)))
@@ -576,8 +603,11 @@ private fun RecommendationCurrentCard(
                             slideOutVertically(animationSpec = tween(220)) { -it / 4 } + fadeOut(tween(180)),
                         )
                 },
+                // 退出中的那一份必须继续渲染旧词：读闭包里的 head 会让滑出的卡立刻变成新词，
+                // 视觉上就是两张相同的卡交叉滑动。按 id 定内容 key，同一张卡的上下文补齐不重启动画。
+                contentKey = { it.word.id },
                 label = "recommendation-card",
-            ) {
+            ) { card ->
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -597,17 +627,17 @@ private fun RecommendationCurrentCard(
                                 .semantics { heading() },
                         )
                         // 「未学」是队首的常态，恒挂一个标签纯是噪音，只在真实状态变化后展示。
-                        if (head.studyState != RecommendationStudyState.NEW) {
-                            val stateLabel = recommendationStudyStateLabel(head.studyState)
+                        if (card.studyState != RecommendationStudyState.NEW) {
+                            val stateLabel = recommendationStudyStateLabel(card.studyState)
                             RecommendationInfoPill(
                                 text = stateLabel,
                                 description = "学习状态：$stateLabel",
                             )
                         }
-                        RecommendationModePill(head.pool)
+                        RecommendationModePill(card.pool)
                     }
                     WordCardContent(
-                        word = word,
+                        word = card.word,
                         phraseStates = phraseStates,
                         onPlayPronunciation = onPlayPronunciation,
                         onTranslate = onTranslate,
@@ -617,11 +647,11 @@ private fun RecommendationCurrentCard(
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                         showPartOfSpeech = true,
                         bottomContent = {
-                            RecommendationWordMetadata(word)
+                            RecommendationWordMetadata(card.word)
                         },
                     )
                     RecommendationReadingBlock(
-                        card = head,
+                        card = card,
                         phraseStates = phraseStates,
                         onTranslate = onTranslate,
                         onSpeak = onSpeak,
@@ -715,42 +745,45 @@ private fun RecommendationCurrentCard(
 }
 
 /**
- * 「接下来」队列预览。[upcoming] 由调用方算好（已去掉当前卡、并应用图例筛选），
+ * 「接下来」队列预览的惰性条目。[upcoming] 由调用方算好（已去掉当前卡、并应用图例筛选），
  * 这样筛选只影响预览列表，不会改变当前卡——当前卡必须始终是队列真实头部，
  * 否则底部操作按钮（纳入复习计划 / 已掌握 / 稍后再看）作用的词与卡面显示的词会不一致。
  */
-@Composable
-private fun RecommendationUpcomingBlock(
+private fun LazyListScope.recommendationUpcomingItems(
     upcoming: List<RecommendationItemCard>,
     filtered: Boolean,
     onClearFilter: () -> Unit,
     onOpenWord: (WordEntity) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    item(key = "upcoming-header") {
         Text(
             "接下来 · ${upcoming.size}",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .padding(top = 4.dp)
-                .semantics { heading() },
+            modifier = Modifier.semantics { heading() },
         )
-        if (upcoming.isEmpty()) {
-            Text(
-                text = if (filtered) "该类别下没有后续词卡。" else "这是今天的最后一张词卡。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (filtered) {
-                OutlinedButton(
-                    onClick = onClearFilter,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) {
-                    Text("显示全部类别")
+    }
+    if (upcoming.isEmpty()) {
+        item(key = "upcoming-empty") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = if (filtered) "该类别下没有后续词卡。" else "这是今天的最后一张词卡。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (filtered) {
+                    OutlinedButton(
+                        onClick = onClearFilter,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) {
+                        Text("显示全部类别")
+                    }
                 }
             }
-        } else {
-            upcoming.forEach { card -> RecommendationUpcomingRow(card, onOpenWord) }
+        }
+    } else {
+        items(upcoming, key = { it.word.id }) { card ->
+            RecommendationUpcomingRow(card, onOpenWord)
         }
     }
 }
@@ -773,37 +806,12 @@ private fun RecommendationUpcomingList(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(key = "upcoming-header") {
-                Text(
-                    "接下来 · ${upcoming.size}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.semantics { heading() },
-                )
-            }
-            if (upcoming.isEmpty()) {
-                item(key = "upcoming-empty") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = if (filtered) "该类别下没有后续词卡。" else "这是今天的最后一张词卡。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (filtered) {
-                            OutlinedButton(
-                                onClick = onClearFilter,
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                            ) {
-                                Text("显示全部类别")
-                            }
-                        }
-                    }
-                }
-            } else {
-                items(upcoming, key = { it.word.id }) { card ->
-                    RecommendationUpcomingRow(card, onOpenWord)
-                }
-            }
+            recommendationUpcomingItems(
+                upcoming = upcoming,
+                filtered = filtered,
+                onClearFilter = onClearFilter,
+                onOpenWord = onOpenWord,
+            )
         }
     }
 }
@@ -813,22 +821,13 @@ private fun RecommendationUpcomingRow(
     card: RecommendationItemCard,
     onOpenWord: (WordEntity) -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(durationMillis = 150),
-        label = "upcoming-row-press-scale",
-    )
     val rowShape = RoundedCornerShape(12.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(rowShape)
             .clickable(
-                interactionSource = interactionSource,
                 onClickLabel = "查看单词 ${card.word.word}",
                 role = Role.Button,
                 onClick = { onOpenWord(card.word) },
@@ -1074,8 +1073,7 @@ private fun RecommendationLegendPill(
 
 @Composable
 private fun RecommendationPoolDot(pool: RecommendationPool) {
-    val (targetBg, _) = poolColors(pool)
-    val bg by animateColorAsState(targetValue = targetBg, animationSpec = tween(250), label = "pool-dot-bg")
+    val (bg, _) = poolColors(pool)
     Surface(
         color = bg,
         shape = RoundedCornerShape(50),

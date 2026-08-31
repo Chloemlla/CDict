@@ -2,11 +2,13 @@ package com.chloemlla.cdict.core.translate
 
 import com.chloemlla.cdict.core.net.CDictBackend
 import com.chloemlla.cdict.core.net.CDictRequestSigner
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -32,7 +34,13 @@ class VivoTranslationClient(
             "Content-Length" to body.toByteArray(Charsets.UTF_8).size.toString(),
         )
         val response = try {
-            transport(serverUrl + PATH, headers, body)
+            // 切换基站 / DNS 抖动这类一次性 IO 失败重试一次；HTTP 错误码不重试。
+            try {
+                transport(serverUrl + PATH, headers, body)
+            } catch (e: IOException) {
+                delay(RETRY_DELAY_MS)
+                transport(serverUrl + PATH, headers, body)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -45,7 +53,12 @@ class VivoTranslationClient(
     suspend fun fetchLanguages(): LanguageListOutcome {
         val url = serverUrl + LANG_LIST_PATH
         val response = try {
-            getTransport(url)
+            try {
+                getTransport(url)
+            } catch (e: IOException) {
+                delay(RETRY_DELAY_MS)
+                getTransport(url)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -57,6 +70,7 @@ class VivoTranslationClient(
     companion object {
         private const val PATH = CDictBackend.TRANSLATE_PATH
         private const val LANG_LIST_PATH = CDictBackend.LANGUAGES_PATH
+        private const val RETRY_DELAY_MS = 300L
     }
 }
 

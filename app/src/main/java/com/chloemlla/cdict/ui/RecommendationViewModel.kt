@@ -12,15 +12,22 @@ import com.chloemlla.cdict.core.data.DatabaseState
 import com.chloemlla.cdict.core.data.DictionaryDatabase
 import com.chloemlla.cdict.core.data.DictionaryRepository
 import com.chloemlla.cdict.core.data.RecommendationEngine
+import com.chloemlla.cdict.core.data.RecommendationItem
 import com.chloemlla.cdict.core.data.STUDY_STATUS_LEARNING
 import com.chloemlla.cdict.core.data.STUDY_STATUS_MASTERED
+import com.chloemlla.cdict.core.data.STUDY_STATUS_REVIEW
 import com.chloemlla.cdict.core.data.StudyDao
 import com.chloemlla.cdict.core.data.StudyDatabase
 import com.chloemlla.cdict.core.data.StudyWordEntity
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 /**
@@ -68,26 +75,89 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
 
     private val today: String get() = LocalDate.now().toString()
 
+    /** 所有会改动 [queue] 的入口共用这把锁：并发入口各持一份 occupied 快照会抽出重复词。 */
+    private val feedMutex = Mutex()
+    private var feedJob: Job? = null
+    private var masteredJob: Job? = null
+
+    /** 计数与队列必须在同一个日期语义下整体翻页，否则跨零点后进度归零、队列又被补满一天的量。 */
+    private var sessionDate: String = today
+    private var dictGeneration: Int = DictionaryRepository.generation.value
+
     init {
-        viewModelScope.launch {
-            when (val result = DictionaryRepository(context).open()) {
-                is DatabaseState.Ready -> {
-                    dictDb = result.database
-                    studyDb = StudyDatabase.open(context)
-                    val dao = studyDb!!.studyDao()
-                    _availableTags.value = result.database.dictionaryDao().distinctCurriculumTags()
-                        .flatMap { it.split(",").map(String::trim).filter(String::isNotEmpty) }
-                        .distinct()
-                        .sorted()
-                    // collect 永不返回，必须独立 launch，否则下面的首次建流不会执行。
-                    viewModelScope.launch { observeMastered(dao) }
-                    buildFeed()
-                }
-                is DatabaseState.Failed -> {
-                    _state.value = RecommendationScreenState.NoDictionary
-                }
-                DatabaseState.Loading -> Unit
+        launchFeed {
+            if (!openDatabases()) {
+                _state.value = RecommendationScreenState.NoDictionary
+                return@launchFeed
             }
+            buildFeed()
+        }
+        observeDictionaryGeneration()
+    }
+
+    /** 打开两个库并载入可选标签；返回 false 表示词库不可用，错误页的「重试加载」会再走一次。 */
+    private suspend fun openDatabases(): Boolean = try {
+        val opened = (DictionaryRepository(context).open() as? DatabaseState.Ready)?.database
+        if (opened == null) {
+            false
+        } else {
+            val study = studyDb ?: StudyDatabase.open(context)
+            dictDb = opened
+            studyDb = study
+            dictGeneration = DictionaryRepository.generation.value
+            _availableTags.value = opened.dictionaryDao().distinctCurriculumTags()
+                .flatMap(::parseCurriculumTags)
+                .distinct()
+                .sorted()
+            // collect 永不返回，必须独立 launch，否则下面的首次建流不会执行。
+            if (masteredJob == null) masteredJob = launchGuarded { observeMastered(study.studyDao()) }
+            true
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
+     * 词典页「重建词库」会关掉旧实例并删除旧文件，探索页必须重取 DAO 再重建整条流，
+     * 否则会一直读已被 unlink 的旧词库。
+     */
+    private fun observeDictionaryGeneration() {
+        viewModelScope.launch {
+            DictionaryRepository.generation.collect { generation ->
+                if (generation == dictGeneration) return@collect
+                dictGeneration = generation
+                dictDb = null
+                reload()
+            }
+        }
+    }
+
+    /**
+     * 查询失败（磁盘写满、词库被重建关掉、文件损坏）必须落成可见状态：裸 launch 里的未捕获异常
+     * 会直接终止进程。
+     */
+    private fun launchGuarded(block: suspend () -> Unit): Job = viewModelScope.launch {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (_state.value is RecommendationScreenState.Ready) {
+                emit()
+            } else {
+                _state.value = RecommendationScreenState.NoDictionary
+            }
+        }
+    }
+
+    /** 会重建或补足队列的入口：先让上一次生成停下，再独占地跑这一次。 */
+    private fun launchFeed(block: suspend () -> Unit) {
+        val previous = feedJob
+        feedJob = launchGuarded {
+            previous?.cancelAndJoin()
+            feedMutex.withLock { block() }
         }
     }
 
@@ -99,9 +169,11 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         dao.masteredIds().collect { ids ->
             val mastered = ids.toSet()
             if (queue.none { it.word.id in mastered }) return@collect
-            queue.retainAll { it.word.id !in mastered }
-            topUpToQuota()
-            emitAndHydrate()
+            feedMutex.withLock {
+                queue.retainAll { it.word.id !in mastered }
+                topUpToQuota()
+                emitAndHydrate()
+            }
         }
     }
 
@@ -121,12 +193,24 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
             if (scope.frequencyGroup != null) putInt(REC_PREF_KEY_SCOPE_GROUP, scope.frequencyGroup)
             else remove(REC_PREF_KEY_SCOPE_GROUP)
         }
-        viewModelScope.launch { buildFeed() }
+        // 生成期间必须先把页面置成加载态：词池小的时候要等数秒，旧卡片还留在屏幕上就会被继续操作，
+        // 而它对应的词已经不在新范围里了。
+        _state.value = RecommendationScreenState.Loading
+        launchFeed { buildFeed() }
     }
 
     /** 依据当前每日目标从头重建整条推荐流（点刷新时调用）。 */
     fun reload() {
-        viewModelScope.launch { buildFeed() }
+        _state.value = RecommendationScreenState.Loading
+        launchFeed {
+            if (dictDb == null || studyDb == null) {
+                if (!openDatabases()) {
+                    _state.value = RecommendationScreenState.NoDictionary
+                    return@launchFeed
+                }
+            }
+            buildFeed()
+        }
     }
 
     /**
@@ -135,8 +219,12 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
      */
     fun syncFromStore() {
         if (_state.value !is RecommendationScreenState.Ready) return
-        viewModelScope.launch {
-            val dao = studyDb?.studyDao() ?: return@launch
+        launchFeed {
+            val dao = studyDb?.studyDao() ?: return@launchFeed
+            if (today != sessionDate) {
+                buildFeed()
+                return@launchFeed
+            }
             val handled = dao.allStudiedIds().toSet()
             queue.retainAll { it.word.id !in handled }
             handledToday = dao.learnedTodayCount(today)
@@ -153,6 +241,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
 
     private suspend fun buildFeed() {
         val dao = studyDb?.studyDao() ?: return
+        sessionDate = today
         queue.clear()
         contextCache.clear()
         handledToday = dao.learnedTodayCount(today)
@@ -201,8 +290,21 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         val eng = engine() ?: return
         val scope = savedScope()
         val occupied = consumedToday + queue.map { it.word.id }
-        eng.generateFeed(shortfall, today, occupied, scope.curriculumTag, scope.frequencyGroup)
-            .items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
+        enqueueUnique(
+            eng.generateFeed(shortfall, today, occupied, scope.curriculumTag, scope.frequencyGroup).items,
+        )
+    }
+
+    /**
+     * 入队兜底：任一生成路径漏防重复都会直接打到 UI（[consume] 只删一份，宽屏预览列表同 key 会崩），
+     * 队列长度也不能随「再来一批」无界增长。
+     */
+    private fun enqueueUnique(items: List<RecommendationItem>) {
+        val present = queue.mapTo(mutableSetOf()) { it.word.id }
+        for (item in items) {
+            if (queue.size >= DAILY_GOAL_MAX) break
+            if (present.add(item.word.id)) queue.addLast(RecommendationItemCard(item.word, item.pool))
+        }
     }
 
     /**
@@ -214,20 +316,31 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
         val head = cur.items.firstOrNull() ?: return
         val id = head.word.id
-        viewModelScope.launch {
-            studyDb?.studyDao()?.upsert(
-                StudyWordEntity(
-                    wordId = id,
-                    status = STUDY_STATUS_LEARNING,
-                    learnedDate = today,
-                    nextReviewDate = plusDays(1),
-                    ease = 2.5,
-                    repetitions = 0,
-                    lastInterval = 1,
-                    addedAt = System.currentTimeMillis(),
-                ),
-            )
-            consume(id)
+        launchGuarded {
+            feedMutex.withLock {
+                if (queue.none { it.word.id == id }) return@withLock
+                val dao = studyDb?.studyDao() ?: return@withLock
+                val existing = dao.word(id)
+                // 已在复习阶梯上的词不能重写：upsert 是整行 REPLACE，会把 ease / repetitions /
+                // nextReviewDate 清零，几轮记忆进度静默丢失。
+                val inPipeline = existing?.status == STUDY_STATUS_LEARNING ||
+                    existing?.status == STUDY_STATUS_REVIEW
+                if (!inPipeline) {
+                    dao.upsert(
+                        StudyWordEntity(
+                            wordId = id,
+                            status = STUDY_STATUS_LEARNING,
+                            learnedDate = today,
+                            nextReviewDate = plusDays(1),
+                            ease = 2.5,
+                            repetitions = 0,
+                            lastInterval = 1,
+                            addedAt = System.currentTimeMillis(),
+                        ),
+                    )
+                }
+                consume(id)
+            }
         }
     }
 
@@ -240,17 +353,21 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
         val head = cur.items.firstOrNull() ?: return
         val id = head.word.id
-        viewModelScope.launch {
-            studyDb?.studyDao()?.upsert(
-                StudyWordEntity(
-                    wordId = id,
-                    status = STUDY_STATUS_MASTERED,
-                    learnedDate = today,
-                    addedAt = System.currentTimeMillis(),
-                    masteredAt = System.currentTimeMillis(),
-                ),
-            )
-            consume(id)
+        launchGuarded {
+            feedMutex.withLock {
+                if (queue.none { it.word.id == id }) return@withLock
+                val dao = studyDb?.studyDao() ?: return@withLock
+                dao.upsert(
+                    StudyWordEntity(
+                        wordId = id,
+                        status = STUDY_STATUS_MASTERED,
+                        learnedDate = today,
+                        addedAt = System.currentTimeMillis(),
+                        masteredAt = System.currentTimeMillis(),
+                    ),
+                )
+                consume(id)
+            }
         }
     }
 
@@ -263,6 +380,7 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         if (idx < 0) return
         consumedToday.add(id)
         queue.removeAt(idx)
+        contextCache.remove(id)
         handledToday = studyDb?.studyDao()?.learnedTodayCount(today) ?: handledToday
         topUpToQuota()
         emitAndHydrate()
@@ -272,21 +390,27 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
     fun defer() {
         val cur = _state.value as? RecommendationScreenState.Ready ?: return
         val head = cur.items.firstOrNull() ?: return
-        queue.removeFirst()
-        val insertAt = minOf(DEFER_INSERT_SLOT, queue.size)
-        queue.add(insertAt, head)
-        viewModelScope.launch { emitAndHydrate() }
+        val id = head.word.id
+        launchGuarded {
+            feedMutex.withLock {
+                // 快照来自上一次 emit，队列可能已被后台同步清空或重排；按 id 定位而不是 removeFirst。
+                val idx = queue.indexOfFirst { it.word.id == id }
+                if (idx < 0) return@withLock
+                val item = queue.removeAt(idx)
+                queue.add(minOf(idx + DEFER_INSERT_SLOT, queue.size), item)
+                emitAndHydrate()
+            }
+        }
     }
 
     /** 再来一批：词池学光后按目标再生成一批（终极复习 / 补充）。 */
     fun continueMore() {
-        viewModelScope.launch {
-            val eng = engine() ?: return@launch
-            val goal = dailyGoal()
+        launchFeed {
+            val eng = engine() ?: return@launchFeed
             val scope = savedScope()
             val occupied = consumedToday + queue.map { it.word.id }
-            val feed = eng.generateFeed(goal, today, occupied, scope.curriculumTag, scope.frequencyGroup)
-            feed.items.forEach { (word, pool) -> queue.addLast(RecommendationItemCard(word, pool)) }
+            val feed = eng.generateFeed(dailyGoal(), today, occupied, scope.curriculumTag, scope.frequencyGroup)
+            enqueueUnique(feed.items)
             emitAndHydrate()
         }
     }
@@ -297,14 +421,16 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
         val prev = dailyGoal()
         prefs.edit { putInt(REC_PREF_KEY_GOAL, goal) }
         if (_state.value !is RecommendationScreenState.Ready) return
-        viewModelScope.launch {
+        launchFeed {
             if (goal > prev) {
                 topUpToQuota()
             } else if (goal < prev) {
                 // Goal is the day's total target; already-handled words still count
                 // toward it, so trim the queue to what remains to be shown.
                 val remaining = (goal - handledToday).coerceAtLeast(0)
-                repeat((queue.size - remaining).coerceAtLeast(0)) { queue.removeLast() }
+                repeat((queue.size - remaining).coerceAtLeast(0)) {
+                    contextCache.remove(queue.removeLast().word.id)
+                }
             }
             emitAndHydrate()
         }
@@ -320,6 +446,14 @@ class RecommendationViewModel(application: Application) : AndroidViewModel(appli
             scope = savedScope(),
             availableCurriculumTags = _availableTags.value,
         )
+    }
+
+    override fun onCleared() {
+        // dict.db 是进程级共享实例，只关自己开的 study.db。
+        studyDb?.close()
+        studyDb = null
+        dictDb = null
+        super.onCleared()
     }
 }
 

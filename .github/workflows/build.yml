@@ -12,16 +12,19 @@ on:
         required: false
         default: false
         type: boolean
-  workflow_run:
-    workflows: ["Merge phrase dictionary"]
-    types:
-      - completed
 
 permissions:
   contents: read
 
 env:
   PYTHONUNBUFFERED: "1"
+  # Expected bytes of the bundled dictionary. The digests live here, in version control,
+  # because `dictionary-asset` is a mutable tag that the merge workflows overwrite with
+  # --clobber: a checksums.txt shipped inside that same release can only catch a truncated
+  # download. Publishing a new dictionary therefore ends with a commit updating these two
+  # lines, which is also what makes an APK reproducible from its commit.
+  DICT_DB_BR_SHA256: "6815346622ce3cb5eb414276094f7ad54dd0095038f7431d05df2a5b007f166e"
+  DICT_SIGNATURE_SHA256: "b2f66132f3e6032302d6d5c165383fce6e17aadce302bf09498e107512bfc2eb"
 
 jobs:
   verify:
@@ -29,13 +32,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Resolve lumen-crash SDK version
@@ -49,52 +52,63 @@ jobs:
           base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$base_url/dict.db.br"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
-          (cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+          {
+            printf '%s  dict.db.br\n' "$DICT_DB_BR_SHA256"
+            printf '%s  dict.signature\n' "$DICT_SIGNATURE_SHA256"
+          } > "$RUNNER_TEMP/expected-dictionary.sha256"
+          if ! (cd "$RUNNER_TEMP" && sha256sum -c expected-dictionary.sha256); then
+            echo "::error::dictionary-asset does not match the digests pinned in .github/workflows/build.yml. If the dictionary was republished on purpose, update DICT_DB_BR_SHA256 / DICT_SIGNATURE_SHA256 with the values printed by the merge workflow."
+            exit 1
+          fi
           cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-          test -s app/src/main/assets/dict.db.br
-          test -s app/src/main/assets/dict.signature
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: "21"
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
       - name: Run Android lint
         run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+      # lintDebug does not run the release-only checks (the fatal-severity rules that
+      # depend on minify/shrink), and the release APK is published automatically, so the
+      # release variant needs its own gate. This step needs no signing material.
+      - name: Run release lint checks
+        run: ./gradlew :app:lintVitalRelease --no-daemon --stacktrace
       - name: Upload verification reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cdict-verification-reports
           path: |
             app/build/reports/tests/**
-            app/build/reports/lint-results-debug.*
+            app/build/reports/lint-results-*.*
+            app/build/reports/lint-vital-*.*
           if-no-files-found: ignore
           retention-days: 14
 
   debug:
     name: Build debug APK
+    # No signing material and no app secret in this job: a debug variant is debuggable,
+    # so anything handed to it can be read out of the artifact. Restricted to main /
+    # manual runs so a push to any branch cannot spend a release-privileged runner.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: verify
     runs-on: ubuntu-latest
-    env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      CDICT_APP_SIGN_SECRET: ${{ secrets.CDICT_APP_SIGN_SECRET }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Ensure Gradle wrapper is executable
         run: chmod +x ./gradlew
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Resolve lumen-crash SDK version
@@ -108,32 +122,23 @@ jobs:
           base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$base_url/dict.db.br"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
-          (cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+          {
+            printf '%s  dict.db.br\n' "$DICT_DB_BR_SHA256"
+            printf '%s  dict.signature\n' "$DICT_SIGNATURE_SHA256"
+          } > "$RUNNER_TEMP/expected-dictionary.sha256"
+          if ! (cd "$RUNNER_TEMP" && sha256sum -c expected-dictionary.sha256); then
+            echo "::error::dictionary-asset does not match the digests pinned in .github/workflows/build.yml. If the dictionary was republished on purpose, update DICT_DB_BR_SHA256 / DICT_SIGNATURE_SHA256 with the values printed by the merge workflow."
+            exit 1
+          fi
           cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-          test -s app/src/main/assets/dict.db.br
-          test -s app/src/main/assets/dict.signature
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: "21"
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-      - name: Validate signing secrets and keystore
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            if [ -z "${!name:-}" ]; then echo "::error::Missing required repository secret: $name"; exit 1; fi
-          done
-          keytool_path="$RUNNER_TEMP/cdict-release.jks"
-          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$keytool_path"
-          test -s "$keytool_path" || { echo "::error::Decoded keystore is empty"; exit 1; }
-          chmod 600 "$keytool_path"
-          keytool -list -keystore "$keytool_path" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keytool-error" || { echo "::error::Keystore alias/password validation failed"; rm -f "$RUNNER_TEMP/keytool-error"; exit 1; }
-          rm -f "$RUNNER_TEMP/keytool-error"
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Set build metadata
         shell: bash
         run: |
@@ -144,11 +149,9 @@ jobs:
           echo "CDICT_SHORT_HASH=${GITHUB_SHA::8}" >> "$GITHUB_ENV"
           echo "CDICT_BUILD_TIME_UTC_MILLIS=$(date -u +%s)000" >> "$GITHUB_ENV"
       - name: Build debug APK
-        env:
-          KEYSTORE_FILE: ${{ runner.temp }}/cdict-release.jks
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
       - name: Upload debug APKs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cdict-debug
           path: app/build/outputs/apk/debug/*.apk
@@ -172,7 +175,7 @@ jobs:
       CDICT_APP_SIGN_SECRET: ${{ secrets.CDICT_APP_SIGN_SECRET }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: Ensure Gradle wrapper is executable
@@ -194,7 +197,7 @@ jobs:
           echo "CDICT_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
           echo "CDICT_SHORT_HASH=$short_hash" >> "$GITHUB_ENV"
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Resolve lumen-crash SDK version
@@ -208,19 +211,23 @@ jobs:
           base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.db.br" "$base_url/dict.db.br"
           curl -fL --retry 3 -o "$RUNNER_TEMP/dict.signature" "$base_url/dict.signature"
-          curl -fL --retry 3 -o "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
-          (cd "$RUNNER_TEMP" && awk '$2 == "dict.db.br" || $2 == "dict.signature"' checksums.txt | sha256sum -c -)
+          {
+            printf '%s  dict.db.br\n' "$DICT_DB_BR_SHA256"
+            printf '%s  dict.signature\n' "$DICT_SIGNATURE_SHA256"
+          } > "$RUNNER_TEMP/expected-dictionary.sha256"
+          if ! (cd "$RUNNER_TEMP" && sha256sum -c expected-dictionary.sha256); then
+            echo "::error::dictionary-asset does not match the digests pinned in .github/workflows/build.yml. If the dictionary was republished on purpose, update DICT_DB_BR_SHA256 / DICT_SIGNATURE_SHA256 with the values printed by the merge workflow."
+            exit 1
+          fi
           cp "$RUNNER_TEMP/dict.db.br" app/src/main/assets/dict.db.br
           cp "$RUNNER_TEMP/dict.signature" app/src/main/assets/dict.signature
-          test -s app/src/main/assets/dict.db.br
-          test -s app/src/main/assets/dict.signature
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: "21"
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Validate signing secrets and keystore
         shell: bash
         run: |
@@ -354,12 +361,23 @@ jobs:
           PY
           cat release-assets/release-manifest.json
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cdict-release
           path: release-assets/
           if-no-files-found: error
           retention-days: 30
+      # R8 removes members that are only reached reflectively; without these files a
+      # "works in debug, crashes in release" report cannot be traced to the rule that
+      # dropped the target.
+      - name: Upload R8 mapping and usage reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cdict-release-r8-reports
+          path: app/build/outputs/mapping/release/
+          if-no-files-found: warn
+          retention-days: 90
       - name: Publish GitHub release
         if: success() && github.event_name != 'pull_request'
         shell: bash

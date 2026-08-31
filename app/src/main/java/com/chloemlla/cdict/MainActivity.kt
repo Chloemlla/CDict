@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -28,6 +29,7 @@ import com.chloemlla.cdict.ui.StudyViewModelFactory
 import com.chloemlla.cdict.ui.TranslationViewModel
 import com.chloemlla.cdict.ui.TranslationViewModelFactory
 import com.chloemlla.lumen.crash.ui.LumenCrashGate
+import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
     private val dictionaryViewModel: DictionaryViewModel by viewModels {
@@ -53,9 +55,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleExternalWord(intent)
-        // 前台可见时机拉起 CMFA 的伙伴配对确认窗（透明窗盖在本应用之上，每进程一次）。
-        ClashPartner.requestPairing(this)
         setContent {
+            // 拉起 CMFA 的伙伴配对确认窗（透明窗盖在本应用之上，每进程一次）。等 ClashPartner 自己
+            // 在 IO 线程探测出伙伴包名后才发起，未安装伙伴应用时不在主线程做 PackageManager 探测。
+            LaunchedEffect(Unit) {
+                ClashPartner.state.first { it.installedPackage != null }
+                ClashPartner.requestPairing(this@MainActivity)
+            }
             LumenCrashGate {
                 val state by dictionaryViewModel.state.collectAsStateWithLifecycle()
                 CdictTheme {
@@ -113,7 +119,10 @@ class MainActivity : ComponentActivity() {
 
     /** 快速翻译弹窗「前往」带来的词条：交给词典 ViewModel 打开，并请求切到词典标签。 */
     private fun handleExternalWord(intent: Intent?) {
-        val word = intent?.getStringExtra(EXTRA_WORD)?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        if (intent == null) return
+        val word = intent.getStringExtra(EXTRA_WORD)?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        // 取出即消费：Activity 会长期持有这个 Intent，留着它旋转屏幕或恢复进程时会重放这次跳转。
+        intent.removeExtra(EXTRA_WORD)
         dictionaryViewModel.openExternalWord(word)
         externalWordRequest++
     }

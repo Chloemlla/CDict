@@ -32,75 +32,36 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.chloemlla.cdict.core.net.DonationClaimOutcome
-import com.chloemlla.cdict.core.net.DonationClient
-import kotlinx.coroutines.launch
 
-private data class ClaimFeedback(val message: String, val positive: Boolean)
+internal data class ClaimFeedback(val message: String, val positive: Boolean)
 
 /**
  * 赞赏页底部的「署名鸣谢」区块：署名说明、署名申请表单与实时名单。
  *
  * 名单跟渠道列表一起由服务端下发，开发者核实转账备注后应用内即时可见，不需要发版。
- * 提交前先过一遍本地限流（[DonationClaimQuota]），误触连点不会白白打到后端。
+ * 表单状态与提交都由 [DonationScreen] 持有：这个区块是 LazyColumn 的一个 item，滚出视口就会被回收。
  */
 @Composable
-fun DonationSupportSection(
-    client: DonationClient,
+internal fun DonationSupportSection(
     supporters: List<String>,
-    onCelebrate: () -> Unit,
+    transactionId: String,
+    displayName: String,
+    submitting: Boolean,
+    feedback: ClaimFeedback?,
+    onTransactionIdChange: (String) -> Unit,
+    onDisplayNameChange: (String) -> Unit,
+    onSubmit: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val store = remember(context) { AboutStore(context) }
-    val scope = rememberCoroutineScope()
-    var transactionId by rememberSaveable { mutableStateOf("") }
-    var displayName by rememberSaveable { mutableStateOf("") }
-    var submitting by remember { mutableStateOf(false) }
-    var feedback by remember { mutableStateOf<ClaimFeedback?>(null) }
-
-    val submit: () -> Unit = submit@{
-        if (submitting) return@submit
-        val now = System.currentTimeMillis()
-        val quota = store.donationClaimQuota
-        val blocked = quota.rejectionAt(now)
-        if (blocked != null) {
-            feedback = ClaimFeedback(blocked, false)
-            return@submit
-        }
-        store.donationClaimQuota = quota.accepted(now)
-        submitting = true
-        val submittedId = transactionId
-        val submittedName = displayName
-        scope.launch {
-            val outcome = client.submitClaim(submittedId, submittedName)
-            submitting = false
-            when (outcome) {
-                is DonationClaimOutcome.Accepted -> {
-                    feedback = ClaimFeedback(outcome.message, true)
-                    transactionId = ""
-                    displayName = ""
-                    onCelebrate()
-                }
-                is DonationClaimOutcome.Rejected -> feedback = ClaimFeedback(outcome.message, false)
-            }
-        }
-    }
-
     Column(modifier = Modifier.fillMaxWidth()) {
         SupporterHintCard()
         Spacer(Modifier.height(16.dp))
@@ -109,9 +70,9 @@ fun DonationSupportSection(
             displayName = displayName,
             submitting = submitting,
             feedback = feedback,
-            onTransactionIdChange = { transactionId = it.trim().take(64) },
-            onDisplayNameChange = { displayName = it.take(32) },
-            onSubmit = submit,
+            onTransactionIdChange = { onTransactionIdChange(it.trim().take(64)) },
+            onDisplayNameChange = { onDisplayNameChange(sanitizeDisplayName(it)) },
+            onSubmit = onSubmit,
         )
         Spacer(Modifier.height(20.dp))
         SupporterRoll(supporters)
@@ -215,7 +176,9 @@ private fun ClaimForm(
     onDisplayNameChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
-    val canSubmit = !submitting && transactionId.trim().length >= 6 && displayName.isNotBlank()
+    val trimmedId = transactionId.trim()
+    val idMalformed = trimmedId.isNotEmpty() && !isWellFormedTransactionId(trimmedId)
+    val canSubmit = !submitting && isWellFormedTransactionId(trimmedId) && displayName.isNotBlank()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -240,7 +203,16 @@ private fun ClaimForm(
                 onValueChange = onTransactionIdChange,
                 label = { Text("交易号 / 订单号") },
                 placeholder = { Text("支付宝或微信账单详情里的交易单号") },
-                supportingText = { Text("6-64 位，只含字母、数字、连字符或下划线") },
+                supportingText = {
+                    Text(
+                        if (idMalformed) {
+                            "交易号只能是 6-64 位的字母、数字、连字符或下划线"
+                        } else {
+                            "6-64 位，只含字母、数字、连字符或下划线"
+                        },
+                    )
+                },
+                isError = idMalformed,
                 singleLine = true,
                 enabled = !submitting,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -252,7 +224,10 @@ private fun ClaimForm(
                 onValueChange = onDisplayNameChange,
                 label = { Text("希望展示的称呼") },
                 placeholder = { Text("名单里显示的名字") },
-                supportingText = { Text("${displayName.length}/32，会公开展示，别填真实隐私信息") },
+                supportingText = {
+                    val used = Character.codePointCount(displayName, 0, displayName.length)
+                    Text("$used/$DISPLAY_NAME_MAX，会公开展示，别填真实隐私信息")
+                },
                 singleLine = true,
                 enabled = !submitting,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -294,6 +269,7 @@ private fun ClaimForm(
                         } else {
                             MaterialTheme.colorScheme.errorContainer
                         },
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     ) {
                         Text(
                             current.message,
@@ -393,3 +369,28 @@ private val SUPPORTER_HINT_LINES = listOf(
     "核实通过后名单随服务端实时更新，应用内即时可见，不用等版本更新。",
     "不写备注、不提交申请就是匿名支持，同样感谢。",
 )
+
+private const val DISPLAY_NAME_MAX = 32
+
+/** 与后端一致的交易号字符集；本地先判一次，格式不对的输入既不占限流额度也不发请求。 */
+internal fun isWellFormedTransactionId(id: String): Boolean =
+    id.length in 6..64 &&
+        id.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }
+
+/** 称呼会公开展示，先剔掉不可见字符与双向控制符，再按 code point 截断以免切开 emoji。 */
+internal fun sanitizeDisplayName(raw: String): String =
+    raw.filterNot { it.isInvisibleControl() }.takeCodePoints(DISPLAY_NAME_MAX)
+
+private fun Char.isInvisibleControl(): Boolean =
+    isISOControl() || code == 0x200B || code in 0x200E..0x200F || code in 0x202A..0x202E
+
+private fun String.takeCodePoints(max: Int): String {
+    if (length <= max) return this
+    var index = 0
+    var counted = 0
+    while (index < length && counted < max) {
+        index += Character.charCount(Character.codePointAt(this, index))
+        counted++
+    }
+    return substring(0, index)
+}

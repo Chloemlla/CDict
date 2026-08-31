@@ -134,14 +134,13 @@ class PhraseSpeechViewModelTest {
     }
 
     @Test
-    fun `speak another text switches speaking key without stopping`() = runTest {
+    fun `speak another text switches to the new text`() = runTest {
         val speaker = FakeSpeaker()
         val vm = PhraseSpeechViewModel(okClient("ok"), speaker)
         vm.speak("hello")
         vm.speak("world")
         assertEquals("world", vm.speakingKey.value)
         assertEquals("world", speaker.spoken)
-        assertEquals(false, speaker.stopped)
     }
 
     @Test

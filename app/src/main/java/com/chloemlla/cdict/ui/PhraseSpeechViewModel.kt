@@ -1,11 +1,15 @@
 package com.chloemlla.cdict.ui
 
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.chloemlla.cdict.core.audio.PronunciationPlayer
 import com.chloemlla.cdict.core.audio.PronunciationSpeaker
+import com.chloemlla.cdict.core.translate.RoomTranslationCache
+import com.chloemlla.cdict.core.translate.TranslationCache
+import com.chloemlla.cdict.core.translate.TranslationCacheKey
 import com.chloemlla.cdict.core.translate.TranslationDirection
 import com.chloemlla.cdict.core.translate.TranslationOutcome
 import com.chloemlla.cdict.core.translate.TranslationRequest
@@ -30,6 +34,7 @@ sealed interface PhraseUiState {
 class PhraseSpeechViewModel(
     private val client: VivoTranslationClient = VivoTranslationClient(),
     private val speaker: PronunciationSpeaker,
+    private val cache: TranslationCache = TranslationCache.NoOp,
 ) : ViewModel() {
     private val _states = MutableStateFlow<Map<String, PhraseUiState>>(emptyMap())
     val states: StateFlow<Map<String, PhraseUiState>> = _states.asStateFlow()
@@ -45,15 +50,35 @@ class PhraseSpeechViewModel(
         if (currentState is PhraseUiState.Loading || currentState is PhraseUiState.Done) return
         _states.update { it + (en to PhraseUiState.Loading) }
         viewModelScope.launch {
-            val outcome = client.translate(
-                TranslationRequest(listOf(en), TranslationDirection.EN_TO_ZH),
-            )
-            val next = when (outcome) {
-                is TranslationOutcome.Success -> {
-                    val zh = outcome.result.translations.firstOrNull()?.takeIf { it.isNotBlank() }
-                    if (zh != null) PhraseUiState.Done(zh) else PhraseUiState.Error("暂无译文")
+            val key = TranslationCacheKey.of(en, TranslationDirection.EN_TO_ZH)
+            // 缓存只是可选加速：磁盘写满时 Room 会抛 SQLiteFullException，不该把翻译功能一起拖崩。
+            val cachedResult = try {
+                cache.get(key)
+            } catch (e: SQLiteException) {
+                null
+            }
+            val cachedZh = cachedResult?.translations?.firstOrNull()?.takeIf { it.isNotBlank() }
+            val next = if (cachedZh != null) {
+                PhraseUiState.Done(cachedZh)
+            } else {
+                when (val outcome = client.translate(
+                    TranslationRequest(listOf(en), TranslationDirection.EN_TO_ZH),
+                )) {
+                    is TranslationOutcome.Success -> {
+                        val zh = outcome.result.translations.firstOrNull()?.takeIf { it.isNotBlank() }
+                        if (zh != null) {
+                            try {
+                                cache.put(key, en, TranslationDirection.EN_TO_ZH, outcome.result)
+                            } catch (e: SQLiteException) {
+                                // 写缓存失败不影响本次译文展示。
+                            }
+                            PhraseUiState.Done(zh)
+                        } else {
+                            PhraseUiState.Error("暂无译文")
+                        }
+                    }
+                    is TranslationOutcome.Failure -> PhraseUiState.Error(outcome.message)
                 }
-                is TranslationOutcome.Failure -> PhraseUiState.Error(outcome.message)
             }
             _states.update { current ->
                 if (current[en] is PhraseUiState.Loading) current + (en to next) else current
@@ -85,10 +110,12 @@ class PhraseSpeechViewModel(
 
 class PhraseSpeechViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        val appContext = context.applicationContext
         @Suppress("UNCHECKED_CAST")
         return PhraseSpeechViewModel(
             VivoTranslationClient(),
-            PronunciationPlayer(context.applicationContext),
+            PronunciationPlayer(appContext),
+            RoomTranslationCache.shared(appContext),
         ) as T
     }
 }

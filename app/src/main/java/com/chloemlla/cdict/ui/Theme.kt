@@ -132,6 +132,9 @@ fun CdictTheme(
                 } else {
                     CdictLightColorScheme.inversePrimary
                 },
+                // 抬升面（导航容器、各张卡片）用 surfaceTint 混色，不锁定它的话按钮是品牌色、
+                // 抬升面却偏向壁纸取色。
+                surfaceTint = if (darkTheme) CdictDarkColorScheme.primary else CdictLightColorScheme.primary,
             )
         }
         darkTheme -> CdictDarkColorScheme

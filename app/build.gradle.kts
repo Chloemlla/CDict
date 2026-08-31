@@ -93,12 +93,10 @@ android {
             // the installed official app without conflicting package names.
             applicationIdSuffix = ".debug"
             buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "false")
-            // Sign the debug build with the release keystore in CI so the emitted
-            // debug APK carries a trusted, reproducible signature (not the random
-            // default debug key). Locally (no secrets) it falls back to the debug key.
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            // A debug variant is debuggable, so anything embedded here is readable by
+            // any process that can attach to it: no release certificate, no app secret.
+            // Debug builds fall back to the backend's IP-limited tier.
+            buildConfigField("String", "CDICT_APP_SIGN_SECRET", "\"\"")
         }
         release {
             isMinifyEnabled = true
@@ -162,15 +160,14 @@ ksp {
     arg("room.incremental", "true")
 }
 
-// Room exports the schema to a shared project dir per database. `release` and
-// `releaseAab` both run KSP and would concurrently read/write that file, racing
-// ("Expected end of object, but had EOF"). Force the AAB variant's KSP to run
-// strictly after release's so the file is complete before it is read. Room
-// schema export is not a declared task output, so Gradle cannot know they
-// conflict and would otherwise parallelize them.
+// Room exports the schema to one shared project dir per database, and every variant's KSP
+// task reads/writes that same file, racing ("Expected end of object, but had EOF"). Room
+// schema export is not a declared task output, so Gradle cannot know they conflict and
+// would otherwise parallelize them. `releaseAab` shares the dir with both other variants,
+// so it has to run after both, not just after `release`.
 tasks.configureEach {
     if (name == "kspReleaseAabKotlin") {
-        mustRunAfter("kspReleaseKotlin")
+        mustRunAfter("kspDebugKotlin", "kspReleaseKotlin")
     }
 }
 

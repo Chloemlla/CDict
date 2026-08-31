@@ -3,8 +3,9 @@ package com.chloemlla.cdict.core.data
 import android.content.Context
 import android.content.res.AssetManager
 import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteDatabaseCorruptException
+import android.database.sqlite.SQLiteException
 import android.util.Log
-import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -12,7 +13,23 @@ import kotlinx.coroutines.withContext
 import org.brotli.dec.BrotliInputStream
 import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
 import java.io.InputStream
+
+/** Outcome of preparing the offline dictionary file; each failure needs a different user action. */
+sealed interface ExtractionResult {
+    data object Ok : ExtractionResult
+
+    sealed interface Failure : ExtractionResult
+
+    data class InsufficientStorage(val requiredBytes: Long) : Failure
+
+    data object AssetMissing : Failure
+
+    /** The bundled asset or the extracted file cannot be read as a dictionary. */
+    data class Corrupted(val detail: String?) : Failure
+}
 
 /**
  * Extracts the Brotli-compressed [dict.db.br] from assets on first launch
@@ -23,14 +40,14 @@ import java.io.InputStream
  * Room's [androidx.room.RoomDatabase.Builder] finds it without
  * [androidx.room.RoomDatabase.Builder.createFromAsset].
  *
- * ### Version-aware auto-rebuild
- * When the app [versionCode] changes (app update), the old database is
- * automatically deleted and re-extracted from the new bundled asset, so the
- * user never sees a stale-content prompt within the same app version.
+ * ### Content-aware auto-rebuild
+ * The installed database is re-extracted only when the bundled `dict.signature`
+ * disagrees with the `metadata.assetSignature` row inside it, so app updates that
+ * ship the same dictionary keep the extracted file.
  *
  * ### Storage guard
- * Decompression requires ~100 MB free space. [ensureDatabaseExists] checks
- * [File.usableSpace] before starting and returns false if insufficient.
+ * Decompression needs room for the whole database plus its journal.
+ * [ensureDatabaseExists] checks [File.usableSpace] before starting.
  *
  * ### Performance
  * - The compressed asset is loaded with [AssetManager.ACCESS_BUFFER] so all
@@ -40,13 +57,14 @@ import java.io.InputStream
  */
 object DatabaseExtractor {
 
+    /** Room's `@Index` cannot carry a collation, so the case-insensitive headword index is raw SQL. */
+    const val CREATE_WORD_NOCASE_INDEX =
+        "CREATE INDEX IF NOT EXISTS idx_words_word_nocase ON words (word COLLATE NOCASE)"
+
     private const val TAG = "DatabaseExtractor"
     private const val COMPRESSED_ASSET = "dict.db.br"
     private const val BUFFER_SIZE = 256 * 1024 // 256 KB
-    private const val MIN_STORAGE_THRESHOLD = 100L * 1024 * 1024 // 100 MB
-
-    private const val PREFS_NAME = "db_extract"
-    private const val KEY_EXTRACTED_VERSION = "extracted_version_code"
+    private const val MIN_STORAGE_THRESHOLD = 120L * 1024 * 1024 // 120 MB
 
     private val extractionMutex = Mutex()
 
@@ -56,27 +74,6 @@ object DatabaseExtractor {
      */
     fun databaseFile(context: Context): File =
         context.getDatabasePath("dict.db")
-
-    /** Current app versionCode from [PackageInfoCompat]. */
-    private fun appVersionCode(context: Context): Long {
-        @Suppress("DEPRECATION")
-        val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        return PackageInfoCompat.getLongVersionCode(info)
-    }
-
-    /** VersionCode stored when the database was last extracted. */
-    private fun storedExtractedVersion(context: Context): Long {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getLong(KEY_EXTRACTED_VERSION, -1L)
-    }
-
-    /** Persist the current versionCode so future launches can detect updates. */
-    private fun markExtracted(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(KEY_EXTRACTED_VERSION, appVersionCode(context))
-            .apply()
-    }
 
     /**
      * Returns true when at least [MIN_STORAGE_THRESHOLD] bytes are available
@@ -92,20 +89,55 @@ object DatabaseExtractor {
         }
     }
 
-    private fun hasValidDictionaryDatabase(dbFile: File): Boolean =
+    private sealed interface Probe {
+        /** Opened and the dictionary table has rows; [assetSignature] is the content stamp, if present. */
+        class Usable(val assetSignature: String?) : Probe
+
+        /** Opened, but there is no dictionary content in it — safe to delete and extract again. */
+        data object Unusable : Probe
+
+        /** Could not be opened at all, so nothing can be concluded about its content. */
+        data object Undecidable : Probe
+    }
+
+    /**
+     * Opens the file read-write on purpose: Room leaves the header in WAL mode, and a WAL
+     * database without its `-shm` sidecar cannot be opened read-only at all. Judging such a
+     * file "invalid" is what used to delete and re-extract the dictionary on every cold start.
+     */
+    private fun probe(dbFile: File): Probe =
         try {
-            SQLiteDatabase.openDatabase(
-                dbFile.path,
-                null,
-                SQLiteDatabase.OPEN_READONLY,
-            ).use { database ->
-                database.rawQuery("SELECT 1 FROM words LIMIT 1", null).use { cursor ->
-                    cursor.moveToFirst()
+            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { database ->
+                try {
+                    if (!database.hasDictionaryRows()) Probe.Unusable else Probe.Usable(database.assetSignature())
+                } catch (_: SQLiteException) {
+                    Probe.Unusable
                 }
             }
-        } catch (_: Exception) {
-            false
+        } catch (_: SQLiteDatabaseCorruptException) {
+            Probe.Unusable
+        } catch (_: SQLiteException) {
+            Probe.Undecidable
         }
+
+    private fun SQLiteDatabase.hasDictionaryRows(): Boolean =
+        rawQuery("SELECT 1 FROM words LIMIT 1", null).use { cursor -> cursor.moveToFirst() }
+
+    private fun SQLiteDatabase.assetSignature(): String? =
+        rawQuery("SELECT value FROM metadata WHERE key = 'assetSignature'", null).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0)?.trim()?.takeIf { it.isNotBlank() } else null
+        }
+
+    /**
+     * An installed dictionary is stale only when both sides carry a signature and they differ.
+     * A missing signature on either side leaves the file alone; [DictionaryUpdateManager] then
+     * offers the manual rebuild instead of deleting 94 MB on a guess.
+     */
+    private fun isStale(context: Context, installedSignature: String?): Boolean {
+        if (installedSignature == null) return false
+        val bundled = DictionaryUpdateManager.bundledSignature(context) ?: return false
+        return bundled != installedSignature
+    }
 
     /**
      * Creates a Brotli decoder for [input].
@@ -119,47 +151,30 @@ object DatabaseExtractor {
     private fun brotliDecoder(input: InputStream): InputStream =
         BrotliInputStream(input)
 
-    /**
-     * Decompresses [dict.db.br] from [assets] on first install.
-     *
-     * Writes to a temporary file first, then atomically renames to the final
-     * path, so a kill mid-decompression never leaves a corrupt database.
-     *
-     * @return true when the database is ready (either freshly extracted or
-     *         already present), false on failure.
-     */
-    suspend fun ensureDatabaseExists(context: Context): Boolean =
+    /** Decompresses [dict.db.br] from assets when the installed dictionary is missing or stale. */
+    suspend fun ensureDatabaseExists(context: Context): ExtractionResult =
         extractionMutex.withLock {
             withContext(Dispatchers.IO) {
                 val dbFile = databaseFile(context)
 
-                // Version-aware auto-rebuild: when the app versionCode changed
-                // (app update), delete the old database so the next extraction
-                // picks up the new bundled asset.
-                val currentVersion = appVersionCode(context)
-                val extractedVersion = storedExtractedVersion(context)
-                if (dbFile.exists() && extractedVersion != -1L && extractedVersion != currentVersion) {
-                    context.deleteDatabase("dict.db")
-                }
-
-                // A previous interrupted or concurrent extraction may have left
-                // a database-shaped file without the dictionary table.
-                if (dbFile.exists() && !hasValidDictionaryDatabase(dbFile)) {
-                    context.deleteDatabase("dict.db")
-                }
-
-                // Fast path: database already present and up-to-date.
                 if (dbFile.exists()) {
-                    if (extractedVersion != currentVersion) markExtracted(context)
-                    return@withContext true
+                    when (val probed = probe(dbFile)) {
+                        Probe.Undecidable -> return@withContext ExtractionResult.Ok
+                        Probe.Unusable -> context.deleteDatabase("dict.db")
+                        is Probe.Usable ->
+                            if (isStale(context, probed.assetSignature)) {
+                                context.deleteDatabase("dict.db")
+                            } else {
+                                return@withContext ExtractionResult.Ok
+                            }
+                    }
                 }
 
                 // Ensure parent directory exists before checking its filesystem space.
                 dbFile.parentFile?.mkdirs()
 
-                // Storage guard: ensure enough free space for the 94 MB database.
                 if (!hasSufficientStorage(context)) {
-                    return@withContext false
+                    return@withContext ExtractionResult.InsufficientStorage(MIN_STORAGE_THRESHOLD)
                 }
 
                 // Write to a temporary file so an interrupted extraction never
@@ -185,19 +200,44 @@ object DatabaseExtractor {
                             }
                         }
                     }
-                    if (!hasValidDictionaryDatabase(dbFile)) {
-                        context.deleteDatabase("dict.db")
-                        return@withContext false
-                    }
-                    markExtracted(context)
-                    true
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to extract $COMPRESSED_ASSET", e)
+                    prepareExtracted(context, dbFile)
+                } catch (e: FileNotFoundException) {
+                    Log.e(TAG, "Missing $COMPRESSED_ASSET in assets", e)
                     context.deleteDatabase("dict.db")
-                    false
+                    ExtractionResult.AssetMissing
+                } catch (e: IOException) {
+                    Log.e(TAG, "Failed to extract $COMPRESSED_ASSET", e)
+                    // The partial temp file is still on disk here, so a write that ran out of
+                    // space is still visible as "not enough space" rather than as corruption.
+                    val outOfSpace = !hasSufficientStorage(context)
+                    context.deleteDatabase("dict.db")
+                    if (outOfSpace) {
+                        ExtractionResult.InsufficientStorage(MIN_STORAGE_THRESHOLD)
+                    } else {
+                        ExtractionResult.Corrupted(e.message)
+                    }
                 } finally {
                     tmpFile.delete()
                 }
             }
         }
+
+    /**
+     * Adds the case-insensitive headword index the published asset may not carry yet and
+     * confirms the freshly written file really holds the dictionary.
+     */
+    private fun prepareExtracted(context: Context, dbFile: File): ExtractionResult {
+        val ready = try {
+            SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { database ->
+                database.execSQL(CREATE_WORD_NOCASE_INDEX)
+                database.hasDictionaryRows()
+            }
+        } catch (e: SQLiteException) {
+            Log.e(TAG, "Extracted dictionary is not readable", e)
+            false
+        }
+        if (ready) return ExtractionResult.Ok
+        context.deleteDatabase("dict.db")
+        return ExtractionResult.Corrupted(null)
+    }
 }

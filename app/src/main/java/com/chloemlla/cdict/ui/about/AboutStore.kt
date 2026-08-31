@@ -1,11 +1,11 @@
 package com.chloemlla.cdict.ui.about
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 
 class AboutStore(context: Context) {
-    private val prefs = context.applicationContext
-        .getSharedPreferences("cdict_about", Context.MODE_PRIVATE)
+    private val prefs = sharedPrefs(context)
 
     var ossNoticeSeen: Boolean
         get() = prefs.getBoolean("oss_notice_seen", false)
@@ -88,4 +88,28 @@ class AboutStore(context: Context) {
                 putLong("claim_last_millis", value.lastSubmitMillis)
             }
         }
+
+    companion object {
+        private const val PREFS_NAME = "cdict_about"
+
+        @Volatile
+        private var cachedPrefs: SharedPreferences? = null
+
+        /**
+         * 幂等预热：在 IO 线程调一次即可把 prefs 的首次磁盘加载搬离主线程，重复调用不会再打开文件。
+         * 预热之后组合期构造 [AboutStore] 与读取属性都命中内存。
+         */
+        fun preload(context: Context): AboutStore {
+            val store = AboutStore(context)
+            store.prefs.getBoolean("oss_notice_seen", false)
+            return store
+        }
+
+        private fun sharedPrefs(context: Context): SharedPreferences =
+            cachedPrefs ?: synchronized(this) {
+                cachedPrefs ?: context.applicationContext
+                    .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .also { cachedPrefs = it }
+            }
+    }
 }

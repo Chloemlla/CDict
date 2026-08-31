@@ -18,8 +18,16 @@ abstract class TranslationCacheDatabase : RoomDatabase() {
     abstract fun translationCacheDao(): TranslationCacheDao
 
     companion object {
+        @Volatile
+        private var instance: TranslationCacheDatabase? = null
+
         fun open(context: Context): TranslationCacheDatabase =
-            Room.databaseBuilder(context, TranslationCacheDatabase::class.java, "translation_cache.db")
-                .build()
+            instance ?: synchronized(this) {
+                instance ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    TranslationCacheDatabase::class.java,
+                    "translation_cache.db",
+                ).build().also { instance = it }
+            }
     }
 }

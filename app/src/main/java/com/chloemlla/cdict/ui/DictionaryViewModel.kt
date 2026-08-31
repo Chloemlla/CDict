@@ -22,6 +22,7 @@ import com.chloemlla.cdict.core.data.WordRelationEntity
 import com.chloemlla.cdict.core.search.SearchEngine
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,6 +83,10 @@ class DictionaryViewModel(
     private var totalCount = 0L
     private var loadMoreInFlight = false
     private var searchJob: Job? = null
+    // 列表 / 详情查询的在飞协程：重建词库要先让它们停下再 close，否则查询会打到已关闭的实例上。
+    private var browseJob: Job? = null
+    private var loadMoreJob: Job? = null
+    private var detailJob: Job? = null
     // Distinct curriculum labels present in the asset, loaded once per database open so the
     // filter menu reflects whatever tags the publishing pipeline applied (高中 3500 词, ...).
     private var availableTags: List<String> = emptyList()
@@ -93,7 +98,7 @@ class DictionaryViewModel(
     private val databaseReady = MutableStateFlow(false)
 
     init {
-        viewModelScope.launch {
+        browseJob = viewModelScope.launch {
             when (val result = repository.open()) {
                 is DatabaseState.Ready -> {
                     val db = result.database
@@ -134,8 +139,7 @@ class DictionaryViewModel(
 
     private suspend fun loadAvailableTags(db: DictionaryDatabase): List<String> =
         db.dictionaryDao().distinctCurriculumTags()
-            .flatMap { raw -> raw.split(',', '，').map(String::trim) }
-            .filter(String::isNotEmpty)
+            .flatMap(::parseCurriculumTags)
             .distinct()
             .sorted()
 
@@ -150,18 +154,25 @@ class DictionaryViewModel(
     fun setSortMode(mode: SortMode) {
         val db = database ?: return
         if (currentSortMode() == mode) return
-        viewModelScope.launch {
+        browseJob?.cancel()
+        browseJob = viewModelScope.launch {
             val tag = currentCurriculumTag()
-            totalCount = browseCount(db, tag)
-            val words = browsePage(db, mode, tag, 0)
-            _state.value = DictionaryScreenState.Ready(
-                words = words,
-                query = "",
-                sortMode = mode,
-                curriculumTag = tag,
-                availableCurriculumTags = availableTags,
-                hasMore = words.size.toLong() < totalCount,
-            )
+            try {
+                totalCount = browseCount(db, tag)
+                val words = browsePage(db, mode, tag, 0)
+                _state.value = DictionaryScreenState.Ready(
+                    words = words,
+                    query = "",
+                    sortMode = mode,
+                    curriculumTag = tag,
+                    availableCurriculumTags = availableTags,
+                    hasMore = words.size.toLong() < totalCount,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reportBrowseFailure()
+            }
         }
     }
 
@@ -169,18 +180,35 @@ class DictionaryViewModel(
     fun setCurriculumTag(tag: String?) {
         val db = database ?: return
         if (currentCurriculumTag() == tag) return
-        viewModelScope.launch {
+        browseJob?.cancel()
+        browseJob = viewModelScope.launch {
             val mode = currentSortMode()
-            totalCount = browseCount(db, tag)
-            val words = browsePage(db, mode, tag, 0)
-            _state.value = DictionaryScreenState.Ready(
-                words = words,
-                query = "",
-                sortMode = mode,
-                curriculumTag = tag,
-                availableCurriculumTags = availableTags,
-                hasMore = words.size.toLong() < totalCount,
-            )
+            try {
+                totalCount = browseCount(db, tag)
+                val words = browsePage(db, mode, tag, 0)
+                _state.value = DictionaryScreenState.Ready(
+                    words = words,
+                    query = "",
+                    sortMode = mode,
+                    curriculumTag = tag,
+                    availableCurriculumTags = availableTags,
+                    hasMore = words.size.toLong() < totalCount,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reportBrowseFailure()
+            }
+        }
+    }
+
+    /**
+     * 列表查询失败（词库被重建关闭、文件损坏）不能是闪退。重建已经把页面接管成 Loading 时保持沉默，
+     * 否则明确报错，避免用户停在一个不再对应任何操作的旧列表上。
+     */
+    private fun reportBrowseFailure() {
+        if (_state.value is DictionaryScreenState.Ready) {
+            _state.value = DictionaryScreenState.Error("词库读取失败，请重启应用或重建词库。")
         }
     }
 
@@ -193,61 +221,76 @@ class DictionaryViewModel(
             delay(SEARCH_DEBOUNCE_MS)
             val tag = currentCurriculumTag()
             val mode = currentSortMode()
-            val newState = if (query.isBlank()) {
-                totalCount = browseCount(db, tag)
-                val words = browsePage(db, mode, tag, 0)
-                DictionaryScreenState.Ready(
-                    words = words,
-                    query = "",
-                    sortMode = mode,
-                    curriculumTag = tag,
-                    availableCurriculumTags = availableTags,
-                    hasMore = words.size.toLong() < totalCount,
-                )
-            } else if (query.any { it.code > 127 }) {
-                DictionaryScreenState.Ready(
-                    words = db.dictionaryDao().searchChinese(query).first(),
-                    query = query,
-                    suggestion = null,
-                    sortMode = mode,
-                    curriculumTag = tag,
-                    availableCurriculumTags = availableTags,
-                )
-            } else {
-                val trimmed = query.trim()
-                val dao = db.dictionaryDao()
-                val words = try {
-                    SearchEngine.reorderForSearch(
-                        trimmed,
-                        dao.searchEnglish(SearchEngine.ftsPrefixQuery(trimmed)).first(),
+            // 回显用原始输入，检索一律用 trim 后的值：尾随空格在 LIKE 里是字面量，会让粘贴来的词搜不到。
+            val trimmed = query.trim()
+            val newState = try {
+                if (query.isBlank()) {
+                    totalCount = browseCount(db, tag)
+                    val words = browsePage(db, mode, tag, 0)
+                    DictionaryScreenState.Ready(
+                        words = words,
+                        query = "",
+                        sortMode = mode,
+                        curriculumTag = tag,
+                        availableCurriculumTags = availableTags,
+                        hasMore = words.size.toLong() < totalCount,
                     )
-                } catch (e: SQLiteException) {
-                    // FTS4 rejects operator sequences the sanitizer cannot fully anticipate;
-                    // degrade to a plain LIKE substring scan instead of crashing the search.
-                    SearchEngine.reorderForSearch(trimmed, dao.searchChinese(query).first())
+                } else if (query.any { it.code > 127 }) {
+                    DictionaryScreenState.Ready(
+                        words = db.dictionaryDao().searchChinese(escapeLikePattern(trimmed)).first(),
+                        query = query,
+                        suggestion = null,
+                        sortMode = mode,
+                        curriculumTag = tag,
+                        availableCurriculumTags = availableTags,
+                    )
+                } else {
+                    val dao = db.dictionaryDao()
+                    val words = try {
+                        SearchEngine.reorderForSearch(
+                            trimmed,
+                            dao.searchEnglish(SearchEngine.ftsPrefixQuery(trimmed)).first(),
+                        )
+                    } catch (e: SQLiteException) {
+                        // FTS4 rejects operator sequences the sanitizer cannot fully anticipate;
+                        // degrade to a plain LIKE substring scan instead of crashing the search.
+                        SearchEngine.reorderForSearch(trimmed, dao.searchChinese(escapeLikePattern(trimmed)).first())
+                    }
+                    // Typo tolerance (PRD §3.1): nothing matched on the headword prefix, so look
+                    // for a close neighbour (edit distance <= 2) within a length-bounded pool and
+                    // offer it as a "did you mean?" suggestion. Skipped once a real match exists.
+                    val suggestion =
+                        if (words.isNotEmpty()) null
+                        else dao.wordsInLengthRange(
+                            minLength = maxOf(1, trimmed.length - 2),
+                            maxLength = trimmed.length + 2,
+                            limit = 300,
+                        ).let { pool -> SearchEngine.suggest(trimmed, pool) }
+                    DictionaryScreenState.Ready(
+                        words = words,
+                        query = query,
+                        suggestion = suggestion,
+                        sortMode = mode,
+                        curriculumTag = tag,
+                        availableCurriculumTags = availableTags,
+                    )
                 }
-                // Typo tolerance (PRD §3.1): nothing matched on the headword prefix, so look
-                // for a close neighbour (edit distance <= 2) within a length-bounded pool and
-                // offer it as a "did you mean?" suggestion. Skipped once a real match exists.
-                val suggestion =
-                    if (words.isNotEmpty()) null
-                    else dao.wordsInLengthRange(
-                        minLength = maxOf(1, trimmed.length - 2),
-                        maxLength = trimmed.length + 2,
-                        limit = 300,
-                    ).let { pool -> SearchEngine.suggest(trimmed, pool) }
-                DictionaryScreenState.Ready(
-                    words = words,
-                    query = query,
-                    suggestion = suggestion,
-                    sortMode = mode,
-                    curriculumTag = tag,
-                    availableCurriculumTags = availableTags,
-                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reportBrowseFailure()
+                return@launch
             }
             _state.value = newState
         }
     }
+
+    /**
+     * LIKE 模式里的 `%` `_` 是通配符，用户输入的这两个半角字符必须转义，否则「中_」会命中一大批
+     * 无关词条。转义符 `\` 自身也要先转义；DAO 侧以 `ESCAPE '\'` 解释它。
+     */
+    private fun escapeLikePattern(query: String): String =
+        query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     fun loadMore() {
         val state = _state.value as? DictionaryScreenState.Ready ?: return
@@ -263,7 +306,7 @@ class DictionaryViewModel(
         // Flip the loading footer synchronously (no suspension in between) so the UI never re-requests.
         _state.value = state.copy(isLoadingMore = true)
         loadMoreInFlight = true
-        viewModelScope.launch {
+        loadMoreJob = viewModelScope.launch {
             try {
                 val more = browsePage(db, sortMode, tag, offset)
                 val latest = _state.value as? DictionaryScreenState.Ready ?: return@launch
@@ -275,6 +318,14 @@ class DictionaryViewModel(
                     hasMore = merged.size.toLong() < totalCount,
                     isLoadingMore = false,
                 )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 分页失败保留已加载的列表，只把底部的加载指示收起来，让用户可以重试滑动。
+                val latest = _state.value as? DictionaryScreenState.Ready
+                if (latest != null && latest.words === baseWords) {
+                    _state.value = latest.copy(isLoadingMore = false)
+                }
             } finally {
                 loadMoreInFlight = false
             }
@@ -324,10 +375,12 @@ class DictionaryViewModel(
         val db = database
         if (db == null) return
         val dao = db.dictionaryDao()
-        viewModelScope.launch {
+        detailJob?.cancel()
+        detailJob = viewModelScope.launch {
             try {
-                // Pre-fetch (PRD §3.4): warm the audio LRU cache for the word and its speakable
-                // fragments while the detail page loads, so the first tap plays instantly.
+                // Pre-fetch (PRD §3.4): warm the audio LRU cache for the word itself while the
+                // detail page loads, so the first tap plays instantly. 例句不预取——一条词条最多 10 句，
+                // 连点几个派生词就是几十个抢同一条移动网络的下载，而例句朗读的点击率很低。
                 pronunciationPlayer.prefetch(word.word, Accent.US)
                 pronunciationPlayer.prefetch(word.word, Accent.UK)
                 val derivedTerms = dao.derivedTerms(word.id)
@@ -348,7 +401,6 @@ class DictionaryViewModel(
                     etymologies = dao.etymologies(word.id),
                     studyNotes = dao.studyNotes(word.id),
                 )
-                detail.sentences.forEach { s -> s.english.takeIf(String::isNotBlank)?.let { pronunciationPlayer.prefetch(it, Accent.US) } }
                 val latest = _state.value
                 if (latest is DictionaryScreenState.Ready && latest.selected?.id == word.id) {
                     _state.value = latest.copy(detail = detail)
@@ -385,7 +437,8 @@ class DictionaryViewModel(
     /** Rebuild the installed dictionary database from the bundled asset. */
     fun rebuildDictionary() {
         viewModelScope.launch {
-            database?.close()
+            // 在飞查询必须先停下：repository.rebuild() 会关掉共享实例，查询打到已关闭的实例上会抛异常。
+            cancelDatabaseWork()
             database = null
             detailStack.clear()
             databaseReady.value = false
@@ -422,11 +475,21 @@ class DictionaryViewModel(
         }
     }
 
+    /** 关库前先让在飞的列表 / 详情查询停下：对已 close 的 Room 实例查询会抛异常。 */
+    private suspend fun cancelDatabaseWork() {
+        listOfNotNull(searchJob, browseJob, loadMoreJob, detailJob).forEach { it.cancelAndJoin() }
+        searchJob = null
+        browseJob = null
+        loadMoreJob = null
+        detailJob = null
+    }
+
     fun playPronunciation(word: WordEntity, accent: Accent) {
         val key = "${word.id}:${accent.name}"
-        val current = _state.value as? DictionaryScreenState.Ready ?: return
+        // 发音不依赖浏览列表的状态机：词库首屏还在加载、或正在重建时，探索页的发音按钮同样要能用。
+        val current = _state.value as? DictionaryScreenState.Ready
         // Toggle: clicking the button that is currently playing stops it.
-        if (current.playingKey == key) {
+        if (current != null && current.playingKey == key) {
             pronunciationPlayer.stop()
             _state.value = current.copy(playingKey = null)
             return
@@ -439,11 +502,14 @@ class DictionaryViewModel(
             }
         }
         pronunciationPlayer.play(word.word, accent)
-        _state.value = current.copy(playingKey = key)
+        if (current != null) {
+            _state.value = current.copy(playingKey = key)
+        }
     }
 
     override fun onCleared() {
-        database?.close()
+        // dict.db 是进程级共享实例（探索页也在读同一个），这里只放引用，不能 close：
+        // 关掉之后新建的 ViewModel 会拿到同一个已关闭实例，所有查询都会失败。
         database = null
         pronunciationPlayer.release()
         super.onCleared()

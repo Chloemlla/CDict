@@ -15,59 +15,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+
+      # Input is the published asset, not the git copy: the merge workflows only update the
+      # release, so the git copy lags behind and republishing it would undo their merges.
+      - name: Download current dictionary asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pub"
+          base_url="https://github.com/Chloemlla/CDict/releases/download/dictionary-asset"
+          curl -fL --retry 3 -o "$RUNNER_TEMP/pub/CDict-dict.db" "$base_url/CDict-dict.db"
+          test -s "$RUNNER_TEMP/pub/CDict-dict.db"
 
       - name: Recompute assetSignature in place
         shell: bash
         run: |
           set -euo pipefail
-          python - scripts/CDict-dict.db <<'PY'
-          import hashlib, sqlite3, sys
-          db = sqlite3.connect(sys.argv[1])
-          cols = ("id","word","phoneticUk","phoneticUs","translation","definition",
-                  "mnemonic","frequencyGroup","frequency","emotionColor","register",
-                  "nuanceDescription","usageWarning","collocations","aiSupplemented",
-                  "headwordSummary","curriculumTags")
-          h = hashlib.sha256()
-          q = "SELECT " + ",".join(cols) + " FROM words ORDER BY id"
-          for row in db.execute(q):
-              h.update("|".join(str(v or "") for v in row).encode("utf-8"))
-              h.update(b"\n")
-          sig = h.hexdigest()
-          db.execute("UPDATE metadata SET value=? WHERE key='assetSignature'", (sig,))
-          db.commit()
-          db.close()
-          print("assetSignature=" + sig)
-          PY
+          python scripts/recompute_asset_signature.py "$RUNNER_TEMP/pub/CDict-dict.db"
 
-      - name: Commit and push corrected dictionary to git
+      - name: Sync the git copy of the dictionary
         shell: bash
         run: |
           set -euo pipefail
+          cp "$RUNNER_TEMP/pub/CDict-dict.db" scripts/CDict-dict.db
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add scripts/CDict-dict.db
           if git diff --cached --quiet; then
-            echo "No changes to commit (signature already up to date)."
+            echo "No changes to commit (the git copy already matches the published asset)."
           else
-            git commit -m "fix(dictionary): recompute assetSignature for annotated high-school phrases"
+            git commit -m "chore(dictionary): sync dictionary asset and recompute assetSignature"
             git push
           fi
-
-      - name: Prepare working copy for release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/pub"
-          cp scripts/CDict-dict.db "$RUNNER_TEMP/pub/CDict-dict.db"
-          test -s "$RUNNER_TEMP/pub/CDict-dict.db"
 
       - name: Extract dictionary signature
         shell: bash
@@ -91,9 +78,19 @@ jobs:
           test -s "$RUNNER_TEMP/pub/dict.db.br"
 
       - name: Checksum release assets
+        shell: bash
         run: |
           set -euo pipefail
           (cd "$RUNNER_TEMP/pub" && sha256sum CDict-dict.db dict.db.br dict.signature > checksums.txt && cat checksums.txt)
+          # The app build checks the downloaded dictionary against digests committed in
+          # build.yml, so republishing the asset needs a follow-up commit there.
+          {
+            echo "### Update .github/workflows/build.yml before the next app build"
+            echo '```yaml'
+            echo "  DICT_DB_BR_SHA256: \"$(sha256sum "$RUNNER_TEMP/pub/dict.db.br" | cut -d' ' -f1)\""
+            echo "  DICT_SIGNATURE_SHA256: \"$(sha256sum "$RUNNER_TEMP/pub/dict.signature" | cut -d' ' -f1)\""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish dictionary release
         env:

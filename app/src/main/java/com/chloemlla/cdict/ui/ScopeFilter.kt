@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,36 +71,45 @@ fun ScopeFilterRow(
             availableCurriculumTags.forEach { add(it to it) }
         }
     }
-    val isFiltered = scope.curriculumTag != null || scope.frequencyGroup != null
+    // ViewModel 要等取样查询跑完才带着新范围发射，这段窗口内上层快照仍是旧值：本地先记住用户
+    // 刚选的范围，否则紧接着操作另一个下拉会把前一次选择一起写回旧值。
+    var pending by remember { mutableStateOf<StudyScope?>(null) }
+    val effective = pending ?: scope
+    LaunchedEffect(scope) {
+        if (scope == pending) pending = null
+    }
+    val isFiltered = effective.curriculumTag != null || effective.frequencyGroup != null
+    val applyScope: (StudyScope) -> Unit = { next ->
+        pending = next
+        onScopeChange(next)
+    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ScopeDropdown(
-            label = scope.curriculumTag ?: SCOPE_ALL_WORDS_LABEL,
+            label = effective.curriculumTag ?: SCOPE_ALL_WORDS_LABEL,
             a11yLabel = "词表范围",
             options = curriculumOptions,
-            selected = scope.curriculumTag,
-            onSelect = { tag -> onScopeChange(scope.copy(curriculumTag = tag)) },
-            active = scope.curriculumTag != null,
+            selected = effective.curriculumTag,
+            onSelect = { tag -> applyScope(effective.copy(curriculumTag = tag)) },
+            active = effective.curriculumTag != null,
             modifier = Modifier.weight(1f),
         )
         ScopeDropdown(
-            label = scope.frequencyGroup?.let { "组 $it" } ?: SCOPE_ALL_GROUPS_LABEL,
+            label = effective.frequencyGroup?.let { "组 $it" } ?: SCOPE_ALL_GROUPS_LABEL,
             a11yLabel = "频率组范围",
             options = SCOPE_FREQUENCY_OPTIONS,
-            selected = scope.frequencyGroup,
-            onSelect = { group ->
-                onScopeChange(scope.copy(frequencyGroup = group))
-            },
-            active = scope.frequencyGroup != null,
+            selected = effective.frequencyGroup,
+            onSelect = { group -> applyScope(effective.copy(frequencyGroup = group)) },
+            active = effective.frequencyGroup != null,
             modifier = Modifier.weight(1f),
         )
         // 仅在存在筛选时出现，避免平时占用行宽；一键回到「全部词表 + 全部组」。
         if (isFiltered) {
             IconButton(
-                onClick = { onScopeChange(StudyScope()) },
+                onClick = { applyScope(StudyScope()) },
                 modifier = Modifier.size(48.dp),
             ) {
                 Icon(

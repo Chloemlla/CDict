@@ -2,11 +2,13 @@ package com.chloemlla.cdict.core.audio
 
 import com.chloemlla.cdict.core.net.CDictBackend
 import com.chloemlla.cdict.core.net.CDictRequestSigner
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /** 后端音频响应：[bytes] 可能是音频，也可能是错误 JSON，由 [contentType] 区分。 */
@@ -24,8 +26,15 @@ class VivoTtsClient(
 ) {
     /** 请求 TTS 合成。成功返回 [VivoTtsResult.Audio]；否则 [VivoTtsResult.Error]。 */
     suspend fun synthesize(text: String, langType: String = "en-USA"): VivoTtsResult {
+        val url = buildUrl(text, langType)
         val response = try {
-            transport(buildUrl(text, langType))
+            // 切换基站 / DNS 抖动这类一次性 IO 失败重试一次；HTTP 错误码不重试。
+            try {
+                transport(url)
+            } catch (e: IOException) {
+                delay(RETRY_DELAY_MS)
+                transport(url)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -64,13 +73,18 @@ class VivoTtsClient(
         val message = Regex("\"(?:error|message|msg)\"\\s*:\\s*\"([^\"]*)\"").find(s)?.groupValues?.get(1)
         return message?.takeIf { it.isNotBlank() }?.let { "在线合成拒绝 $it" }
     }
+
+    private companion object {
+        const val RETRY_DELAY_MS = 300L
+    }
 }
 
 private suspend fun httpGetAudio(url: String): TtsHttpResponse = withContext(Dispatchers.IO) {
     val connection = (URL(url).openConnection() as HttpURLConnection).apply {
         requestMethod = "GET"
-        connectTimeout = 30_000
-        readTimeout = 30_000
+        // 与词典静态音频层同量级：整条朗读链路有总预算，单级不能吃满几十秒。
+        connectTimeout = 8_000
+        readTimeout = 8_000
         setRequestProperty("Accept", "audio/*, application/json")
         CDictRequestSigner.sign(this, "GET", url)
     }
