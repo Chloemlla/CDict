@@ -106,14 +106,14 @@ Tapping an entry opens a detail page showing:
 The detail page provides **UK / US** pronunciation buttons. Speech uses **dictionary static audio** by default and falls back through three tiers — no audio files are packaged. The preferred online source can be changed in **About → Pronunciation priority**:
 
 ```
-Dictionary static audio (GET https://tts.chloemlla.com/api/cdict/tts?source=youdao)
-  → Online speech synthesis (GET https://tts.chloemlla.com/api/cdict/tts?source=engine)
+Dictionary static audio (GET https://chloemlla.com/api/cdict/tts?source=youdao)
+  → Online speech synthesis (GET https://chloemlla.com/api/cdict/tts?source=engine)
   → Android system TextToSpeech
 ```
 
 Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) automatically falls back to the next tier. Dictionary browsing and offline search are fully unaffected when pronunciation is unavailable. The About-page switch can reverse the two online tiers when online synthesis is preferred. Concurrent downloads of the same word are merged (single-flight), and rapid repeat taps keep only the newest playback.
 
-**Both online tiers only ever talk to this project's own backend** (`CDictBackend`, `https://tts.chloemlla.com`), which proxies to the upstream services. The APK ships **no third-party credentials**: upstream URLs, `appId` / `appKey` and the nested signature all live server-side.
+**Both online tiers only ever talk to this project's own backend** (`CDictBackend`, `https://chloemlla.com`), which proxies to the upstream services. The APK ships **no third-party credentials**: upstream URLs, `appId` / `appKey` and the nested signature all live server-side.
 
 - `VivoTtsClient` issues a plain `GET /api/cdict/tts?source=engine&text=…&langType=…` and accepts an `audio/*` response; a JSON body is treated as an explicit error, not audio.
 - Responses may be MP3 or container-less PCM (`audio/L16; rate=16000`); the format is detected before playback and PCM is wrapped in a WAV header.
@@ -131,7 +131,7 @@ Any tier failure (timeout / non-2xx / corrupted audio / network unavailable) aut
 
 A **Translation** tab runs an embedded online translation engine:
 
-- Served by the project's **own backend**: `POST https://tts.chloemlla.com/api/cdict/translate` (language list: `GET /api/cdict/languages`). The request body carries only `text` / `from` / `to`; the backend adds the upstream credentials, device parameters and signature.
+- Served by the project's **own backend**: `POST https://chloemlla.com/api/cdict/translate` (language list: `GET /api/cdict/languages`). The request body carries only `text` / `from` / `to`; the backend adds the upstream credentials, device parameters and signature.
 - **Language directions**: auto→Chinese, auto→English, Chinese→English, English→Chinese (21 directions in total).
 - **Batch translation**: multiple lines are merged on `\n` into a single request and split back line-by-line.
 - **Response extras**: echoes the source / target language and phonetics.
@@ -149,7 +149,7 @@ The app is **free forever** — nothing is paywalled, and donating **unlocks not
 |:---:|:---:|
 | <img src="https://bee-reg-ab.imagency.cn/p/a2df2e95b7dc5c235e9e5bd51a5d7d56.jpg" alt="Alipay donation QR" width="220"> | <img src="https://bee-reg-ab.imagency.cn/p/1ef3d8b53b69cf08a9fa7d6e98f779f4.png" alt="WeChat Pay donation QR" width="220"> |
 
-- **No payment details in the APK**: the donation page fetches everything at view time from the project's own backend — `GET https://tts.chloemlla.com/api/cdict/donate` for channels, copy and the thank-you list, `GET /api/cdict/donate/<channel-id>` for the QR code. Codes, wording and the list can all change without shipping a release.
+- **No payment details in the APK**: the donation page fetches everything at view time from the project's own backend — `GET https://chloemlla.com/api/cdict/donate` for channels, copy and the thank-you list, `GET /api/cdict/donate/<channel-id>` for the QR code. Codes, wording and the list can all change without shipping a release.
 - **The configured image URL is served verbatim**: when an image URL is set in the admin panel, `/api/cdict/donate/<channel-id>` answers `302` pointing straight at that URL — the backend never downloads, caches or rewrites the image bytes, so fetching the QR is a direct hop to that image host. Only when the URL is left blank does the backend return its bundled image. The client still ignores any absolute URL in the response body and always rebuilds the request as `CDictBackend.BASE_URL + /api/cdict/donate/<id>`, with channel ids validated against `[a-z0-9-]{1,32}`.
 - **Credited if you want to be**: put the name you'd like shown in the transfer memo; once the developer verifies it, the name is added to the server-side list and the in-app thank-you list on the donation page updates immediately. No memo means an anonymous donation.
 - **Ask to be credited from inside the app**: the form at the bottom of the donation page submits a transaction id plus the name you'd like shown (`POST /api/cdict/donate/claim`). The request body contains only those two fields; requests also carry a random install ID used only to distinguish request quotas, without reading a hardware identifier. The same transaction id is idempotent. A successful submit rains 🎉 across the screen.

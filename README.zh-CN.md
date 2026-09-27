@@ -106,14 +106,14 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 词详情页提供 **英音 / 美音** 发音按钮。默认使用 **词典静态发音**,按三级顺序回退,无需打包任何音频文件;可在「关于 → 朗读优先来源」中切换两级在线来源的优先级:
 
 ```
-词典静态发音 (GET https://tts.chloemlla.com/api/cdict/tts?source=youdao)
-  → 在线语音合成 (GET https://tts.chloemlla.com/api/cdict/tts?source=engine)
+词典静态发音 (GET https://chloemlla.com/api/cdict/tts?source=youdao)
+  → 在线语音合成 (GET https://chloemlla.com/api/cdict/tts?source=engine)
   → Android 系统 TextToSpeech
 ```
 
 任一级失败(超时 / 非 2xx / 音频损坏 / 网络不可用)自动降级到下一级;发音不可用时词典浏览与离线搜索完全不受影响。切换为在线合成优先后,两级在线来源的顺序反转;词与整句都直接交给所选的在线来源整句朗读(绝不逐词拆读,以免按词打断句子)。播放按"单飞"合并同词并发下载,同词快速连点只保留最新一次发音。
 
-**两级在线来源都只请求本项目自有后端**(`CDictBackend`,`https://tts.chloemlla.com`),由服务端代理到上游;安装包内**不含任何第三方凭据**——上游地址、`appId` / `appKey` 与嵌套签名全部留在服务端。
+**两级在线来源都只请求本项目自有后端**(`CDictBackend`,`https://chloemlla.com`),由服务端代理到上游;安装包内**不含任何第三方凭据**——上游地址、`appId` / `appKey` 与嵌套签名全部留在服务端。
 
 - `VivoTtsClient` 只发一次普通 `GET /api/cdict/tts?source=engine&text=…&langType=…`,仅接受 `audio/*` 响应;返回 JSON 会被识别为明确错误而非当作音频。
 - 响应可能是 MP3,也可能是无容器 PCM(`audio/L16; rate=16000`);播放前会识别格式并给 PCM 补 WAV 头。
@@ -131,7 +131,7 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 
 **翻译**标签页内置在线翻译引擎:
 
-- 由本项目**自有后端**提供:`POST https://tts.chloemlla.com/api/cdict/translate`(语言列表 `GET /api/cdict/languages`)。请求体只带 `text` / `from` / `to`,上游凭据、设备参数与签名由服务端补全。
+- 由本项目**自有后端**提供:`POST https://chloemlla.com/api/cdict/translate`(语言列表 `GET /api/cdict/languages`)。请求体只带 `text` / `from` / `to`,上游凭据、设备参数与签名由服务端补全。
 - **语言方向**:自动 → 中文、自动 → 英文、中文 → 英文、英文 → 中文(共 21 个方向)。
 - **批量翻译**:多行文本按 `\n` 合并为单次请求,响应逐行拆回。
 - **响应附加信息**:源 / 目标语言回显、音标。
@@ -149,7 +149,7 @@ App 启动默认打开**词典**标签页。导航是响应式的:窄窗口用�
 |:---:|:---:|
 | <img src="https://bee-reg-ab.imagency.cn/p/a2df2e95b7dc5c235e9e5bd51a5d7d56.jpg" alt="支付宝赞赏码" width="220"> | <img src="https://bee-reg-ab.imagency.cn/p/1ef3d8b53b69cf08a9fa7d6e98f779f4.png" alt="微信赞赏码" width="220"> |
 
-- **收款码不内置**:安装包内没有任何收款码或收款账号。打开赞赏页时向自有后端拉取 `GET https://tts.chloemlla.com/api/cdict/donate`(渠道、文案与鸣谢名单)与 `GET /api/cdict/donate/<渠道 id>`(收款码),换码换文案换名单都无需发版。
+- **收款码不内置**:安装包内没有任何收款码或收款账号。打开赞赏页时向自有后端拉取 `GET https://chloemlla.com/api/cdict/donate`(渠道、文案与鸣谢名单)与 `GET /api/cdict/donate/<渠道 id>`(收款码),换码换文案换名单都无需发版。
 - **图片地址原样下发**:`/api/cdict/donate/<渠道 id>` 在后台填了图床地址时返回 `302`,直接指向后台填写的那个地址——后端不下载、不缓存、不改写图片字节。因此取图这一跳会直连该图床;地址留空时才由后端返回内置图片。客户端始终忽略响应体里的绝对地址,一律用 `CDictBackend.BASE_URL + /api/cdict/donate/<id>` 重建请求,渠道 id 按 `[a-z0-9-]{1,32}` 校验。
 - **署名鸣谢**:转账备注里写上想展示的称呼,开发者核实后加入后台名单,应用内「赞赏支持」页的鸣谢名单随即实时更新;不写备注即匿名支持。
 - **应用内申请署名**:赞赏页底部的表单可直接提交「交易号 + 希望展示的称呼」(`POST /api/cdict/donate/claim`),核实后加入名单;请求正文只包含这两项,另附一个仅用于区分请求额度的随机安装标识,不读取硬件标识。同一交易号幂等。提交成功会有 🎉 洒落一遍。

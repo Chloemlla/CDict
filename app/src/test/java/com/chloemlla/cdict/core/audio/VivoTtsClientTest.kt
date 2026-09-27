@@ -17,7 +17,7 @@ class VivoTtsClientTest {
                 "?source=engine&text=hello+world&langType=en-USA",
             url,
         )
-        assertTrue(url.startsWith("https://tts.chloemlla.com/"))
+        assertTrue(url.startsWith("https://chloemlla.com/"))
     }
 
     @Test

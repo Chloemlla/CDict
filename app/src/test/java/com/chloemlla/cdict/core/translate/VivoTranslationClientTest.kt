@@ -164,7 +164,7 @@ class VivoTranslationClientTest {
         ) as TranslationOutcome.Success
         assertEquals(listOf("你好", "世界"), outcome.result.translations)
         assertEquals(CDictBackend.BASE_URL + CDictBackend.TRANSLATE_PATH, capturedUrl)
-        assertTrue(capturedUrl!!.startsWith("https://tts.chloemlla.com/"))
+        assertTrue(capturedUrl!!.startsWith("https://chloemlla.com/"))
         assertTrue(capturedHeaders!!.containsKey("Content-Type"))
         val body = capturedBody!!
         assertTrue(body.contains("text=hello%0Aworld"))

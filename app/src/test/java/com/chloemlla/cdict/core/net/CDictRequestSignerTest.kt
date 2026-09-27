@@ -102,12 +102,12 @@ class CDictRequestSignerTest {
     @Test
     fun `foreign hosts and unrelated paths are never signed`() {
         listOf(
-            "https://tts.chloemlla.com",
-            "https://tts.chloemlla.com/api/other",
-            "https://tts.chloemlla.com/api/cdictx/translate",
-            "https://tts.chloemlla.com.example.invalid/api/cdict/translate",
+            "https://chloemlla.com",
+            "https://chloemlla.com/api/other",
+            "https://chloemlla.com/api/cdictx/translate",
+            "https://chloemlla.com.example.invalid/api/cdict/translate",
             "https://example.invalid/api/cdict/translate",
-            "http://tts.chloemlla.com/api/cdict/translate",
+            "http://chloemlla.com/api/cdict/translate",
         ).forEach { url ->
             assertFalse(url, CDictRequestSigner.isBackendUrl(URL(url)))
         }

@@ -7,7 +7,7 @@ import org.junit.Test
 
 class DonationClientTest {
 
-    private val client = DonationClient(baseUrl = "https://tts.chloemlla.com")
+    private val client = DonationClient(baseUrl = "https://chloemlla.com")
 
     private fun response(status: Int, body: String) =
         DonationHttpResponse(status, body.toByteArray(Charsets.UTF_8))
@@ -15,7 +15,7 @@ class DonationClientTest {
     @Test
     fun `image url is always built from the backend base url`() {
         assertEquals(
-            "https://tts.chloemlla.com/api/cdict/donate/alipay",
+            "https://chloemlla.com/api/cdict/donate/alipay",
             client.imageUrl("alipay"),
         )
     }
@@ -105,7 +105,7 @@ class DonationClientTest {
     fun `malformed transaction id is rejected before any request is sent`() = runBlocking {
         var called = false
         val offline = DonationClient(
-            baseUrl = "https://tts.chloemlla.com",
+            baseUrl = "https://chloemlla.com",
             postTransport = { _, _ ->
                 called = true
                 response(200, """{"success":true}""")
@@ -121,7 +121,7 @@ class DonationClientTest {
         var seenUrl = ""
         var seenBody = ""
         val posting = DonationClient(
-            baseUrl = "https://tts.chloemlla.com",
+            baseUrl = "https://chloemlla.com",
             postTransport = { url, body ->
                 seenUrl = url
                 seenBody = body
@@ -129,7 +129,7 @@ class DonationClientTest {
             },
         )
         val outcome = posting.submitClaim("  2026082012345678  ", "  阿伟  ")
-        assertEquals("https://tts.chloemlla.com/api/cdict/donate/claim", seenUrl)
+        assertEquals("https://chloemlla.com/api/cdict/donate/claim", seenUrl)
         assertTrue(seenBody.contains("\"transactionId\":\"2026082012345678\""))
         assertTrue(seenBody.contains("阿伟"))
         assertEquals(false, (outcome as DonationClaimOutcome.Accepted).duplicated)
