@@ -190,7 +190,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
     ksp("org.jetbrains.kotlin:kotlin-metadata-jvm:2.4.10")
-    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("org.brotli:dec:0.1.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("com.chloemlla.lumen:lumen-crash:$lumenCrashSdkVersion")
